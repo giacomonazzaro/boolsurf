@@ -28,18 +28,50 @@ struct Spline_Draw {
   int         instance_id      = {};  // id of instance in scene_data
   vector<int> curves_to_update = {};
 };
+struct Spline_View {
+  Spline_Input&  input;
+  Spline_Output& ioutput;
+  Spline_Cache&  cache;
+  Spline_Draw&   draw;
+};
+
 struct Splinesurf {
   vector<Spline_Input>  spline_input  = {};
   vector<Spline_Output> spline_output = {};
   vector<Spline_Cache>  spline_cache  = {};
   vector<Spline_Draw>   spline_draw   = {};
 };
+struct Editing {
+  int selected_spline_id = -1;
+};
 
 struct App {
   scene_data scene = {};
+  shape_bvh  bvh   = {};
   float      time  = 0;
 
+  Editing    editing = {};
   Splinesurf splinesurf;
+
+  int add_spline() {
+    auto id = (int)splinesurf.spline_input.size();
+    splinesurf.spline_input.push_back({});
+    splinesurf.spline_output.push_back({});
+    splinesurf.spline_cache.push_back({});
+    splinesurf.spline_draw.push_back({});
+    return id;
+  }
+
+  Spline_View selected_spline_input() {
+    if (splinesurf.spline_input.empty()) {
+      add_spline();
+      editing.selected_spline_id = 0;
+    }
+    auto id = editing.selected_spline_id;
+    return Spline_View{splinesurf.spline_input[id],
+        splinesurf.spline_output[id], splinesurf.spline_cache[id],
+        splinesurf.spline_draw[id]};
+  }
 };
 
 // view params
@@ -99,6 +131,27 @@ void run_glview(const glview_params& params) {
 #else
 
 using app_callback = std::function<void(const glinput_state& input, App& app)>;
+
+mesh_point intersect_mesh(App& app, const glinput_state& input) {
+  auto& shape    = app.scene.shapes.at(0);
+  auto& camera   = app.scene.cameras.at(0);
+  auto  mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+      input.mouse_pos.y / float(input.window_size.y)};
+  auto  ray      = camera_ray(
+      camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
+  auto isec = intersect_triangles_bvh(
+      app.bvh, shape.triangles, shape.positions, ray, false);
+  if (isec.hit) {
+    // if (stroke.empty() || stroke.back().element != isec.element ||
+    // stroke.back().uv != isec.uv) {
+    // stroke.push_back({isec.element, isec.uv});
+    printf("point: %d, %f %f\n", isec.element, isec.uv.x, isec.uv.y);
+    // updated = true;
+    // }
+    return mesh_point{isec.element, isec.uv};
+  }
+  return {};
+}
 
 void run_app(App& app, const string& name, const glscene_params& params_,
     const app_callback& widgets_callback  = {},
@@ -191,7 +244,16 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       scene.cameras.at(params.camera) = camera;
     }
 
-    if (input.mouse_left_click) printf("ciao\n");
+    if (input.mouse_left_click) {
+      auto point = intersect_mesh(app, input);
+      if (point.face != -1) {
+        auto spline = app.selected_spline_input();
+        spline.input.control_points.push_back(point);
+        printf("xxx: %ld\n", app.splinesurf.spline_input.size());
+        printf(
+            "cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
+      }
+    }
   };
 
   // run ui
@@ -200,9 +262,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 
 void widgets_callback(const glinput_state& input, App& app) {
   auto time = app.time;
-  if (input.widgets_active) {
-    printf("time: %f, function: %s\n", time, __FUNCTION__);
-  }
+  // if (input.widgets_active) {
+  // printf("time: %f, function: %s\n", time, __FUNCTION__);
+  // }
 }
 
 void update_callback(const glinput_state& input, App& app) {
@@ -219,6 +281,7 @@ void run_glview(const glview_params& params) {
 
   // make scene
   auto app  = App{};
+  app.bvh   = make_triangles_bvh(shape.triangles, shape.positions, {});
   app.scene = make_shape_scene(shape, params.addsky);
 
   // run viewer

@@ -1801,20 +1801,22 @@ void run_ui(const vec2i& size, const string& title,
     if (state.widgets_width && state.widgets_left)
       state.input.mouse_pos.x -= state.widgets_width;
 
+    auto mouse_right = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) ==
+                       GLFW_PRESS;
+    auto mouse_left = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) ==
+                      GLFW_PRESS;
+
     state.input.mouse_right_click = false;
-    if (!state.input.mouse_right &&
-        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+    if (!state.input.mouse_right && mouse_right)
       state.input.mouse_right_click = true;
 
     state.input.mouse_left_click = false;
-    if (!state.input.mouse_left &&
-        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+    if (!state.input.mouse_left && mouse_left)
       state.input.mouse_left_click = true;
 
-    state.input.mouse_right =
-        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
-    state.input.mouse_left = glfwGetMouseButton(
-                                 window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    state.input.mouse_right = mouse_right;
+    state.input.mouse_left  = mouse_left;
+
     state.input.modifier_alt =
         glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
