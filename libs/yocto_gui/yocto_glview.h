@@ -252,6 +252,8 @@ namespace yocto {
 struct glinput_state {
   bool     mouse_left           = false;  // left button
   bool     mouse_right          = false;  // right button
+  bool     mouse_left_click     = false;  // left button
+  bool     mouse_right_click    = false;  // right button
   bool     mouse_middle         = false;  // middle button
   vec2f    mouse_pos            = {};     // position excluding widgets
   vec2f    mouse_last           = {};  // last mouse position excluding widgets
@@ -267,6 +269,8 @@ struct glinput_state {
   vec2i    window_size          = {0, 0};        // window size
   vec4i    framebuffer_viewport = {0, 0, 0, 0};  // framebuffer viewport
 };
+
+bool uiupdate_camera_params(const glinput_state& input, camera_data& camera);
 
 // Init callback called after the window has opened
 using init_glcallback = function<void(const glinput_state& input)>;

@@ -83,9 +83,8 @@ static bool uiupdate_image_params(
   return false;
 }
 
-static bool uiupdate_camera_params(
-    const glinput_state& input, camera_data& camera) {
-  if (input.mouse_left && input.modifier_alt && !input.widgets_active) {
+bool uiupdate_camera_params(const glinput_state& input, camera_data& camera) {
+  if (input.mouse_left && !input.widgets_active) {
     auto dolly  = 0.0f;
     auto pan    = zero2f;
     auto rotate = zero2f;
@@ -94,8 +93,9 @@ static bool uiupdate_camera_params(
       pan.x = -pan.x;
     } else if (input.modifier_ctrl) {
       dolly = (input.mouse_pos.y - input.mouse_last.y) / 100.0f;
-    } else {
-      rotate = (input.mouse_pos - input.mouse_last) / 100.0f;
+    } else if (input.modifier_alt) {
+      rotate   = (input.mouse_pos - input.mouse_last) / 100.0f;
+      rotate.y = -rotate.y;
     }
     auto [frame, focus] = camera_turntable(
         camera.frame, camera.focus, rotate, dolly, pan);
@@ -1800,13 +1800,25 @@ void run_ui(const vec2i& size, const string& title,
     state.input.mouse_pos = vec2f{(float)mouse_posx, (float)mouse_posy};
     if (state.widgets_width && state.widgets_left)
       state.input.mouse_pos.x -= state.widgets_width;
-    state.input.mouse_left = glfwGetMouseButton(
-                                 window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+    state.input.mouse_right_click = false;
+    if (!state.input.mouse_right &&
+        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+      state.input.mouse_right_click = true;
+
+    state.input.mouse_left_click = false;
+    if (!state.input.mouse_left &&
+        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+      state.input.mouse_left_click = true;
+
     state.input.mouse_right =
         glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    state.input.mouse_left = glfwGetMouseButton(
+                                 window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     state.input.modifier_alt =
         glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
+
     state.input.modifier_shift =
         glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
