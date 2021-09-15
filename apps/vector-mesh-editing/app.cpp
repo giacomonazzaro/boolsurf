@@ -245,6 +245,15 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   auto  glscene = glscene_state{};
   auto& scene   = app.scene;
 
+  auto add_shape = [](scene_data& scene, glscene_state& glscene,
+                       const frame3f& frame = identity3x4f, int material = 1) {
+    auto id = (int)scene.shapes.size();
+    scene.shapes.push_back({});
+    scene.instances.push_back({frame, id, material});
+    glscene.shapes.push_back({});
+    return id;
+  };
+
   // draw params
   auto params = params_;
 
@@ -334,17 +343,26 @@ void run_app(App& app, const string& name, const glscene_params& params_,
         auto spline = app.selected_spline();
         spline.input.control_points.push_back(point);
 
+        {
+          auto frame = frame3f{};
+          frame.o    = eval_position(
+              app.mesh.triangles, app.mesh.positions, point);
+          auto  shape_id = add_shape(scene, glscene, frame);
+          auto& shape    = scene.shapes[shape_id];
+          shape          = make_sphere(8, 0.005, 1);
+          updated_shapes.push_back(shape_id);
+          // make point shape
+        }
+
         printf(
             "cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
         if ((spline.input.control_points.size() - 1) % 3 == 0 &&
             spline.input.control_points.size() >= 4) {
           auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
           spline.cache.curves_to_update.insert((int)curve_id);
-          auto shape_id = (int)scene.shapes.size();
+
+          auto shape_id = add_shape(scene, glscene);
           spline.draw.curve_shapes.push_back(shape_id);
-          scene.shapes.push_back({});
-          scene.instances.push_back({{}, shape_id, 1});
-          glscene.shapes.push_back({});
         }
       }
     }
@@ -379,13 +397,17 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     for (int i = 0; i < app.splinesurf.spline_input.size(); i++) {
       auto spline = app.get_spline_view(i);
       for (auto& c : spline.draw.curves_to_update) {
-        auto  id        = spline.draw.curve_shapes[c];
-        auto& shape     = scene.shapes[id];
-        shape.positions = spline.cache.positions;
-        shape.lines.resize(spline.cache.positions.size() - 1);
-        for (int i = 0; i < spline.cache.positions.size() - 1; i++) {
-          shape.lines[i] = {i, i + 1};
-        }
+        auto  id    = spline.draw.curve_shapes[c];
+        auto& shape = scene.shapes[id];
+        // shape.positions = spline.cache.positions;
+        auto line_thickness = 0.005;
+        shape               = polyline_to_cylinders(
+            spline.cache.positions, 8, line_thickness);
+        shape.normals = compute_normals(shape);
+        // shape.lines.resize(spline.cache.positions.size() - 1);
+        // for (int i = 0; i < spline.cache.positions.size() - 1; i++) {
+        //   shape.lines[i] = {i, i + 1};
+        // }
         updated_shapes += spline.draw.curve_shapes[c];
       }
       spline.draw.curves_to_update.clear();
@@ -415,15 +437,20 @@ void run_glview(const glview_params& params) {
 
   auto app = App{};
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
+  auto bbox = invalidb3f;
+  for (auto& pos : app.mesh.positions) bbox = merge(bbox, pos);
+  for (auto& pos : app.mesh.positions)
+    pos = (pos - center(bbox)) / max(size(bbox));
 
-  // make scene
   app.mesh.adjacencies = face_adjacencies(app.mesh.triangles);
   app.mesh.dual_solver = make_dual_geodesic_solver(
       app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies);
-  app.bvh   = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
-  app.scene = make_shape_scene(app.mesh, params.addsky);
+  app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
+
+  // make scene
+  app.scene           = make_shape_scene(app.mesh, params.addsky);
   auto line_material  = material_data{};
-  line_material.color = {1, 1, 1};
+  line_material.color = {1, 0, 0};
   app.scene.materials.push_back(line_material);
 
   // run viewer
