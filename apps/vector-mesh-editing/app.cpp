@@ -6,31 +6,54 @@
 #include <yocto/yocto_scene.h>
 #include <yocto/yocto_sceneio.h>
 #include <yocto/yocto_shape.h>
+
+#include <unordered_set>
+template <typename Key, typename Value>
+using hash_map = std::unordered_map<Key, Value>;
+
+template <typename Key>
+using hash_set = std::unordered_set<Key>;
+
 #if YOCTO_OPENGL == 1
 #include <yocto_gui/yocto_glview.h>
 #endif
 using namespace yocto;
 
+// Vector append and concatenation
+template <typename T>
+inline void operator+=(vector<T>& a, const vector<T>& b) {
+  a.insert(a.end(), b.begin(), b.end());
+}
+template <typename T>
+inline void operator+=(vector<T>& a, const T& b) {
+  a.push_back(b);
+}
+
 struct Spline_Input {
-  vector<mesh_point> control_points = {};
-  vector<bool>       is_smooth      = {};
+  vector<mesh_point> control_points   = {};
+  vector<bool>       is_smooth        = {};
+  int                num_subdivisions = 4;
+
+  int num_curves() const {
+    return max((int)(control_points.size() - 1) / 3, 0);
+  }
 };
 struct Spline_Output {
   vector<mesh_point> points = {};
 };
 struct Spline_Cache {
-  vector<vec3f> positions = {};
-  geodesic_path tangent0  = {};  // TODO(giacomo): use mesh_paths?
-  geodesic_path tangent1  = {};  // TODO(giacomo): use mesh_paths?
+  vector<vec3f> positions        = {};
+  geodesic_path tangent0         = {};  // TODO(giacomo): use mesh_paths?
+  geodesic_path tangent1         = {};  // TODO(giacomo): use mesh_paths?
+  hash_set<int> curves_to_update = {};
 };
 struct Spline_Draw {
-  int         shape_id         = {};  // id of shape in scene_data
-  int         instance_id      = {};  // id of instance in scene_data
-  vector<int> curves_to_update = {};
+  vector<int>   curve_shapes     = {};  // id of shape in scene_data
+  hash_set<int> curves_to_update = {};
 };
 struct Spline_View {
   Spline_Input&  input;
-  Spline_Output& ioutput;
+  Spline_Output& output;
   Spline_Cache&  cache;
   Spline_Draw&   draw;
 };
@@ -41,17 +64,33 @@ struct Splinesurf {
   vector<Spline_Cache>  spline_cache  = {};
   vector<Spline_Draw>   spline_draw   = {};
 };
+
 struct Editing {
   int selected_spline_id = -1;
 };
 
 struct App {
+  struct Mesh : shape_data {
+    vector<vec3i>        adjacencies = {};
+    dual_geodesic_solver dual_solver = {};
+    // bool_borders         borders     = {};
+
+    // shape_bvh                  bvh                = {};
+    // bbox3f                     bbox               = {};
+    // int                        num_triangles      = 0;
+    // int                        num_positions      = 0;
+    // hash_map<int, vector<int>> triangulated_faces = {};
+    // geodesic_solver            graph              = {};
+  };
+
   scene_data scene = {};
+  Mesh       mesh  = {};
   shape_bvh  bvh   = {};
   float      time  = 0;
 
-  Editing    editing = {};
-  Splinesurf splinesurf;
+  Editing                 editing = {};
+  Splinesurf              splinesurf;
+  std::unordered_set<int> splines_to_update = {};
 
   int add_spline() {
     auto id = (int)splinesurf.spline_input.size();
@@ -62,17 +101,31 @@ struct App {
     return id;
   }
 
-  Spline_View selected_spline_input() {
-    if (splinesurf.spline_input.empty()) {
-      add_spline();
-      editing.selected_spline_id = 0;
-    }
-    auto id = editing.selected_spline_id;
+  Spline_View get_spline_view(int id) {
     return Spline_View{splinesurf.spline_input[id],
         splinesurf.spline_output[id], splinesurf.spline_cache[id],
         splinesurf.spline_draw[id]};
   }
+
+  Spline_View selected_spline() {
+    if (splinesurf.spline_input.empty()) {
+      add_spline();
+      editing.selected_spline_id = 0;
+    }
+    return get_spline_view(editing.selected_spline_id);
+  }
 };
+
+inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
+    const std::array<mesh_point, 4>& control_points, int subdivisions) {
+  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
+      mesh.adjacencies, control_points, subdivisions);
+}
+inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
+    const vector<mesh_point>& control_points, int subdivisions) {
+  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
+      mesh.adjacencies, control_points, subdivisions);
+}
 
 // view params
 struct view_params {
@@ -93,6 +146,37 @@ void add_options(const cli_command& cli, view_params& params) {
 void run_view(const view_params& params) { print_fatal("Opengl not compiled"); }
 
 #else
+
+// inline shape_data make_polygon_shape(
+//    const App::Mesh& mesh, const vector<vec3f>& positions, float line_width) {
+//  auto shape = shape_data{};
+//
+//  {
+//    auto froms = vector<vec3f>();
+//    auto tos   = vector<vec3f>();
+//    froms.reserve(positions.size() - 1);
+//    tos.reserve(positions.size() - 1);
+//    for (int i = 0; i < positions.size() - 1; i++) {
+//      auto from = positions[i];
+//      auto to   = positions[i + 1];
+//      if (from == to) continue;
+//      froms.push_back(from);
+//      tos.push_back(to);
+//    }
+//
+//    auto cylinder = make_uvcylinder({16, 1, 1}, {line_width, 1});
+//    for (auto& p : cylinder.positions) {
+//      p.z = p.z * 0.5 + 0.5;
+//    }
+//
+//    shape.quads     = cylinder.quads;
+//    shape.positions = cylinder.positions;
+//    shape.normals   = cylinder.normals;
+//    shape.froms     = froms;
+//    shape.tos       = tos;
+//  }
+//  return shape;
+//}
 
 // view shapes
 void run_view(const view_params& params) {
@@ -247,15 +331,67 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     if (input.mouse_left_click) {
       auto point = intersect_mesh(app, input);
       if (point.face != -1) {
-        auto spline = app.selected_spline_input();
+        auto spline = app.selected_spline();
         spline.input.control_points.push_back(point);
-        printf("xxx: %ld\n", app.splinesurf.spline_input.size());
+
         printf(
             "cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
+        if ((spline.input.control_points.size() - 1) % 3 == 0 &&
+            spline.input.control_points.size() >= 4) {
+          auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
+          spline.cache.curves_to_update.insert((int)curve_id);
+          auto shape_id = (int)scene.shapes.size();
+          spline.draw.curve_shapes.push_back(shape_id);
+          scene.shapes.push_back({});
+          scene.instances.push_back({{}, shape_id, 1});
+          glscene.shapes.push_back({});
+        }
       }
     }
-  };
 
+    for (int i = 0; i < app.splinesurf.spline_input.size(); i++) {
+      auto spline = app.get_spline_view(i);
+      if (spline.cache.curves_to_update.size()) {
+        spline.output.points = bezier_spline(app.mesh,
+            spline.input.control_points, spline.input.num_subdivisions);
+
+        spline.cache.positions.resize(spline.output.points.size());
+        for (int i = 0; i < spline.output.points.size(); i++) {
+          spline.cache.positions[i] = eval_position(
+              app.mesh.triangles, app.mesh.positions, spline.output.points[i]);
+        }
+      }
+      spline.draw.curves_to_update = spline.cache.curves_to_update;
+      spline.cache.curves_to_update.clear();
+    }
+    // for (auto& curve_id : spline.cache.curves_to_update) {
+    // auto id             = curve_id * 3 + 1;
+    // auto control_points = *(
+    //     std::array<mesh_point, 4>*)&spline.input.control_points[id];
+    // auto curve = bezier_spline(app.mesh, spline.input.control_points,
+    //     spline.input.num_subdivisions);
+    // auto points_per_curve = 3 * (1 << num_subdivisions) + 1;
+    // for (int i = 0; i < curve.size(); i++) {
+    //   spline.output.points[id + i] = curve[i];
+    // }
+    // }
+
+    for (int i = 0; i < app.splinesurf.spline_input.size(); i++) {
+      auto spline = app.get_spline_view(i);
+      for (auto& c : spline.draw.curves_to_update) {
+        auto  id        = spline.draw.curve_shapes[c];
+        auto& shape     = scene.shapes[id];
+        shape.positions = spline.cache.positions;
+        shape.lines.resize(spline.cache.positions.size() - 1);
+        for (int i = 0; i < spline.cache.positions.size() - 1; i++) {
+          shape.lines[i] = {i, i + 1};
+        }
+        updated_shapes += spline.draw.curve_shapes[c];
+      }
+      spline.draw.curves_to_update.clear();
+    }
+    // update_glscene(glscene, scene, updated_shapes, updated_textures);
+  };
   // run ui
   run_ui({1280 + 320, 720}, "yshade", callbacks);
 }
@@ -276,13 +412,19 @@ void update_callback(const glinput_state& input, App& app) {
 void run_glview(const glview_params& params) {
   // loading shape
   auto error = string{};
-  auto shape = shape_data{};
-  if (!load_shape(params.shape, shape, error)) print_fatal(error);
+
+  auto app = App{};
+  if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
 
   // make scene
-  auto app  = App{};
-  app.bvh   = make_triangles_bvh(shape.triangles, shape.positions, {});
-  app.scene = make_shape_scene(shape, params.addsky);
+  app.mesh.adjacencies = face_adjacencies(app.mesh.triangles);
+  app.mesh.dual_solver = make_dual_geodesic_solver(
+      app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies);
+  app.bvh   = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
+  app.scene = make_shape_scene(app.mesh, params.addsky);
+  auto line_material  = material_data{};
+  line_material.color = {1, 1, 1};
+  app.scene.materials.push_back(line_material);
 
   // run viewer
   run_app(app, "yshape", {}, widgets_callback, update_callback);

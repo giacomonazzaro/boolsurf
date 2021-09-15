@@ -1568,6 +1568,7 @@ void draw_scene(glscene_state& glscene, const scene_data& scene,
   if (params.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   for (auto& instance : scene.instances) {
     auto& glshape  = glscene.shapes.at(instance.shape);
+    if(glshape.vertexarray == 0) continue;
     auto& material = scene.materials.at(instance.material);
 
     auto shape_xform     = frame_to_mat(instance.frame);
