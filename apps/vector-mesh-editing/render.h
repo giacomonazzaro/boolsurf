@@ -169,11 +169,15 @@ static bool draw_scene_editor(scene_data& scene, scene_selection& selection,
 }
 
 // Open a window and show an scene via path tracing
-void view_raytraced_scene(const string& title, const string& name,
+void view_raytraced_scene(App& app, const string& title, const string& name,
     scene_data& scene, const trace_params& params_ = {}, bool print = true,
     bool edit = false) {
   // copy params and camera
-  auto params = params_;
+  auto               params  = params_;
+  auto               glscene = glscene_state{};  // TODO(giacomo): Not used!!!
+  auto               updated_shapes = vector<int>{};
+  vector<shape_data> new_shapes;
+  vector<instance_data> new_instances;
 
   // build bvh
   if (print) print_progress_begin("build bvh");
@@ -368,6 +372,22 @@ void view_raytraced_scene(const string& title, const string& name,
       stop_render();
       scene.cameras[params.camera] = camera;
       reset_display();
+    }
+
+    {
+      process_click(app, scene, glscene, updated_shapes, new_shapes,
+          new_instances, input);
+      if (new_shapes.size()) {
+        stop_render();
+        scene.shapes += new_shapes;
+        scene.instances += new_instances;
+        update_splines(app, scene, updated_shapes);
+        updated_shapes.clear();
+        new_shapes.clear();
+        new_instances.clear();
+        bvh = make_bvh(scene, params);
+        reset_display();
+      }
     }
   };
 

@@ -13,17 +13,6 @@
 #endif
 using namespace yocto;
 
-inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
-    const std::array<mesh_point, 4>& control_points, int subdivisions) {
-  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
-      mesh.adjacencies, control_points, subdivisions);
-}
-inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
-    const vector<mesh_point>& control_points, int subdivisions) {
-  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
-      mesh.adjacencies, control_points, subdivisions);
-}
-
 // view params
 struct view_params {
   string shape  = "shape.ply";
@@ -78,15 +67,18 @@ void run_view(const view_params& params) { print_fatal("Opengl not compiled"); }
 // view shapes
 void run_view(const view_params& params) {
   // load shape
-  auto error = string{};
-  auto shape = shape_data{};
-  if (!load_shape(params.shape, shape, error, true)) print_fatal(error);
+  //  auto error = string{};
+  //  auto shape = shape_data{};
+  //  if (!load_shape(params.shape, shape, error, true)) print_fatal(error);
+  //
+  //  // make scene
+  //  auto scene = make_shape_scene(shape, params.addsky);
 
-  // make scene
-  auto scene = make_shape_scene(shape, params.addsky);
+  auto app = App{};
+  init_app(app, params);
 
   // run view
-  view_raytraced_scene("yshape", params.shape, scene);
+  view_raytraced_scene(app, "yshape", params.shape, app.scene);
 }
 
 #endif
@@ -113,68 +105,6 @@ void run_glview(const glview_params& params) {
 
 using app_callback = std::function<void(const glinput_state& input, App& app)>;
 
-mesh_point intersect_mesh(App& app, const glinput_state& input) {
-  auto& shape    = app.scene.shapes.at(0);
-  auto& camera   = app.scene.cameras.at(0);
-  auto  mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-      input.mouse_pos.y / float(input.window_size.y)};
-  auto  ray      = camera_ray(
-      camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
-  auto isec = intersect_triangles_bvh(
-      app.bvh, shape.triangles, shape.positions, ray, false);
-  if (isec.hit) {
-    // if (stroke.empty() || stroke.back().element != isec.element ||
-    // stroke.back().uv != isec.uv) {
-    // stroke.push_back({isec.element, isec.uv});
-    printf("point: %d, %f %f\n", isec.element, isec.uv.x, isec.uv.y);
-    // updated = true;
-    // }
-    return mesh_point{isec.element, isec.uv};
-  }
-  return {};
-}
-
-void update_output(Spline_Output& output, const Spline_Input& input,
-    const App::Mesh& mesh, const hash_set<int>& curves_to_update) {
-  if (curves_to_update.size()) {
-    output.points = bezier_spline(
-        mesh, input.control_points, input.num_subdivisions);
-  }
-  // for (auto& curve_id : spline.cache.curves_to_update) {
-  // auto id             = curve_id * 3 + 1;
-  // auto control_points = *(
-  //     std::array<mesh_point, 4>*)&spline.input.control_points[id];
-  // auto curve = bezier_spline(app.mesh, spline.input.control_points,
-  //     spline.input.num_subdivisions);
-  // auto points_per_curve = 3 * (1 << num_subdivisions) + 1;
-  // for (int i = 0; i < curve.size(); i++) {
-  //   spline.output.points[id + i] = curve[i];
-  // }
-  // }
-}
-
-void update_cache(Spline_Cache& cache, const Spline_Output& output,
-    scene_data& scene, vector<int>& updated_shapes) {
-  auto& mesh = scene.shapes[0];
-  if (cache.curves_to_update.size()) {
-    cache.positions.resize(output.points.size());
-    for (int i = 0; i < output.points.size(); i++) {
-      cache.positions[i] = eval_position(
-          mesh.triangles, mesh.positions, output.points[i]);
-    }
-  }
-
-  for (auto& c : cache.curves_to_update) {
-    auto  id             = cache.curve_shapes[c];
-    auto& shape          = scene.shapes[id];
-    auto  line_thickness = 0.005;
-    shape         = polyline_to_cylinders(cache.positions, 8, line_thickness);
-    shape.normals = compute_normals(shape);
-    updated_shapes += cache.curve_shapes[c];
-  }
-  cache.curves_to_update.clear();
-}
-
 void run_app(App& app, const string& name, const glscene_params& params_,
     const app_callback& widgets_callback  = {},
     const app_callback& uiupdate_callback = {},
@@ -182,15 +112,6 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   // glscene
   auto  glscene = glscene_state{};
   auto& scene   = app.scene;
-
-  auto add_shape = [](scene_data& scene, glscene_state& glscene,
-                       const frame3f& frame = identity3x4f, int material = 1) {
-    auto id = (int)scene.shapes.size();
-    scene.shapes.push_back({});
-    scene.instances.push_back({frame, id, material});
-    glscene.shapes.push_back({});
-    return id;
-  };
 
   // draw params
   auto params = params_;
@@ -210,6 +131,10 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   // gpu updates
   auto updated_shapes   = vector<int>{};
   auto updated_textures = vector<int>{};
+
+  // scene
+  auto new_instances = vector<instance_data>{};
+  auto new_shapes    = vector<shape_data>{};
 
   // callbacks
   auto callbacks    = glwindow_callbacks{};
@@ -275,47 +200,17 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       scene.cameras.at(params.camera) = camera;
     }
 
-    if (input.mouse_left_click) {
-      auto point = intersect_mesh(app, input);
-      if (point.face != -1) {
-        auto spline = app.selected_spline();
-        spline.input.control_points.push_back(point);
+    process_click(
+        app, scene, glscene, updated_shapes, new_shapes, new_instances, input);
 
-        {
-          auto frame = frame3f{};
-          frame.o    = eval_position(
-              app.mesh.triangles, app.mesh.positions, point);
-          auto  shape_id = add_shape(scene, glscene, frame);
-          auto& shape    = scene.shapes[shape_id];
-          shape          = make_sphere(8, 0.005, 1);
-          updated_shapes.push_back(shape_id);
-        }
+    scene.shapes += new_shapes;
+    scene.instances += new_instances;
 
-        printf(
-            "cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
-        if ((spline.input.control_points.size() - 1) % 3 == 0 &&
-            spline.input.control_points.size() >= 4) {
-          auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
-          spline.cache.curves_to_update.insert((int)curve_id);
+    update_splines(app, scene, updated_shapes);
 
-          auto shape_id = add_shape(scene, glscene);
-          spline.cache.curve_shapes.push_back(shape_id);
-        }
-      }
-    }
-
-    // Update bezier outputs of edited curves.
-    for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-      auto spline = app.get_spline_view(i);
-      update_output(
-          spline.output, spline.input, app.mesh, spline.cache.curves_to_update);
-    }
-
-    // Update bezier positions of edited curves.
-    for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-      auto spline = app.get_spline_view(i);
-      update_cache(spline.cache, spline.output, scene, updated_shapes);
-    }
+    new_shapes.clear();
+    new_instances.clear();
+    // updated_shapes.clear();
   };
   // run ui
   run_ui({1280 + 320, 720}, "yshade", callbacks);
@@ -333,28 +228,6 @@ void update_callback(const glinput_state& input, App& app) {
       std::chrono::high_resolution_clock::now().time_since_epoch().count() *
       1e-9;
 };
-
-template <typename Params>
-void init_app(App& app, const Params& params) {
-  // loading shape
-  auto error = string{};
-  if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
-  auto bbox = invalidb3f;
-  for (auto& pos : app.mesh.positions) bbox = merge(bbox, pos);
-  for (auto& pos : app.mesh.positions)
-    pos = (pos - center(bbox)) / max(size(bbox));
-
-  app.mesh.adjacencies = face_adjacencies(app.mesh.triangles);
-  app.mesh.dual_solver = make_dual_geodesic_solver(
-      app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies);
-  app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
-
-  // make scene
-  app.scene           = make_shape_scene(app.mesh, params.addsky);
-  auto line_material  = material_data{};
-  line_material.color = {1, 0, 0};
-  app.scene.materials.push_back(line_material);
-}
 
 void run_glview(const glview_params& params) {
   auto app = App{};
