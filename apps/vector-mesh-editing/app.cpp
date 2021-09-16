@@ -45,24 +45,30 @@ struct Spline_Cache {
   vector<vec3f> positions        = {};
   geodesic_path tangent0         = {};  // TODO(giacomo): use mesh_paths?
   geodesic_path tangent1         = {};  // TODO(giacomo): use mesh_paths?
-  hash_set<int> curves_to_update = {};
-};
-struct Spline_Draw {
   vector<int>   curve_shapes     = {};  // id of shape in scene_data
   hash_set<int> curves_to_update = {};
 };
+// struct Spline_Draw {
+//   vector<int>   curve_shapes     = {};  // id of shape in scene_data
+//   hash_set<int> curves_to_update = {};
+// };
 struct Spline_View {
   Spline_Input&  input;
   Spline_Output& output;
   Spline_Cache&  cache;
-  Spline_Draw&   draw;
+  // Spline_Draw&   draw;
 };
 
 struct Splinesurf {
   vector<Spline_Input>  spline_input  = {};
   vector<Spline_Output> spline_output = {};
   vector<Spline_Cache>  spline_cache  = {};
-  vector<Spline_Draw>   spline_draw   = {};
+  // vector<Spline_Draw>   spline_draw   = {};
+
+  Spline_View get_spline_view(int id) {
+    return Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
+  }
+  int num_splines() const { return spline_input.size(); }
 };
 
 struct Editing {
@@ -97,15 +103,11 @@ struct App {
     splinesurf.spline_input.push_back({});
     splinesurf.spline_output.push_back({});
     splinesurf.spline_cache.push_back({});
-    splinesurf.spline_draw.push_back({});
+    // splinesurf.spline_draw.push_back({});
     return id;
   }
 
-  Spline_View get_spline_view(int id) {
-    return Spline_View{splinesurf.spline_input[id],
-        splinesurf.spline_output[id], splinesurf.spline_cache[id],
-        splinesurf.spline_draw[id]};
-  }
+  Spline_View get_spline_view(int id) { return splinesurf.get_spline_view(id); }
 
   Spline_View selected_spline() {
     if (splinesurf.spline_input.empty()) {
@@ -237,6 +239,47 @@ mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
+void update_output(Spline_Output& output, const Spline_Input& input,
+    const App::Mesh& mesh, const hash_set<int>& curves_to_update) {
+  if (curves_to_update.size()) {
+    output.points = bezier_spline(
+        mesh, input.control_points, input.num_subdivisions);
+  }
+  // for (auto& curve_id : spline.cache.curves_to_update) {
+  // auto id             = curve_id * 3 + 1;
+  // auto control_points = *(
+  //     std::array<mesh_point, 4>*)&spline.input.control_points[id];
+  // auto curve = bezier_spline(app.mesh, spline.input.control_points,
+  //     spline.input.num_subdivisions);
+  // auto points_per_curve = 3 * (1 << num_subdivisions) + 1;
+  // for (int i = 0; i < curve.size(); i++) {
+  //   spline.output.points[id + i] = curve[i];
+  // }
+  // }
+}
+
+void update_cache(Spline_Cache& cache, const Spline_Output& output,
+    scene_data& scene, vector<int>& updated_shapes) {
+  auto& mesh = scene.shapes[0];
+  if (cache.curves_to_update.size()) {
+    cache.positions.resize(output.points.size());
+    for (int i = 0; i < output.points.size(); i++) {
+      cache.positions[i] = eval_position(
+          mesh.triangles, mesh.positions, output.points[i]);
+    }
+  }
+
+  for (auto& c : cache.curves_to_update) {
+    auto  id             = cache.curve_shapes[c];
+    auto& shape          = scene.shapes[id];
+    auto  line_thickness = 0.005;
+    shape         = polyline_to_cylinders(cache.positions, 8, line_thickness);
+    shape.normals = compute_normals(shape);
+    updated_shapes += cache.curve_shapes[c];
+  }
+  cache.curves_to_update.clear();
+}
+
 void run_app(App& app, const string& name, const glscene_params& params_,
     const app_callback& widgets_callback  = {},
     const app_callback& uiupdate_callback = {},
@@ -362,57 +405,23 @@ void run_app(App& app, const string& name, const glscene_params& params_,
           spline.cache.curves_to_update.insert((int)curve_id);
 
           auto shape_id = add_shape(scene, glscene);
-          spline.draw.curve_shapes.push_back(shape_id);
+          spline.cache.curve_shapes.push_back(shape_id);
         }
       }
     }
 
-    for (int i = 0; i < app.splinesurf.spline_input.size(); i++) {
+    // Update bezier outputs of edited curves.
+    for (int i = 0; i < app.splinesurf.num_splines(); i++) {
       auto spline = app.get_spline_view(i);
-      if (spline.cache.curves_to_update.size()) {
-        spline.output.points = bezier_spline(app.mesh,
-            spline.input.control_points, spline.input.num_subdivisions);
-
-        spline.cache.positions.resize(spline.output.points.size());
-        for (int i = 0; i < spline.output.points.size(); i++) {
-          spline.cache.positions[i] = eval_position(
-              app.mesh.triangles, app.mesh.positions, spline.output.points[i]);
-        }
-      }
-      spline.draw.curves_to_update = spline.cache.curves_to_update;
-      spline.cache.curves_to_update.clear();
+      update_output(
+          spline.output, spline.input, app.mesh, spline.cache.curves_to_update);
     }
-    // for (auto& curve_id : spline.cache.curves_to_update) {
-    // auto id             = curve_id * 3 + 1;
-    // auto control_points = *(
-    //     std::array<mesh_point, 4>*)&spline.input.control_points[id];
-    // auto curve = bezier_spline(app.mesh, spline.input.control_points,
-    //     spline.input.num_subdivisions);
-    // auto points_per_curve = 3 * (1 << num_subdivisions) + 1;
-    // for (int i = 0; i < curve.size(); i++) {
-    //   spline.output.points[id + i] = curve[i];
-    // }
-    // }
 
-    for (int i = 0; i < app.splinesurf.spline_input.size(); i++) {
+    // Update bezier positions of edited curves.
+    for (int i = 0; i < app.splinesurf.num_splines(); i++) {
       auto spline = app.get_spline_view(i);
-      for (auto& c : spline.draw.curves_to_update) {
-        auto  id    = spline.draw.curve_shapes[c];
-        auto& shape = scene.shapes[id];
-        // shape.positions = spline.cache.positions;
-        auto line_thickness = 0.005;
-        shape               = polyline_to_cylinders(
-            spline.cache.positions, 8, line_thickness);
-        shape.normals = compute_normals(shape);
-        // shape.lines.resize(spline.cache.positions.size() - 1);
-        // for (int i = 0; i < spline.cache.positions.size() - 1; i++) {
-        //   shape.lines[i] = {i, i + 1};
-        // }
-        updated_shapes += spline.draw.curve_shapes[c];
-      }
-      spline.draw.curves_to_update.clear();
+      update_cache(spline.cache, spline.output, scene, updated_shapes);
     }
-    // update_glscene(glscene, scene, updated_shapes, updated_textures);
   };
   // run ui
   run_ui({1280 + 320, 720}, "yshade", callbacks);
