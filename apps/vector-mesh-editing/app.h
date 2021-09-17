@@ -121,8 +121,10 @@ void init_app(App& app, const Params& params) {
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
-  app.scene           = make_shape_scene(app.mesh, params.addsky);
-  auto line_material  = material_data{};
+  app.scene = make_shape_scene(app.mesh, params.addsky);
+
+  // Add line material.
+  auto line_material  = app.scene.materials[0];
   line_material.color = {1, 0, 0};
   app.scene.materials.push_back(line_material);
 }
@@ -239,7 +241,7 @@ void update_cache(Spline_Cache& cache, const Spline_Output& output,
     auto  id             = cache.curve_shapes[c];
     auto& shape          = scene.shapes[id];
     auto  line_thickness = 0.005;
-    shape         = polyline_to_cylinders(cache.positions, 8, line_thickness);
+    shape         = polyline_to_cylinders(cache.positions, 16, line_thickness);
     shape.normals = compute_normals(shape);
     updated_shapes += cache.curve_shapes[c];
   }

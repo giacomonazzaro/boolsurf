@@ -377,7 +377,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     {
       process_click(app, scene, glscene, updated_shapes, new_shapes,
           new_instances, input);
-      if (new_shapes.size()) {
+      if (new_instances.size()) {
         stop_render();
         scene.shapes += new_shapes;
         scene.instances += new_instances;
