@@ -1,4 +1,5 @@
 #pragma once
+#include <boolsurf/boolsurf.h>
 #include <yocto/yocto_geometry.h>
 #include <yocto/yocto_math.h>
 #include <yocto/yocto_mesh.h>
@@ -112,21 +113,21 @@ struct Editing {
 };
 
 struct App {
-  struct Mesh : shape_data {
-    vector<vec3i>        adjacencies = {};
-    dual_geodesic_solver dual_solver = {};
-    // bool_borders         borders     = {};
+  // struct Mesh : shape_data {
+  //   vector<vec3i>        adjacencies = {};
+  //   dual_geodesic_solver dual_solver = {};
+  // bool_borders         borders     = {};
 
-    // shape_bvh                  bvh                = {};
-    // bbox3f                     bbox               = {};
-    // int                        num_triangles      = 0;
-    // int                        num_positions      = 0;
-    // hash_map<int, vector<int>> triangulated_faces = {};
-    // geodesic_solver            graph              = {};
-  };
+  // shape_bvh                  bvh                = {};
+  // bbox3f                     bbox               = {};
+  // int                        num_triangles      = 0;
+  // int                        num_positions      = 0;
+  // hash_map<int, vector<int>> triangulated_faces = {};
+  // geodesic_solver            graph              = {};
+  // };
 
   scene_data scene = {};
-  Mesh       mesh  = {};
+  bool_mesh  mesh  = {};
   shape_bvh  bvh   = {};
   float      time  = 0;
 
@@ -315,19 +316,19 @@ inline void process_click(
 }
 
 // TODO(giacomo): Put following stuff in splinesurf.h
-inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
+inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
     const std::array<mesh_point, 4>& control_points, int subdivisions) {
   return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
       mesh.adjacencies, control_points, subdivisions);
 }
-inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
+inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
     const vector<mesh_point>& control_points, int subdivisions) {
   return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
       mesh.adjacencies, control_points, subdivisions);
 }
 
 void update_output(Spline_Output& output, const Spline_Input& input,
-    const App::Mesh& mesh, const hash_set<int>& curves_to_update) {
+    const bool_mesh& mesh, const hash_set<int>& curves_to_update) {
   for (auto curve_id : curves_to_update) {
     if (output.points.size() <= curve_id) output.points.resize(curve_id + 1);
     auto control_polygon    = input.control_polygon(curve_id);

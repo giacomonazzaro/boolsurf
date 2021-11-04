@@ -9,11 +9,11 @@ template <typename Key>
 using hash_set = std::unordered_set<Key>;
 
 // Vector append and concatenation
-template <typename T>
-inline void operator+=(std::vector<T>& a, const std::vector<T>& b) {
-  a.insert(a.end(), b.begin(), b.end());
-}
-template <typename T>
-inline void operator+=(std::vector<T>& a, const T& b) {
-  a.push_back(b);
-}
+//template <typename T>
+//inline void operator+=(std::vector<T>& a, const std::vector<T>& b) {
+//  a.insert(a.end(), b.begin(), b.end());
+//}
+//template <typename T>
+//inline void operator+=(std::vector<T>& a, const T& b) {
+//  a.push_back(b);
+//}
