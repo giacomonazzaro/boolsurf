@@ -133,8 +133,8 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   auto updated_textures = vector<int>{};
 
   // scene
-  auto new_instances = vector<instance_data>{};
-  auto new_shapes    = vector<shape_data>{};
+  auto& new_instances = app.new_instances;
+  auto& new_shapes    = app.new_shapes;
 
   // callbacks
   auto callbacks    = glwindow_callbacks{};
@@ -200,14 +200,22 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       scene.cameras.at(params.camera) = camera;
     }
 
-    process_click(
-        app, scene, glscene, updated_shapes, new_shapes, new_instances, input);
+    process_click(app, updated_shapes, input);
     process_mouse(app, input);
 
     scene.shapes += new_shapes;
     scene.instances += new_instances;
+    for (auto& _ : new_shapes) {
+      glscene.shapes.emplace_back();
+    }
 
     update_splines(app, scene, updated_shapes);
+
+    if (!updated_shapes.empty() || !updated_textures.empty()) {
+      update_glscene(glscene, scene, updated_shapes, updated_textures);
+      updated_shapes.clear();
+      updated_textures.clear();
+    }
 
     new_shapes.clear();
     new_instances.clear();

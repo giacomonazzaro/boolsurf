@@ -18,21 +18,34 @@ struct Spline_Input {
   vector<mesh_point> control_points   = {};
   vector<bool>       is_smooth        = {};
   int                num_subdivisions = 4;
+  bool               is_closed        = false;
 
+  inline std::array<mesh_point, 4> control_polygon(int curve_id) const {
+    return *(std::array<mesh_point, 4>*)&control_points[curve_id * 3];
+  }
   inline int num_curves() const {
     return max((int)(control_points.size() - 1) / 3, 0);
   }
 };
+
 struct Spline_Output {
-  vector<mesh_point> points = {};
+  vector<vector<mesh_point>> points = {};
 };
+
 struct Spline_Cache {
-  vector<vec3f> positions        = {};
-  geodesic_path tangent0         = {};  // TODO(giacomo): use mesh_paths?
-  geodesic_path tangent1         = {};  // TODO(giacomo): use mesh_paths?
-  vector<int>   curve_shapes     = {};  // id of shape in scene_data
-  vector<int>   point_shapes     = {};  // id of shape in scene_data
-  hash_set<int> curves_to_update = {};
+  struct Tangent {
+    geodesic_path path     = {};  // TODO(giacomo): use mesh_paths?
+    int           shape_id = -1;
+  };
+  struct Curve {
+    vector<vec3f>          positions = {};
+    int                    shape_id  = -1;
+    std::array<Tangent, 2> tangents  = {};  // TODO(giacomo): use mesh_paths?
+  };
+
+  std::vector<Curve> curves           = {};  // TODO(giacomo): use mesh_paths?
+  hash_set<int>      curves_to_update = {};
+  vector<int>        point_shapes     = {};  // id of shape in scene_data
 };
 // struct Spline_Draw {
 //   vector<int>   curve_shapes     = {};  // id of shape in scene_data
@@ -94,9 +107,11 @@ struct App {
   shape_bvh  bvh   = {};
   float      time  = 0;
 
-  Editing                 editing           = {};
-  Splinesurf              splinesurf        = {};
-  std::unordered_set<int> splines_to_update = {};
+  Editing    editing    = {};
+  Splinesurf splinesurf = {};
+  // std::unordered_set<int> splines_to_update = {};
+  vector<shape_data>    new_shapes;
+  vector<instance_data> new_instances;
 
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
@@ -158,6 +173,17 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
+inline int add_shape(scene_data& scene, const shape_data& shape,
+    vector<shape_data>& new_shapes, vector<instance_data>& new_instances,
+    const frame3f& frame = identity3x4f, int material = 1) {
+  auto id = (int)scene.shapes.size() + (int)new_shapes.size();
+  // scene.shapes.push_back({});
+  new_shapes.push_back(shape);
+  new_instances.push_back({frame, id, material});
+  //  glscene.shapes.push_back({});
+  return id;
+}
+
 inline void process_mouse(App& app, const glinput_state& input) {
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
@@ -182,56 +208,48 @@ inline void process_mouse(App& app, const glinput_state& input) {
   });
 }
 
-inline void process_click(App& app, scene_data& scene, glscene_state& glscene,
-    vector<int>& updated_shapes, vector<shape_data>& new_shapes,
-    vector<instance_data>& new_instances, const glinput_state& input) {
-  if (input.mouse_left_click) {
-    auto add_shape =
-        [](scene_data& scene, glscene_state& glscene, const shape_data& shape,
-            vector<shape_data>&    new_shapes,
-            vector<instance_data>& new_instances,
-            const frame3f& frame = identity3x4f, int material = 1) {
-          auto id = (int)scene.shapes.size() + (int)new_shapes.size();
-          // scene.shapes.push_back({});
-          new_shapes.push_back(shape);
-          new_instances.push_back({frame, id, material});
-          glscene.shapes.push_back({});
-          return id;
-        };
+inline int add_curve(App& app, Spline_Cache& cache) {
+  auto curve_id = (int)cache.curves.size();
+  cache.curves.emplace_back();
+  cache.curves_to_update.insert((int)curve_id);
+  cache.curves[curve_id].shape_id = add_shape(
+      app.scene, {}, app.new_shapes, app.new_instances, {});
+  return curve_id;
+}
 
-    if (app.splinesurf.num_splines() == 0) {
-      app.editing.selection.spline_id = add_spline(app.splinesurf);
-    }
-    if (app.editing.selection.spline_id == -1) return;
+inline void process_click(
+    App& app, vector<int>& updated_shapes, const glinput_state& input) {
+  if (!input.mouse_left_click) return;
+  auto& scene = app.scene;
+  if (app.splinesurf.num_splines() == 0) {
+    app.editing.selection.spline_id = add_spline(app.splinesurf);
+  }
+  if (app.editing.selection.spline_id == -1) return;
 
-    auto point = intersect_mesh(app, input);
-    if (point.face == -1) return;
+  auto point = intersect_mesh(app, input);
+  if (point.face == -1) return;
 
-    auto spline   = app.selected_spline();
-    auto point_id = (int)spline.input.control_points.size();
-    spline.input.control_points.push_back(point);
-    app.editing.selection.control_point_id = point_id;
+  auto spline   = app.selected_spline();
+  auto point_id = (int)spline.input.control_points.size();
+  spline.input.control_points.push_back(point);
+  app.editing.selection.control_point_id = point_id;
 
-    {
-      auto frame = frame3f{};
-      frame.o    = eval_position(app.mesh.triangles, app.mesh.positions, point);
-      auto  shape_id = add_shape(scene, glscene, make_sphere(8, 0.005, 1),
-          new_shapes, new_instances, frame);
-      auto& shape    = scene.shapes[shape_id];
-      spline.cache.point_shapes.push_back(shape_id);
-      updated_shapes.push_back(shape_id);
-    }
+  {
+    auto frame = frame3f{};
+    frame.o    = eval_position(app.mesh.triangles, app.mesh.positions, point);
+    auto  shape_id = add_shape(scene, make_sphere(8, 0.005, 1), app.new_shapes,
+        app.new_instances, frame);
+    auto& shape    = scene.shapes[shape_id];
+    spline.cache.point_shapes.push_back(shape_id);
+    updated_shapes.push_back(shape_id);
+  }
 
-    if ((spline.input.control_points.size() - 1) % 3 == 0 &&
-        spline.input.control_points.size() >= 4) {
-      printf("cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
-      auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
-      spline.cache.curves_to_update.insert((int)curve_id);
-
-      auto shape_id = add_shape(
-          scene, glscene, {}, new_shapes, new_instances, {});
-      spline.cache.curve_shapes.push_back(shape_id);
-    }
+  if ((spline.input.control_points.size() - 1) % 3 == 0 &&
+      spline.input.control_points.size() >= 4) {
+    printf("cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
+    //      auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
+    //      spline.cache.curves_to_update.insert((int)curve_id);
+    add_curve(app, spline.cache);
   }
 }
 
@@ -249,9 +267,11 @@ inline vector<mesh_point> bezier_spline(const App::Mesh& mesh,
 
 void update_output(Spline_Output& output, const Spline_Input& input,
     const App::Mesh& mesh, const hash_set<int>& curves_to_update) {
-  if (curves_to_update.size()) {
-    output.points = bezier_spline(
-        mesh, input.control_points, input.num_subdivisions);
+  for (auto curve_id : curves_to_update) {
+    if (output.points.size() <= curve_id) output.points.resize(curve_id + 1);
+    auto control_polygon    = input.control_polygon(curve_id);
+    output.points[curve_id] = bezier_spline(
+        mesh, control_polygon, input.num_subdivisions);
   }
   // for (auto& curve_id : spline.cache.curves_to_update) {
   // auto id             = curve_id * 3 + 1;
@@ -269,21 +289,22 @@ void update_output(Spline_Output& output, const Spline_Input& input,
 void update_cache(Spline_Cache& cache, const Spline_Output& output,
     scene_data& scene, vector<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
-  if (cache.curves_to_update.size()) {
-    cache.positions.resize(output.points.size());
-    for (int i = 0; i < output.points.size(); i++) {
-      cache.positions[i] = eval_position(
-          mesh.triangles, mesh.positions, output.points[i]);
+  for (auto curve_id : cache.curves_to_update) {
+    cache.curves[curve_id].positions.resize(output.points[curve_id].size());
+    for (int i = 0; i < output.points[curve_id].size(); i++) {
+      cache.curves[curve_id].positions[i] = eval_position(
+          mesh.triangles, mesh.positions, output.points[curve_id][i]);
     }
   }
 
-  for (auto& c : cache.curves_to_update) {
-    auto  id             = cache.curve_shapes[c];
-    auto& shape          = scene.shapes[id];
+  for (auto curve_id : cache.curves_to_update) {
+    auto  shape_id       = cache.curves[curve_id].shape_id;
+    auto& shape          = scene.shapes[shape_id];
     auto  line_thickness = 0.005;
-    shape         = polyline_to_cylinders(cache.positions, 16, line_thickness);
+    shape                = polyline_to_cylinders(
+        cache.curves[curve_id].positions, 16, line_thickness);
     shape.normals = compute_normals(shape);
-    updated_shapes += cache.curve_shapes[c];
+    updated_shapes += cache.curves[curve_id].shape_id;
   }
   cache.curves_to_update.clear();
 }

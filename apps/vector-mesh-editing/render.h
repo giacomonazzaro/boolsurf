@@ -173,11 +173,11 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     scene_data& scene, const trace_params& params_ = {}, bool print = true,
     bool edit = false) {
   // copy params and camera
-  auto               params  = params_;
-  auto               glscene = glscene_state{};  // TODO(giacomo): Not used!!!
-  auto               updated_shapes = vector<int>{};
-  vector<shape_data> new_shapes;
-  vector<instance_data> new_instances;
+  auto  params         = params_;
+  auto  glscene        = glscene_state{};  // TODO(giacomo): Not used!!!
+  auto  updated_shapes = vector<int>{};
+  auto& new_shapes     = app.new_shapes;
+  auto& new_instances  = app.new_instances;
 
   // build bvh
   if (print) print_progress_begin("build bvh");
@@ -380,8 +380,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     }
 
     {
-      process_click(app, scene, glscene, updated_shapes, new_shapes,
-          new_instances, input);
+      process_click(app, updated_shapes, input);
       process_mouse(app, input);
 
       if (app.jobs.size()) {
