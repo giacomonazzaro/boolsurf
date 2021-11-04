@@ -224,10 +224,8 @@ void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
     mesh_polygon& polygon, int index) {
   if (index > 0) {
     auto& last_segment = polygon.edges.back();
-    polygon.length -= last_segment.size();
     polygon.edges.pop_back();
   } else {
-    polygon.length = 0;
     polygon.edges.clear();
   }
 
@@ -246,7 +244,6 @@ void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
         mesh.triangles, path.strip, path.lerps, path.start, path.end);
 
     polygon.edges.push_back(segments);
-    polygon.length += segments.size();
   }
 
   polygon.is_contained_in_single_face = (faces.size() == 1);
@@ -350,7 +347,6 @@ static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
     auto& polygons = shapes[shape_id].polygons;
     for (auto polygon_id = 0; polygon_id < polygons.size(); polygon_id++) {
       auto& polygon = polygons[polygon_id];
-      if (polygon.length == 0) continue;
       if (polygon.edges.empty()) continue;
 
       // La polilinea della prima faccia del poligono viene processata alla fine

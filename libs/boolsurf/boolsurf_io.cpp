@@ -415,7 +415,6 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
       for (int i = 0; i < bool_shape.polygons.size(); i++) {
         auto& polygon   = bool_shape.polygons[i];
         auto  positions = vector<vec3f>();
-        positions.reserve(polygon.length + 1);
 
         for (auto& edge : polygon.edges) {
           for (auto& segment : edge) {
@@ -610,8 +609,9 @@ void init_from_svg(bool_state& state, const bool_mesh& mesh,
   }
 
   for (auto& shape : svg) {
+    auto& bshape = state.bool_shapes.emplace_back();
     for (auto& path : shape.paths) {
-      auto& polygon = state.polygons.emplace_back();
+      auto& polygon = bshape.polygons.emplace_back();
 
       auto control_points = vector<mesh_point>{};
       // polygon.center = center;

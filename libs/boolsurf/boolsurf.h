@@ -51,7 +51,6 @@ struct shade_instance;
 struct mesh_polygon {
   vector<int>                  points = {};
   vector<vector<mesh_segment>> edges  = {};
-  int                          length = 0;
 
   bool is_contained_in_single_face = false;
 };
@@ -89,22 +88,10 @@ struct mesh_cell {
   hash_set<vec2i> adjacency = {};  // {cell_id, crossed_polygon_id}
 };
 
-// struct mesh_shape {
-//   int         shape      = 0;
-//   vector<int> generators = {-1, -1};
-//   bool        is_root    = true;
-
-//   vec3f         color = {0, 0, 0};
-//   hash_set<int> cells = {};
-
-//   vector<vector<int>> border_points = {};
-//   shade_instance*     borders_shape = nullptr;
-// };
-
 struct bool_state {
-  vector<mesh_polygon> polygons    = {{}};
-  vector<shape>        bool_shapes = {{}};
-  vector<mesh_point>   points      = {};
+  // vector<mesh_polygon> polygons    = {{}};
+  vector<shape>      bool_shapes = {{}};
+  vector<mesh_point> points      = {};
 
   int                  num_original_points = 0;
   hash_map<int, int>   control_points      = {};
@@ -113,12 +100,8 @@ struct bool_state {
   vector<mesh_cell>   cells          = {};
   vector<vector<int>> labels         = {};
   hash_set<int>       invalid_shapes = {};
-  // vector<int>           ambient_cells = {};
-  // vector<vector<vec2i>> cycles        = {};
-
-  // vector<mesh_shape> shapes         = {};
-  vector<int> shapes_sorting = {};
-  bool        failed         = false;
+  vector<int>         shapes_sorting = {};
+  bool                failed         = false;
 };
 
 namespace yocto {  // TODO(giacomo): Fix this.
