@@ -89,13 +89,10 @@ struct mesh_cell {
 };
 
 struct bool_state {
-  // vector<mesh_polygon> polygons    = {{}};
   vector<shape>      bool_shapes = {{}};
   vector<mesh_point> points      = {};
 
-  int                  num_original_points = 0;
-  hash_map<int, int>   control_points      = {};
-  hash_map<int, vec2i> isecs_generators    = {};
+  // hash_map<int, vec2i> isecs_generators = {};
 
   vector<mesh_cell>   cells          = {};
   vector<vector<int>> labels         = {};
@@ -151,8 +148,8 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
-void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
-    mesh_polygon& polygon, int index = 0);
+void recompute_polygon_segments(
+    const bool_mesh& mesh, const bool_state& state, mesh_polygon& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {
