@@ -4,6 +4,8 @@
 #include <yocto/yocto_mesh.h>
 #include <yocto/yocto_shape.h>
 
+#include <functional>
+
 #if YOCTO_OPENGL == 1
 #include <yocto_gui/yocto_glview.h>
 #endif
@@ -29,6 +31,7 @@ struct Spline_Cache {
   geodesic_path tangent0         = {};  // TODO(giacomo): use mesh_paths?
   geodesic_path tangent1         = {};  // TODO(giacomo): use mesh_paths?
   vector<int>   curve_shapes     = {};  // id of shape in scene_data
+  vector<int>   point_shapes     = {};  // id of shape in scene_data
   hash_set<int> curves_to_update = {};
 };
 // struct Spline_Draw {
@@ -54,10 +57,22 @@ struct Splinesurf {
   inline int num_splines() const { return (int)spline_input.size(); }
 };
 
+inline int add_spline(Splinesurf& splinesurf) {
+  auto id = (int)splinesurf.spline_input.size();
+  splinesurf.spline_input.push_back({});
+  splinesurf.spline_output.push_back({});
+  splinesurf.spline_cache.push_back({});
+  // splinesurf.spline_draw.push_back({});
+  return id;
+}
+
 struct Editing {
-  int         selected_spline_id        = -1;
-  int         selected_control_point_id = -1;
-  vector<int> selected_curves_id        = {};
+  struct Selection {
+    int spline_id        = -1;
+    int control_point_id = -1;
+  };
+  Selection selection             = {};
+  bool      holding_control_point = false;
 };
 
 struct App {
@@ -83,25 +98,18 @@ struct App {
   Splinesurf              splinesurf        = {};
   std::unordered_set<int> splines_to_update = {};
 
-  inline int add_spline() {
-    auto id = (int)splinesurf.spline_input.size();
-    splinesurf.spline_input.push_back({});
-    splinesurf.spline_output.push_back({});
-    splinesurf.spline_cache.push_back({});
-    // splinesurf.spline_draw.push_back({});
-    return id;
-  }
+  std::vector<std::function<void()>> jobs       = {};
+  bool                               update_bvh = false;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
   }
 
   inline Spline_View selected_spline() {
-    if (splinesurf.spline_input.empty()) {
-      add_spline();
-      editing.selected_spline_id = 0;
+    if (splinesurf.num_splines() == 0) {
+      editing.selection.spline_id = add_spline(splinesurf);
     }
-    return get_spline_view(editing.selected_spline_id);
+    return get_spline_view(editing.selection.spline_id);
   }
 };
 
@@ -142,12 +150,36 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
     // if (stroke.empty() || stroke.back().element != isec.element ||
     // stroke.back().uv != isec.uv) {
     // stroke.push_back({isec.element, isec.uv});
-    printf("point: %d, %f %f\n", isec.element, isec.uv.x, isec.uv.y);
+    // printf("point: %d, %f %f\n", isec.element, isec.uv.x, isec.uv.y);
     // updated = true;
     // }
     return mesh_point{isec.element, isec.uv};
   }
   return {};
+}
+
+inline void process_mouse(App& app, const glinput_state& input) {
+  if (!input.mouse_left) {
+    app.editing.holding_control_point = false;
+    return;
+  }
+  auto point = intersect_mesh(app, input);
+  if (point.face == -1) {
+    app.editing.selection = {};
+    return;
+  }
+  auto selection = app.editing.selection;
+  if (selection.spline_id == -1) return;
+  //  if (selection.curve_id == -1) return;
+  if (selection.control_point_id == -1) return;
+  auto spline = app.selected_spline();
+  spline.input.control_points[selection.control_point_id] = point;
+  auto shape_id = spline.cache.point_shapes[selection.control_point_id];
+  app.jobs.push_back([shape_id, point, &app]() {
+    app.scene.instances[shape_id].frame.o = eval_position(
+        app.mesh.triangles, app.mesh.positions, point);
+    app.update_bvh = true;
+  });
 }
 
 inline void process_click(App& app, scene_data& scene, glscene_state& glscene,
@@ -167,30 +199,38 @@ inline void process_click(App& app, scene_data& scene, glscene_state& glscene,
           return id;
         };
 
+    if (app.splinesurf.num_splines() == 0) {
+      app.editing.selection.spline_id = add_spline(app.splinesurf);
+    }
+    if (app.editing.selection.spline_id == -1) return;
+
     auto point = intersect_mesh(app, input);
-    if (point.face != -1) {
-      auto spline = app.selected_spline();
-      spline.input.control_points.push_back(point);
+    if (point.face == -1) return;
 
-      {
-        auto frame = frame3f{};
-        frame.o = eval_position(app.mesh.triangles, app.mesh.positions, point);
-        auto  shape_id = add_shape(scene, glscene, make_sphere(8, 0.005, 1),
-            new_shapes, new_instances, frame);
-        auto& shape    = scene.shapes[shape_id];
-        updated_shapes.push_back(shape_id);
-      }
+    auto spline   = app.selected_spline();
+    auto point_id = (int)spline.input.control_points.size();
+    spline.input.control_points.push_back(point);
+    app.editing.selection.control_point_id = point_id;
 
+    {
+      auto frame = frame3f{};
+      frame.o    = eval_position(app.mesh.triangles, app.mesh.positions, point);
+      auto  shape_id = add_shape(scene, glscene, make_sphere(8, 0.005, 1),
+          new_shapes, new_instances, frame);
+      auto& shape    = scene.shapes[shape_id];
+      spline.cache.point_shapes.push_back(shape_id);
+      updated_shapes.push_back(shape_id);
+    }
+
+    if ((spline.input.control_points.size() - 1) % 3 == 0 &&
+        spline.input.control_points.size() >= 4) {
       printf("cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
-      if ((spline.input.control_points.size() - 1) % 3 == 0 &&
-          spline.input.control_points.size() >= 4) {
-        auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
-        spline.cache.curves_to_update.insert((int)curve_id);
+      auto curve_id = (spline.input.control_points.size() - 1) / 3 - 1;
+      spline.cache.curves_to_update.insert((int)curve_id);
 
-        auto shape_id = add_shape(
-            scene, glscene, {}, new_shapes, new_instances, {});
-        spline.cache.curve_shapes.push_back(shape_id);
-      }
+      auto shape_id = add_shape(
+          scene, glscene, {}, new_shapes, new_instances, {});
+      spline.cache.curve_shapes.push_back(shape_id);
     }
   }
 }

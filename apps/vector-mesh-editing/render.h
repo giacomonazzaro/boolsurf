@@ -324,6 +324,11 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     draw_glcombobox("name", selected, names);
     auto current = (int)render_current;
     draw_glprogressbar("sample", current, params.samples);
+
+    draw_gllabel("selected spline", app.editing.selection.spline_id);
+    draw_gllabel(
+        "selected control_point", app.editing.selection.control_point_id);
+
     if (begin_glheader("render")) {
       auto edited  = 0;
       auto tparams = params;
@@ -377,6 +382,15 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     {
       process_click(app, scene, glscene, updated_shapes, new_shapes,
           new_instances, input);
+      process_mouse(app, input);
+
+      if (app.jobs.size()) {
+        stop_render();
+        for (auto& job : app.jobs) job();
+        app.jobs.clear();
+        reset_display();
+      }
+
       if (new_instances.size()) {
         stop_render();
         scene.shapes += new_shapes;

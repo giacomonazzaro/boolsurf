@@ -612,9 +612,9 @@ bvh_data make_bvh(
 
 static void refit_bvh(bvh_data& bvh, const shape_data& shape) {
 #ifdef YOCTO_EMBREE
-  if (bvh.embree_bvh) {
-    throw std::runtime_error("embree shape refit not supported");
-  }
+//  if (bvh.embree_bvh) {
+//    throw std::runtime_error("embree shape refit not supported");
+//  }
 #endif
 
   // build primitives

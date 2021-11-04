@@ -202,6 +202,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 
     process_click(
         app, scene, glscene, updated_shapes, new_shapes, new_instances, input);
+    process_mouse(app, input);
 
     scene.shapes += new_shapes;
     scene.instances += new_instances;
