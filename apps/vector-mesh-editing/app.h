@@ -157,14 +157,8 @@ void init_app(App& app, const Params& params) {
   // loading shape
   auto error = string{};
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
-  auto bbox = invalidb3f;
-  for (auto& pos : app.mesh.positions) bbox = merge(bbox, pos);
-  for (auto& pos : app.mesh.positions)
-    pos = (pos - center(bbox)) / max(size(bbox));
+  init_mesh(app.mesh);
 
-  app.mesh.adjacencies = face_adjacencies(app.mesh.triangles);
-  app.mesh.dual_solver = make_dual_geodesic_solver(
-      app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies);
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene

@@ -31,6 +31,12 @@ static bool_state* global_state = nullptr;
 #define add_debug_index(face, index) ;
 #endif
 
+// get time in nanoseconds - useful only to compute difference of times
+inline int64_t get_time_() {
+  return std::chrono::high_resolution_clock::now().time_since_epoch().count();
+}
+
+
 static int scope_timer_indent = 0;
 scope_timer::scope_timer(const string& msg) {
   if (scope_timer_indent == 0) printf("       \n");

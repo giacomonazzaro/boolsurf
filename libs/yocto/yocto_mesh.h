@@ -362,24 +362,9 @@ mesh_point eval_path_point(const geodesic_path& path,
 // -----------------------------------------------------------------------------
 namespace yocto {
 
-// TODO(fabio): rename geodesic_strip
-vector<int> strip_on_dual_graph(const dual_geodesic_solver& solver,
-    const vector<vec3i>& triangles, const vector<vec3f>& positions, int start,
-    int end);
-
-// TODO(fabio): rename geodesic_strip_XXX
-vector<int> strip_ascending_distance_field(const geodesic_solver& solver,
+vector<int> compute_strip(const dual_geodesic_solver& solver,
     const vector<vec3i>& triangles, const vector<vec3f>& positions,
-    const vector<vec3i>& adjacencies, int start, int end);
-
-// returns a strip of triangles such target belongs to the first one and
-// source to the last one
-// TODO(fabio): rename geodesic_strip
-vector<int> get_strip(const geodesic_solver& solver,
-    const vector<vec3i>& triangles, const vector<vec3f>& positions,
-    const vector<vec3i>& adjacencies, const vector<vector<int>>& v2t,
-    const vector<vector<float>>& angles, const mesh_point& source,
-    const mesh_point& target, vector<int>& parents);
+    const mesh_point& start, const mesh_point& end);
 
 }  // namespace yocto
 
