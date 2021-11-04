@@ -381,7 +381,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
 
     {
       process_click(app, updated_shapes, input);
-      process_mouse(app, input);
+      process_mouse(app, updated_shapes, input);
 
       if (app.jobs.size()) {
         stop_render();

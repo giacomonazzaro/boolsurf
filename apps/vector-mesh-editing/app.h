@@ -21,10 +21,33 @@ struct Spline_Input {
   bool               is_closed        = false;
 
   inline std::array<mesh_point, 4> control_polygon(int curve_id) const {
+    if (is_closed && curve_id == (control_points.size() - 1) / 3 - 1) {
+      auto ptr = &control_points.back();
+      return {*(ptr - 3), *(ptr - 2), *(ptr - 1), control_points[0]};
+    }
     return *(std::array<mesh_point, 4>*)&control_points[curve_id * 3];
   }
   inline int num_curves() const {
+    // TODO(giacomo): if (is_closed) { }
     return max((int)(control_points.size() - 1) / 3, 0);
+  }
+  inline vector<int> curves_from_control_point(int point_id) {
+    if (point_id == 0) {
+      if (is_closed) {
+        return {0, num_curves() - 1};
+      } else {
+        return {0};
+      }
+    }
+
+    // anchor
+    if (point_id % 3 == 0) {
+      if (point_id == control_points.size() - 1) {
+        return {point_id / 3 - 1};
+      }
+      return {point_id / 3 - 1, point_id / 3};
+    } else
+      return {point_id / 3};
   }
 };
 
@@ -184,28 +207,41 @@ inline int add_shape(scene_data& scene, const shape_data& shape,
   return id;
 }
 
-inline void process_mouse(App& app, const glinput_state& input) {
+inline void process_mouse(
+    App& app, vector<int>& updated_shapes, const glinput_state& input) {
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
     return;
   }
+
   auto point = intersect_mesh(app, input);
   if (point.face == -1) {
     app.editing.selection = {};
     return;
   }
+
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   //  if (selection.curve_id == -1) return;
   if (selection.control_point_id == -1) return;
+  app.editing.holding_control_point = true;
+
   auto spline = app.selected_spline();
   spline.input.control_points[selection.control_point_id] = point;
   auto shape_id = spline.cache.point_shapes[selection.control_point_id];
-  app.jobs.push_back([shape_id, point, &app]() {
-    app.scene.instances[shape_id].frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, point);
-    app.update_bvh = true;
-  });
+
+  // app.jobs.push_back([shape_id, point, &app, &updated_shapes]() {
+  app.scene.instances[shape_id].frame.o = eval_position(
+      app.mesh.triangles, app.mesh.positions, point);
+  updated_shapes += shape_id;
+
+  auto touched_curves = spline.input.curves_from_control_point(
+      selection.control_point_id);
+  for (auto curve : touched_curves) {
+    if (curve >= 0 && curve < spline.input.num_curves())
+      spline.cache.curves_to_update.insert(curve);
+  }
+  // });
 }
 
 inline int add_curve(App& app, Spline_Cache& cache) {
@@ -228,6 +264,31 @@ inline void process_click(
 
   auto point = intersect_mesh(app, input);
   if (point.face == -1) return;
+
+  for (int spline_id = 0; spline_id < app.splinesurf.spline_input.size();
+       spline_id++) {
+    for (int i = 0;
+         i < app.splinesurf.spline_input[spline_id].control_points.size();
+         i++) {
+      auto  point    = app.splinesurf.spline_input[spline_id].control_points[i];
+      auto  mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+          input.mouse_pos.y / float(input.window_size.y)};
+      auto& camera   = app.scene.cameras[0];
+      auto  ray      = camera_ray(
+          camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
+      auto  uv = vec2f{};
+      float dist;
+      auto  line_thickness = 0.005 * 2;
+      auto  center         = eval_position(
+          app.mesh.triangles, app.mesh.positions, point);
+      auto hit = intersect_sphere(ray, center, line_thickness, uv, dist);
+      if (hit) {
+        app.editing.selection.spline_id        = spline_id;
+        app.editing.selection.control_point_id = i;
+        return;
+      }
+    }
+  }
 
   auto spline   = app.selected_spline();
   auto point_id = (int)spline.input.control_points.size();
