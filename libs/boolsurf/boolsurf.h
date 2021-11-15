@@ -22,7 +22,7 @@ struct bool_borders {
   vector<bool> tags = {};
 };
 
-struct bool_mesh : scene_shape {
+struct bool_mesh : shape_data {
   vector<vec3i>        adjacencies = {};
   dual_geodesic_solver dual_solver = {};
   bool_borders         borders     = {};

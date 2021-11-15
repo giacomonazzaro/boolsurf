@@ -133,7 +133,7 @@ struct App {
 
   Editing    editing    = {};
   Splinesurf splinesurf = {};
-  // std::unordered_set<int> splines_to_update = {};
+
   vector<shape_data>    new_shapes;
   vector<instance_data> new_instances;
 
@@ -248,28 +248,16 @@ inline int add_curve(App& app, Spline_Cache& cache) {
   return curve_id;
 }
 
-inline void process_click(
-    App& app, vector<int>& updated_shapes, const glinput_state& input) {
-  if (!input.mouse_left_click) return;
-  auto& scene = app.scene;
-  if (app.splinesurf.num_splines() == 0) {
-    app.editing.selection.spline_id = add_spline(app.splinesurf);
-  }
-  if (app.editing.selection.spline_id == -1) return;
-
-  auto point = intersect_mesh(app, input);
-  if (point.face == -1) return;
-
+inline Editing::Selection get_click_selection(
+    const App& app, const vec2f& mouse_uv) {
+  auto selection = app.editing.selection;
   for (int spline_id = 0; spline_id < app.splinesurf.spline_input.size();
        spline_id++) {
-    for (int i = 0;
-         i < app.splinesurf.spline_input[spline_id].control_points.size();
-         i++) {
-      auto  point    = app.splinesurf.spline_input[spline_id].control_points[i];
-      auto  mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-          input.mouse_pos.y / float(input.window_size.y)};
-      auto& camera   = app.scene.cameras[0];
-      auto  ray      = camera_ray(
+    auto& spline = app.splinesurf.spline_input[spline_id];
+    for (int i = 0; i < spline.control_points.size(); i++) {
+      auto  point  = spline.control_points[i];
+      auto& camera = app.scene.cameras[0];
+      auto  ray    = camera_ray(
           camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
       auto  uv = vec2f{};
       float dist;
@@ -278,13 +266,37 @@ inline void process_click(
           app.mesh.triangles, app.mesh.positions, point);
       auto hit = intersect_sphere(ray, center, line_thickness, uv, dist);
       if (hit) {
-        app.editing.selection.spline_id        = spline_id;
-        app.editing.selection.control_point_id = i;
-        return;
+        selection.spline_id        = spline_id;
+        selection.control_point_id = i;
+        return selection;
       }
     }
   }
+  return selection;
+}
 
+inline void process_click(
+    App& app, vector<int>& updated_shapes, const glinput_state& input) {
+  if (!input.mouse_left_click) return;
+  auto& scene = app.scene;
+
+  // If there are no splines, create the first one and select it.
+  if (app.splinesurf.num_splines() == 0) {
+    app.editing.selection.spline_id = add_spline(app.splinesurf);
+  }
+
+  // If no spline is selected, do nothing.
+  if (app.editing.selection.spline_id == -1) return;
+
+  // Compute clicked point and exit if it mesh was not clicked.
+  auto point = intersect_mesh(app, input);
+  if (point.face == -1) return;
+
+  auto mouse_uv         = vec2f{input.mouse_pos.x / float(input.window_size.x),
+      input.mouse_pos.y / float(input.window_size.y)};
+  app.editing.selection = get_click_selection(app, mouse_uv);
+
+  // Add point to spline
   auto spline   = app.selected_spline();
   auto point_id = (int)spline.input.control_points.size();
   spline.input.control_points.push_back(point);
