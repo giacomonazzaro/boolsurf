@@ -151,7 +151,6 @@ inline vec2f tangent_path_direction(
   return normalize(direction);
 }
 
-
 struct App {
   // struct Mesh : shape_data {
   //   vector<vec3i>        adjacencies = {};
@@ -192,7 +191,6 @@ struct App {
   }
 };
 
-
 inline void move_selected_point(App& app, Splinesurf& splinesurf,
     const Editing::Selection& selection, const bool_mesh& mesh,
     const mesh_point& point) {
@@ -202,9 +200,10 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
   auto& anchor = spline.input.control_points[selection.control_point_id];
   if (selection.handle_id == -1) {
     // auto  path       = shortest_path(mesh, old_anchor.point, point);
-    anchor.point = point;
+    anchor.point   = point;
     auto anchor_id = spline.cache.points[selection.control_point_id].anchor_id;
-      app.scene.instances[anchor_id].frame.o = eval_position(app.mesh.triangles, app.mesh.positions, point);
+    app.scene.instances[anchor_id].frame.o = eval_position(
+        app.mesh.triangles, app.mesh.positions, point);
   } else {
     auto& handle = anchor.handles[selection.handle_id];
 
@@ -216,13 +215,16 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
 
     handle                                  = point;
     anchor.handles[1 - selection.handle_id] = path.end;
-      
-      auto handle0_id = spline.cache.points[selection.control_point_id].handle_ids[selection.handle_id];
-        app.scene.instances[handle0_id].frame.o = eval_position(app.mesh.triangles, app.mesh.positions, point);
 
+    auto handle0_id = spline.cache.points[selection.control_point_id]
+                          .handle_ids[selection.handle_id];
+    app.scene.instances[handle0_id].frame.o = eval_position(
+        app.mesh.triangles, app.mesh.positions, point);
 
-      auto handle1_id = spline.cache.points[selection.control_point_id].handle_ids[1-selection.handle_id];
-        app.scene.instances[handle1_id].frame.o = eval_position(app.mesh.triangles, app.mesh.positions, path.end);
+    auto handle1_id = spline.cache.points[selection.control_point_id]
+                          .handle_ids[1 - selection.handle_id];
+    app.scene.instances[handle1_id].frame.o = eval_position(
+        app.mesh.triangles, app.mesh.positions, path.end);
   }
 }
 
@@ -317,8 +319,8 @@ inline void process_mouse(
   app.editing.holding_control_point = true;
 
   auto spline = app.selected_spline();
-  move_selected_point(app, app.splinesurf, app.editing.selection, app.mesh, point);
-
+  move_selected_point(
+      app, app.splinesurf, app.editing.selection, app.mesh, point);
 
   // app.jobs.push_back([shape_id, point, &app, &updated_shapes]() {
   // app.scene.instances[shape_id].frame.o = eval_position(
@@ -329,15 +331,16 @@ inline void process_mouse(
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[0];
   updated_shapes +=
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[1];
-    
+
   auto touched_curves = vector<int>{};
-    if(selection.handle_id == -1) {
-        touched_curves = { selection.control_point_id, max(0, selection.control_point_id-1) };
-    }
-    else {
-        if(selection.handle_id == 0) touched_curves = { max(selection.control_point_id - 1, 0)};
-        if(selection.handle_id == 1) touched_curves = { selection.control_point_id };
-    }
+  if (selection.handle_id == -1) {
+    touched_curves = {
+        selection.control_point_id, max(0, selection.control_point_id - 1)};
+  } else {
+    if (selection.handle_id == 0)
+      touched_curves = {max(selection.control_point_id - 1, 0)};
+    if (selection.handle_id == 1) touched_curves = {selection.control_point_id};
+  }
   for (auto curve : touched_curves) {
     if (curve >= 0 && curve < spline.input.num_curves())
       spline.cache.curves_to_update.insert(curve);
@@ -364,9 +367,8 @@ inline bool intersect_mesh_point(
   return hit;
 }
 
-inline bool update_selection(
-    App& app, const vec2f& mouse_uv) {
-  auto&  selection = app.editing.selection;
+inline bool update_selection(App& app, const vec2f& mouse_uv) {
+  auto& selection = app.editing.selection;
   auto& camera    = app.scene.cameras[0];
   auto  ray       = camera_ray(
       camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
@@ -385,14 +387,14 @@ inline bool update_selection(
           return true;
         }
       }
-        
-        auto  hit    = intersect_mesh_point(app.mesh, ray, anchor.point);
-        if (hit) {
-          selection.spline_id        = spline_id;
-          selection.control_point_id = i;
-          selection.handle_id        = -1;
-          return true;
-        }
+
+      auto hit = intersect_mesh_point(app.mesh, ray, anchor.point);
+      if (hit) {
+        selection.spline_id        = spline_id;
+        selection.control_point_id = i;
+        selection.handle_id        = -1;
+        return true;
+      }
     }
   }
   return false;
@@ -402,15 +404,13 @@ inline int add_control_point(App& app, Spline_View& spline,
     vector<int>& updated_shapes, const Anchor_Point& anchor) {
   auto point_id = (int)spline.input.control_points.size();
   spline.input.control_points.push_back(anchor);
-    
-    auto& cache = spline.cache.points.emplace_back();
-  auto frame = frame3f{};
-    frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, anchor.point);
-    cache.anchor_id = add_shape(app.scene, make_sphere(8, 0.005, 1),
-        app.new_shapes, app.new_instances, frame);
-    updated_shapes.push_back(cache.anchor_id);
-  
+
+  auto& cache = spline.cache.points.emplace_back();
+  auto  frame = frame3f{};
+  frame.o = eval_position(app.mesh.triangles, app.mesh.positions, anchor.point);
+  cache.anchor_id = add_shape(app.scene, make_sphere(8, 0.005, 1),
+      app.new_shapes, app.new_instances, frame);
+  updated_shapes.push_back(cache.anchor_id);
 
   for (int k = 0; k < 2; k++) {
     frame.o = eval_position(
@@ -430,12 +430,12 @@ inline void process_click(
     app.editing.holding_control_point = -1;
     return;
   }
-    
-    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-        input.mouse_pos.y / float(input.window_size.y)};
-    if(update_selection(app, mouse_uv)) {
-        return;
-    }
+
+  auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+      input.mouse_pos.y / float(input.window_size.y)};
+  if (update_selection(app, mouse_uv)) {
+    return;
+  }
 
   // If there are no splines, create the first one and select it.
   if (app.splinesurf.num_splines() == 0) {
