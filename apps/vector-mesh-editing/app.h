@@ -210,15 +210,15 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
     handle       = point;
 
     // Update tangents and other handle
-    int   k                = selection.handle_id;
-    auto& point_cache      = spline.cache.points[selection.control_point_id];
+    int   k           = selection.handle_id;
+    auto& point_cache = spline.cache.points[selection.control_point_id];
     point_cache.tangents[k].path = shortest_path(
         mesh, anchor.point, anchor.handles[k]);
 
     if (anchor.is_smooth) {
       auto dir = tangent_path_direction(mesh, point_cache.tangents[k].path);
-      auto len = path_length(
-                             point_cache.tangents[k].path, mesh.triangles, mesh.positions, mesh.adjacencies);
+      auto len = path_length(point_cache.tangents[k].path, mesh.triangles,
+          mesh.positions, mesh.adjacencies);
       point_cache.tangents[1 - k].path = straightest_path(
           mesh, anchor.point, -dir, len);
       anchor.handles[1 - k] = point_cache.tangents[1 - k].path.end;
@@ -337,9 +337,8 @@ inline void process_mouse(
     touched_curves = {
         selection.control_point_id, max(0, selection.control_point_id - 1)};
   } else {
-    if (selection.handle_id == 0)
-      touched_curves = {max(selection.control_point_id - 1, 0)};
-    if (selection.handle_id == 1) touched_curves = {selection.control_point_id};
+    auto id        = selection.control_point_id;
+    touched_curves = {max(id - 1, 0), id};
   }
   for (auto curve : touched_curves) {
     if (curve >= 0 && curve < spline.input.num_curves())
@@ -541,7 +540,7 @@ void update_cache(const App& app, Spline_Cache& cache,
       auto  positions      = path_positions(tangent.path, app.mesh.triangles,
           app.mesh.positions, app.mesh.adjacencies);
 
-      auto handle_id                         = anchor.handle_ids[k];
+      auto handle_id                     = anchor.handle_ids[k];
       scene.instances[handle_id].frame.o = positions.back();
 
       auto& shape   = scene.shapes[shape_id];
