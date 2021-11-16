@@ -306,7 +306,7 @@ inline void process_mouse(
 
   auto point = intersect_mesh(app, input);
   if (point.face == -1) {
-    app.editing.selection = {};
+    app.editing.selection.spline_id = {};
     return;
   }
 
@@ -329,9 +329,15 @@ inline void process_mouse(
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[0];
   updated_shapes +=
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[1];
-
-  auto touched_curves = spline.input.curves_from_control_point(
-      selection.control_point_id);
+    
+  auto touched_curves = vector<int>{};
+    if(selection.handle_id == -1) {
+        touched_curves = { selection.control_point_id, max(0, selection.control_point_id-1) };
+    }
+    else {
+        if(selection.handle_id == 0) touched_curves = { max(selection.control_point_id - 1, 0)};
+        if(selection.handle_id == 1) touched_curves = { selection.control_point_id };
+    }
   for (auto curve : touched_curves) {
     if (curve >= 0 && curve < spline.input.num_curves())
       spline.cache.curves_to_update.insert(curve);
@@ -370,13 +376,6 @@ inline Editing::Selection get_click_selection(
     auto& spline = app.splinesurf.spline_input[spline_id];
     for (int i = 0; i < spline.control_points.size(); i++) {
       auto& anchor = spline.control_points[i];
-      auto  hit    = intersect_mesh_point(app.mesh, ray, anchor.point);
-      if (hit) {
-        selection.spline_id        = spline_id;
-        selection.control_point_id = i;
-        selection.handle_id        = -1;
-        return selection;
-      }
       for (int k = 0; k < 2; k++) {
         auto hit = intersect_mesh_point(app.mesh, ray, anchor.handles[k]);
         if (hit) {
@@ -386,6 +385,14 @@ inline Editing::Selection get_click_selection(
           return selection;
         }
       }
+        
+        auto  hit    = intersect_mesh_point(app.mesh, ray, anchor.point);
+        if (hit) {
+          selection.spline_id        = spline_id;
+          selection.control_point_id = i;
+          selection.handle_id        = -1;
+          return selection;
+        }
     }
   }
   return selection;
