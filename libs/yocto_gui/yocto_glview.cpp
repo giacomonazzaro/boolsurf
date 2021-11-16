@@ -1567,8 +1567,8 @@ void draw_scene(glscene_state& glscene, const scene_data& scene,
   // draw instances
   if (params.wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   for (auto& instance : scene.instances) {
-    auto& glshape  = glscene.shapes.at(instance.shape);
-    if(glshape.vertexarray == 0) continue;
+    auto& glshape = glscene.shapes.at(instance.shape);
+    if (glshape.vertexarray == 0) continue;
     auto& material = scene.materials.at(instance.material);
 
     auto shape_xform     = frame_to_mat(instance.frame);
@@ -1806,6 +1806,14 @@ void run_ui(const vec2i& size, const string& title,
                        GLFW_PRESS;
     auto mouse_left = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) ==
                       GLFW_PRESS;
+
+    state.input.mouse_right_release = false;
+    if (state.input.mouse_right && !mouse_right)
+      state.input.mouse_right_release = true;
+
+    state.input.mouse_left_release = false;
+    if (state.input.mouse_left && !mouse_left)
+      state.input.mouse_left_release = true;
 
     state.input.mouse_right_click = false;
     if (!state.input.mouse_right && mouse_right)

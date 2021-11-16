@@ -252,8 +252,10 @@ namespace yocto {
 struct glinput_state {
   bool     mouse_left           = false;  // left button
   bool     mouse_right          = false;  // right button
-  bool     mouse_left_click     = false;  // left button
-  bool     mouse_right_click    = false;  // right button
+  bool     mouse_left_click     = false;  // left click
+  bool     mouse_right_click    = false;  // right click
+  bool     mouse_left_release   = false;  // left release
+  bool     mouse_right_release  = false;  // right release
   bool     mouse_middle         = false;  // middle button
   vec2f    mouse_pos            = {};     // position excluding widgets
   vec2f    mouse_last           = {};  // last mouse position excluding widgets
