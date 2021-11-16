@@ -18,7 +18,7 @@ using namespace yocto;  // TODO(giacomo): Remove this.
 struct Anchor_Point {
   mesh_point point      = {};
   mesh_point handles[2] = {{}, {}};
-  bool       is_smooth  = false;
+  bool       is_smooth  = true;
 };
 
 struct Spline_Input {
@@ -50,22 +50,23 @@ struct Spline_Output {
 };
 
 struct Spline_Cache {
+  struct Curve {
+    vector<vec3f> positions = {};
+    int           shape_id  = -1;
+  };
   struct Tangent {
     geodesic_path path     = {};  // TODO(giacomo): use mesh_paths?
     int           shape_id = -1;
   };
-  struct Curve {
-    vector<vec3f>          positions = {};
-    int                    shape_id  = -1;
-    std::array<Tangent, 2> tangents  = {};  // TODO(giacomo): use mesh_paths?
-  };
   struct Point {
-    int anchor_id     = -1;
-    int handle_ids[2] = {-1, -1};
+    int                    anchor_id     = -1;
+    int                    handle_ids[2] = {-1, -1};
+    std::array<Tangent, 2> tangents = {};  // TODO(giacomo): use mesh_paths?
   };
   std::vector<Curve> curves           = {};  // TODO(giacomo): use mesh_paths?
   std::vector<Point> points           = {};  // id of shape in scene_data
   hash_set<int>      curves_to_update = {};
+  hash_set<int>      points_to_update = {};
 };
 // struct Spline_Draw {
 //   vector<int>   curve_shapes     = {};  // id of shape in scene_data
@@ -206,26 +207,25 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
         app.mesh.triangles, app.mesh.positions, point);
   } else {
     auto& handle = anchor.handles[selection.handle_id];
+    handle       = point;
 
-    auto tangent = shortest_path(mesh, anchor.point, handle);
-    auto dir     = tangent_path_direction(mesh, tangent);
-    auto len     = path_length(
-        tangent, mesh.triangles, mesh.positions, mesh.adjacencies);
-    auto path = straightest_path(mesh, anchor.point, -dir, len);
+    // Update tangents and other handle
+    int   k                = selection.handle_id;
+    auto& point_cache      = spline.cache.points[selection.control_point_id];
+    point_cache.tangents[k].path = shortest_path(
+        mesh, anchor.point, anchor.handles[k]);
 
-    handle                                  = point;
-    anchor.handles[1 - selection.handle_id] = path.end;
-
-    auto handle0_id = spline.cache.points[selection.control_point_id]
-                          .handle_ids[selection.handle_id];
-    app.scene.instances[handle0_id].frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, point);
-
-    auto handle1_id = spline.cache.points[selection.control_point_id]
-                          .handle_ids[1 - selection.handle_id];
-    app.scene.instances[handle1_id].frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, path.end);
+    if (anchor.is_smooth) {
+      auto dir = tangent_path_direction(mesh, point_cache.tangents[k].path);
+      auto len = path_length(
+                             point_cache.tangents[k].path, mesh.triangles, mesh.positions, mesh.adjacencies);
+      point_cache.tangents[1 - k].path = straightest_path(
+          mesh, anchor.point, -dir, len);
+      anchor.handles[1 - k] = point_cache.tangents[1 - k].path.end;
+    }
   }
+
+  spline.cache.points_to_update.insert(selection.control_point_id);
 }
 
 template <typename Params>
@@ -289,13 +289,13 @@ inline int add_curve(App& app, Spline_Cache& cache, const Spline_Input& input) {
   auto& curve    = cache.curves.emplace_back();
   curve.shape_id = add_shape(
       app.scene, {}, app.new_shapes, app.new_instances, {});
-  auto points                = input.control_polygon(curve_id);
-  curve.tangents[0].path     = shortest_path(app.mesh, points[0], points[1]);
-  curve.tangents[0].shape_id = add_shape(
-      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
-  curve.tangents[1].path     = shortest_path(app.mesh, points[3], points[2]);
-  curve.tangents[1].shape_id = add_shape(
-      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
+  //  auto points                = input.control_polygon(curve_id);
+  //  curve.tangents[0].path     = shortest_path(app.mesh, points[0],
+  //  points[1]); curve.tangents[0].shape_id = add_shape(
+  //      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
+  //  curve.tangents[1].path     = shortest_path(app.mesh, points[3],
+  //  points[2]); curve.tangents[1].shape_id = add_shape(
+  //      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
   return curve_id;
 }
 
@@ -419,6 +419,13 @@ inline int add_control_point(App& app, Spline_View& spline,
         app.new_shapes, app.new_instances, frame);
     updated_shapes.push_back(cache.handle_ids[k]);
   }
+
+  cache.tangents[0].shape_id = add_shape(
+      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
+  cache.tangents[1].shape_id = add_shape(
+      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
+
+  spline.cache.points_to_update.insert(point_id);
   return point_id;
 }
 
@@ -525,13 +532,19 @@ void update_cache(const App& app, Spline_Cache& cache,
     updated_shapes += cache.curves[curve_id].shape_id;
   }
 
-  for (auto curve_id : cache.curves_to_update) {
-    for (auto& tangent : cache.curves[curve_id].tangents) {
+  for (auto point_id : cache.points_to_update) {
+    auto& anchor = cache.points[point_id];
+    for (int k = 0; k < 2; k++) {
+      auto& tangent        = anchor.tangents[k];
       auto  shape_id       = tangent.shape_id;
-      auto& shape          = scene.shapes[shape_id];
       auto  line_thickness = 0.003;
       auto  positions      = path_positions(tangent.path, app.mesh.triangles,
           app.mesh.positions, app.mesh.adjacencies);
+
+      auto handle_id                         = anchor.handle_ids[k];
+      scene.instances[handle_id].frame.o = positions.back();
+
+      auto& shape   = scene.shapes[shape_id];
       shape         = polyline_to_cylinders(positions, 16, line_thickness);
       shape.normals = compute_normals(shape);
       updated_shapes += shape_id;
