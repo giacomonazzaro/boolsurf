@@ -364,9 +364,9 @@ inline bool intersect_mesh_point(
   return hit;
 }
 
-inline Editing::Selection get_click_selection(
-    const App& app, const vec2f& mouse_uv) {
-  auto  selection = app.editing.selection;
+inline bool update_selection(
+    App& app, const vec2f& mouse_uv) {
+  auto&  selection = app.editing.selection;
   auto& camera    = app.scene.cameras[0];
   auto  ray       = camera_ray(
       camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
@@ -382,7 +382,7 @@ inline Editing::Selection get_click_selection(
           selection.spline_id        = spline_id;
           selection.control_point_id = i;
           selection.handle_id        = k;
-          return selection;
+          return true;
         }
       }
         
@@ -391,11 +391,11 @@ inline Editing::Selection get_click_selection(
           selection.spline_id        = spline_id;
           selection.control_point_id = i;
           selection.handle_id        = -1;
-          return selection;
+          return true;
         }
     }
   }
-  return selection;
+  return false;
 }
 
 inline int add_control_point(App& app, Spline_View& spline,
@@ -430,6 +430,12 @@ inline void process_click(
     app.editing.holding_control_point = -1;
     return;
   }
+    
+    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+        input.mouse_pos.y / float(input.window_size.y)};
+    if(update_selection(app, mouse_uv)) {
+        return;
+    }
 
   // If there are no splines, create the first one and select it.
   if (app.splinesurf.num_splines() == 0) {
@@ -461,10 +467,6 @@ inline void process_click(
       printf("cp: %ld\n", app.splinesurf.spline_input[0].control_points.size());
       add_curve(app, spline.cache, spline.input);
     }
-
-    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-        input.mouse_pos.y / float(input.window_size.y)};
-    app.editing.selection = get_click_selection(app, mouse_uv);
   }
 }
 
