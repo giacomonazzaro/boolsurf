@@ -346,10 +346,10 @@ vector<vec3f> path_positions(const geodesic_path& path,
 vector<float> path_parameters(const geodesic_path& path,
     const vector<vec3i>& triangles, const vector<vec3f>& positions,
     const vector<vec3i>& adjacencies);
+vector<float> path_parameters(const vector<vec3f>& positions);
 float path_length(const geodesic_path& path, const vector<vec3i>& triangles,
     const vector<vec3f>& positions, const vector<vec3i>& adjacencies);
-vector<float> path_parameters(const vector<vec3f>& positions);
-float         path_length(const vector<vec3f>& positions);
+float path_length(const vector<vec3f>& positions);
 
 mesh_point eval_path_point(const geodesic_path& path,
     const vector<vec3i>& triangles, const vector<vec3f>& positions,
