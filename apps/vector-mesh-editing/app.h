@@ -288,12 +288,11 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
-inline int add_shape(scene_data& scene, const shape_data& shape,
-    vector<shape_data>& new_shapes, vector<instance_data>& new_instances,
+inline int add_shape(App& app, const shape_data& shape,
     const frame3f& frame = identity3x4f, int material = 1) {
-  auto id = (int)scene.shapes.size() + (int)new_shapes.size();
-  new_shapes.push_back(shape);
-  new_instances.push_back({frame, id, material});
+  auto id = (int)app.scene.shapes.size() + (int)app.new_shapes.size();
+  app.new_shapes.push_back(shape);
+  app.new_instances.push_back({frame, id, material});
   return id;
 }
 
@@ -302,8 +301,7 @@ inline int add_curve(App& app, Spline_Cache& cache, const Spline_Input& input) {
   cache.curves_to_update.insert((int)curve_id);
 
   auto& curve    = cache.curves.emplace_back();
-  curve.shape_id = add_shape(
-      app.scene, {}, app.new_shapes, app.new_instances, {});
+  curve.shape_id = add_shape(app, {});
   return curve_id;
 }
 
@@ -405,23 +403,19 @@ inline int add_control_point(App& app, Spline_View& spline,
   auto  frame = frame3f{};
   frame.o = eval_position(app.mesh.triangles, app.mesh.positions, anchor.point);
   auto radius     = app.line_thickness * 2;
-  cache.anchor_id = add_shape(app.scene, make_sphere(8, radius, 1),
-      app.new_shapes, app.new_instances, frame);
+  cache.anchor_id = add_shape(app, make_sphere(8, radius, 1), frame);
   updated_shapes.push_back(cache.anchor_id);
 
   for (int k = 0; k < 2; k++) {
     auto radius = app.line_thickness * 0.6 * 2;
     frame.o     = eval_position(
         app.mesh.triangles, app.mesh.positions, anchor.handles[k]);
-    cache.handle_ids[k] = add_shape(app.scene, make_sphere(8, radius, 1),
-        app.new_shapes, app.new_instances, frame);
+    cache.handle_ids[k] = add_shape(app, make_sphere(8, radius, 1), frame);
     updated_shapes.push_back(cache.handle_ids[k]);
   }
 
-  cache.tangents[0].shape_id = add_shape(
-      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
-  cache.tangents[1].shape_id = add_shape(
-      app.scene, {}, app.new_shapes, app.new_instances, {}, 2);
+  cache.tangents[0].shape_id = add_shape(app, {}, {}, 2);
+  cache.tangents[1].shape_id = add_shape(app, {}, {}, 2);
 
   spline.cache.points_to_update.insert(point_id);
   return point_id;
@@ -485,17 +479,6 @@ void update_output(Spline_Output& output, const Spline_Input& input,
     output.points[curve_id] = bezier_spline(
         mesh, control_polygon, input.num_subdivisions);
   }
-  // for (auto& curve_id : spline.cache.curves_to_update) {
-  // auto id             = curve_id * 3 + 1;
-  // auto control_points = *(
-  //     std::array<mesh_point, 4>*)&spline.input.control_points[id];
-  // auto curve = bezier_spline(app.mesh, spline.input.control_points,
-  //     spline.input.num_subdivisions);
-  // auto points_per_curve = 3 * (1 << num_subdivisions) + 1;
-  // for (int i = 0; i < curve.size(); i++) {
-  //   spline.output.points[id + i] = curve[i];
-  // }
-  // }
 }
 
 void update_cache(const App& app, Spline_Cache& cache,
