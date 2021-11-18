@@ -527,8 +527,7 @@ void update_output(Spline_Output& output, const Spline_Input& input,
   // }
 }
 
-void update_cache(const App& app, Spline_Cache& cache,
-    const Spline_Output& output, scene_data& scene,
+void update_cache(const App& app, Spline_Cache& cache, const Spline_Input& input, const Spline_Output& output, scene_data& scene,
     vector<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
   for (auto curve_id : cache.curves_to_update) {
@@ -566,8 +565,7 @@ void update_cache(const App& app, Spline_Cache& cache,
       shape.normals = compute_normals(shape);
       updated_shapes += shape_id;
     }
-    scene.instances[anchor.shape_id].frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, app.splinesurf[].point);
+    scene.instances[anchor.anchor_id].frame.o = eval_position(app.mesh, input.control_points[point_id].point);
   }
   cache.points_to_update.clear();
   cache.curves_to_update.clear();
@@ -585,6 +583,6 @@ inline void update_splines(
   // Update bezier positions of edited curves.
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
-    update_cache(app, spline.cache, spline.output, scene, updated_shapes);
+    update_cache(app, spline.cache, spline.input, spline.output, scene, updated_shapes);
   }
 }
