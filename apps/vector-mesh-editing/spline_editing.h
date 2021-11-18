@@ -139,6 +139,15 @@ inline geodesic_path shortest_path(
 }
 
 template <typename Add_Shape>
+inline int add_curve(Spline_Cache& cache, Add_Shape& add_shape) {
+  auto  curve_id = (int)cache.curves.size();
+  auto& curve    = cache.curves.emplace_back();
+  curve.shape_id = add_shape();
+  cache.curves_to_update.insert((int)curve_id);
+  return curve_id;
+}
+
+template <typename Add_Shape>
 inline int add_anchor_point(
     Spline_View& spline, const mesh_point& point, Add_Shape& add_shape) {
   // Create anchor point with zero-length tangents.
@@ -154,6 +163,9 @@ inline int add_anchor_point(
   cache.tangents[0].shape_id = add_shape();
   cache.tangents[1].shape_id = add_shape();
   for (int k = 0; k < 2; k++) cache.handle_ids[k] = add_shape();
+
+  // Add curve
+  if (point_id > 0) add_curve(spline.cache, add_shape);
 
   // Trigger update of this point.
   spline.cache.points_to_update.insert(point_id);
@@ -223,4 +235,10 @@ inline void move_selected_point(Splinesurf& splinesurf,
   }
 
   spline.cache.points_to_update.insert(selection.control_point_id);
+}
+
+template <typename Add_Shape>
+inline int close_spline(Spline_View spline, Add_Shape& add_shape) {
+  spline.input.is_closed = true;
+  return add_curve(spline.cache, add_shape);
 }

@@ -83,21 +83,12 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
-inline int add_shape(App& app, const shape_data& shape,
+inline int add_shape(App& app, const shape_data& shape = {},
     const frame3f& frame = identity3x4f, int material = 1) {
   auto id = (int)app.scene.shapes.size() + (int)app.new_shapes.size();
   app.new_shapes.push_back(shape);
   app.new_instances.push_back({frame, id, material});
   return id;
-}
-
-inline int add_curve(App& app, Spline_Cache& cache, const Spline_Input& input) {
-  auto curve_id = (int)cache.curves.size();
-  cache.curves_to_update.insert((int)curve_id);
-
-  auto& curve    = cache.curves.emplace_back();
-  curve.shape_id = add_shape(app, {});
-  return curve_id;
 }
 
 inline void process_mouse(
@@ -190,37 +181,32 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
 
 inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
+  if (!input.mouse_left_click) return;
+
   // Compute clicked point and exit if it mesh was not clicked.
-  if (input.mouse_left_click) {
-    auto point = intersect_mesh(app, input);
-    if (point.face == -1) return;
+  auto point = intersect_mesh(app, input);
+  if (point.face == -1) return;
 
-    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-        input.mouse_pos.y / float(input.window_size.y)};
-    if (update_selection(app, mouse_uv)) {
-      return;
-    }
+  // Update selection. If it was changed, don't add new points.
+  auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+      input.mouse_pos.y / float(input.window_size.y)};
+  if (update_selection(app, mouse_uv)) return;
 
-    // If there are no splines, create the first one and select it.
-    if (app.splinesurf.num_splines() == 0) {
-      app.editing.selection           = {};
-      app.editing.selection.spline_id = add_spline(app.splinesurf);
-    }
-
-    // app.editing.clicked_point = point;
-
-    // If no spline is selected, do nothing.
-    if (app.editing.selection.spline_id == -1) return;
-    auto spline        = app.selected_spline();
-    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-    auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
-    app.editing.selection.control_point_id = anchor_id;
-    app.editing.selection.handle_id        = 1;
-
-    if (spline.input.control_points.size() > 1) {
-      add_curve(app, spline.cache, spline.input);
-    }
+  // If there are no splines, create the first one and select it.
+  if (app.splinesurf.num_splines() == 0) {
+    app.editing.selection           = {};
+    app.editing.selection.spline_id = add_spline(app.splinesurf);
   }
+
+  // If no spline is selected, do nothing.
+  if (app.editing.selection.spline_id == -1) return;
+
+  // Add new anchor point.
+  auto spline        = app.selected_spline();
+  auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+  auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
+  app.editing.selection.control_point_id = anchor_id;
+  app.editing.selection.handle_id        = 1;
 }
 
 // TODO(giacomo): Put following stuff in splinesurf.h

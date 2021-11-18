@@ -156,9 +156,8 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       app.editing.selection.spline_id = spline_id;
     }
     if (draw_glbutton("close spline")) {
-      auto spline            = app.selected_spline();
-      spline.input.is_closed = true;
-      auto curve_id          = add_curve(app, spline.cache, spline.input);
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      close_spline(app.selected_spline(), add_app_shape);
     }
     if (begin_glheader("shade")) {
       draw_glcombobox("camera", params.camera, camera_names);
