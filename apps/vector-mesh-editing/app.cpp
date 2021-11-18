@@ -151,7 +151,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     draw_glcombobox("name", selected, names);
     draw_glcheckbox("flag", app.flag);
     if (draw_glbutton("add spline")) {
-      add_spline(app.splinesurf);
+      auto spline_id                  = add_spline(app.splinesurf);
+      app.editing.selection           = {};
+      app.editing.selection.spline_id = spline_id;
     }
     if (begin_glheader("shade")) {
       draw_glcombobox("camera", params.camera, camera_names);
