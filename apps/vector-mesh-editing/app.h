@@ -27,6 +27,13 @@ struct Spline_Input {
   bool                 is_closed        = false;
 
   inline std::array<mesh_point, 4> control_polygon(int curve_id) const {
+    if (is_closed && curve_id == control_points.size() - 1) {
+      auto a = control_points[curve_id].point;
+      auto b = control_points[curve_id].handles[1];
+      auto c = control_points[0].handles[0];
+      auto d = control_points[0].point;
+      return {a, b, c, d};
+    }
     auto a = control_points[curve_id].point;
     auto b = control_points[curve_id].handles[1];
     auto c = control_points[curve_id + 1].handles[0];
@@ -34,14 +41,11 @@ struct Spline_Input {
     return {a, b, c, d};
   }
   inline int num_curves() const {
-    // TODO(giacomo): Incomplete
-    if (is_closed) assert(0 && "Incomplete");
-    return max((int)(control_points.size() - 1), 0);
-  }
-  inline vector<int> curves_from_control_point(int point_id) {
-    // TODO(giacomo): Incomplete
-    if (is_closed) assert(0 && "Incomplete");
-    return {point_id};
+    if (control_points.size() == 1) return 0;
+    if (is_closed)
+      return control_points.size();
+    else
+      return control_points.size() - 1;
   }
 };
 
@@ -351,13 +355,15 @@ inline void process_mouse(
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[1];
 
   auto touched_curves = vector<int>{};
-  if (selection.handle_id == -1) {
-    touched_curves = {
-        selection.control_point_id, max(0, selection.control_point_id - 1)};
-  } else {
-    auto id        = selection.control_point_id;
-    touched_curves = {max(id - 1, 0), id};
+  auto prev           = selection.control_point_id - 1;
+  if (prev < 0) {
+    if (spline.input.is_closed)
+      prev = spline.input.control_points.size() - 1;
+    else
+      prev = 0;
   }
+  touched_curves = {selection.control_point_id, prev};
+
   for (auto curve : touched_curves) {
     if (curve >= 0 && curve < spline.input.num_curves())
       spline.cache.curves_to_update.insert(curve);
@@ -527,7 +533,8 @@ void update_output(Spline_Output& output, const Spline_Input& input,
   // }
 }
 
-void update_cache(const App& app, Spline_Cache& cache, const Spline_Input& input, const Spline_Output& output, scene_data& scene,
+void update_cache(const App& app, Spline_Cache& cache,
+    const Spline_Input& input, const Spline_Output& output, scene_data& scene,
     vector<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
   for (auto curve_id : cache.curves_to_update) {
@@ -565,7 +572,8 @@ void update_cache(const App& app, Spline_Cache& cache, const Spline_Input& input
       shape.normals = compute_normals(shape);
       updated_shapes += shape_id;
     }
-    scene.instances[anchor.anchor_id].frame.o = eval_position(app.mesh, input.control_points[point_id].point);
+    scene.instances[anchor.anchor_id].frame.o = eval_position(
+        app.mesh, input.control_points[point_id].point);
   }
   cache.points_to_update.clear();
   cache.curves_to_update.clear();
@@ -583,6 +591,7 @@ inline void update_splines(
   // Update bezier positions of edited curves.
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
-    update_cache(app, spline.cache, spline.input, spline.output, scene, updated_shapes);
+    update_cache(
+        app, spline.cache, spline.input, spline.output, scene, updated_shapes);
   }
 }
