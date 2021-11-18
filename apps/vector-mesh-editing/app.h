@@ -188,38 +188,6 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
   return false;
 }
 
-template <typename Add_Shape>
-inline int add_control_point(
-    Spline_View& spline, const Anchor_Point& anchor, Add_Shape& add_shape) {
-  auto point_id = (int)spline.input.control_points.size();
-  spline.input.control_points.push_back(anchor);
-
-  auto& cache     = spline.cache.points.emplace_back();
-  cache.anchor_id = add_shape();
-  // auto  frame = frame3f{};
-  // frame.o = eval_position(app.mesh.triangles, app.mesh.positions,
-  // anchor.point); auto radius     = app.line_thickness * 2; cache.anchor_id =
-  // add_shape(app, make_sphere(8, radius, 1), frame);
-  // updated_shapes.push_back(cache.anchor_id);
-
-  for (int k = 0; k < 2; k++) {
-    cache.handle_ids[k] = add_shape();
-    // auto radius = app.line_thickness * 0.6 * 2;
-    // frame.o     = eval_position(
-    //     app.mesh.triangles, app.mesh.positions, anchor.handles[k]);
-    // cache.handle_ids[k] = add_shape(app, make_sphere(8, radius, 1), frame);
-    // updated_shapes.push_back(cache.handle_ids[k]);
-  }
-
-  cache.tangents[0].shape_id = add_shape();
-  cache.tangents[1].shape_id = add_shape();
-  // cache.tangents[0].shape_id = add_shape(app, {}, {}, 2);
-  // cache.tangents[1].shape_id = add_shape(app, {}, {}, 2);
-
-  spline.cache.points_to_update.insert(point_id);
-  return point_id;
-}
-
 inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
   // Compute clicked point and exit if it mesh was not clicked.
@@ -244,13 +212,9 @@ inline void process_click(
     // If no spline is selected, do nothing.
     if (app.editing.selection.spline_id == -1) return;
     auto spline        = app.selected_spline();
-    auto anchor        = Anchor_Point{};
-    anchor.point       = point;
-    anchor.handles[0]  = point;
-    anchor.handles[1]  = point;
     auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-    auto a             = add_control_point(spline, anchor, add_app_shape);
-    app.editing.selection.control_point_id = a;
+    auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
+    app.editing.selection.control_point_id = anchor_id;
     app.editing.selection.handle_id        = 1;
 
     if (spline.input.control_points.size() > 1) {

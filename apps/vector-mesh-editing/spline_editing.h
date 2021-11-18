@@ -138,6 +138,28 @@ inline geodesic_path shortest_path(
   return path;
 }
 
+template <typename Add_Shape>
+inline int add_anchor_point(
+    Spline_View& spline, const mesh_point& point, Add_Shape& add_shape) {
+  // Create anchor point with zero-length tangents.
+  auto anchor = Anchor_Point{point, {point, point}};
+
+  // Add point to input.
+  auto point_id = (int)spline.input.control_points.size();
+  spline.input.control_points.push_back(anchor);
+
+  // Add shapes for point, handles and tangents to cache.
+  auto& cache                = spline.cache.points.emplace_back();
+  cache.anchor_id            = add_shape();
+  cache.tangents[0].shape_id = add_shape();
+  cache.tangents[1].shape_id = add_shape();
+  for (int k = 0; k < 2; k++) cache.handle_ids[k] = add_shape();
+
+  // Trigger update of this point.
+  spline.cache.points_to_update.insert(point_id);
+  return point_id;
+}
+
 inline void move_selected_point(Splinesurf& splinesurf,
     const Editing::Selection& selection, const bool_mesh& mesh,
     const mesh_point& point) {
