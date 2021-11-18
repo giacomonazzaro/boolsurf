@@ -188,14 +188,14 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
   return false;
 }
 
-template <typename Point_Adder, typename Line_Adder>
-inline int add_control_point(Spline_View& spline, const Anchor_Point& anchor,
-    Point_Adder& add_point_shape, Line_Adder& add_line_shape) {
+template <typename Add_Shape>
+inline int add_control_point(
+    Spline_View& spline, const Anchor_Point& anchor, Add_Shape& add_shape) {
   auto point_id = (int)spline.input.control_points.size();
   spline.input.control_points.push_back(anchor);
 
   auto& cache     = spline.cache.points.emplace_back();
-  cache.anchor_id = add_point_shape(anchor.point);
+  cache.anchor_id = add_shape();
   // auto  frame = frame3f{};
   // frame.o = eval_position(app.mesh.triangles, app.mesh.positions,
   // anchor.point); auto radius     = app.line_thickness * 2; cache.anchor_id =
@@ -203,7 +203,7 @@ inline int add_control_point(Spline_View& spline, const Anchor_Point& anchor,
   // updated_shapes.push_back(cache.anchor_id);
 
   for (int k = 0; k < 2; k++) {
-    cache.handle_ids[k] = add_point_shape(anchor.handles[k]);
+    cache.handle_ids[k] = add_shape();
     // auto radius = app.line_thickness * 0.6 * 2;
     // frame.o     = eval_position(
     //     app.mesh.triangles, app.mesh.positions, anchor.handles[k]);
@@ -211,8 +211,8 @@ inline int add_control_point(Spline_View& spline, const Anchor_Point& anchor,
     // updated_shapes.push_back(cache.handle_ids[k]);
   }
 
-  cache.tangents[0].shape_id = add_line_shape();
-  cache.tangents[1].shape_id = add_line_shape();
+  cache.tangents[0].shape_id = add_shape();
+  cache.tangents[1].shape_id = add_shape();
   // cache.tangents[0].shape_id = add_shape(app, {}, {}, 2);
   // cache.tangents[1].shape_id = add_shape(app, {}, {}, 2);
 
@@ -243,24 +243,13 @@ inline void process_click(
 
     // If no spline is selected, do nothing.
     if (app.editing.selection.spline_id == -1) return;
-    auto spline          = app.selected_spline();
-    auto anchor          = Anchor_Point{};
-    anchor.point         = point;
-    anchor.handles[0]    = point;
-    anchor.handles[1]    = point;
-    auto add_point_shape = [&](const mesh_point& point) {
-      auto frame = frame3f{};
-      frame.o    = eval_position(app.mesh.triangles, app.mesh.positions, point);
-      auto radius   = app.line_thickness * 2;
-      auto shape_id = add_shape(app, make_sphere(8, radius, 1), frame);
-      updated_shapes.push_back(shape_id);
-      return shape_id;
-    };
-    auto add_line_shape = [&]() {
-      auto shape_id = add_shape(app, {}, {}, 2);
-      return shape_id;
-    };
-    auto a = add_control_point(spline, anchor, add_point_shape, add_line_shape);
+    auto spline        = app.selected_spline();
+    auto anchor        = Anchor_Point{};
+    anchor.point       = point;
+    anchor.handles[0]  = point;
+    anchor.handles[1]  = point;
+    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+    auto a             = add_control_point(spline, anchor, add_app_shape);
     app.editing.selection.control_point_id = a;
     app.editing.selection.handle_id        = 1;
 
@@ -321,16 +310,33 @@ void update_cache(const App& app, Spline_Cache& cache,
       auto  positions = path_positions(tangent.path, app.mesh.triangles,
           app.mesh.positions, app.mesh.adjacencies);
 
-      auto handle_id                     = anchor.handle_ids[k];
-      scene.instances[handle_id].frame.o = positions.back();
-
-      auto& shape = scene.shapes[shape_id];
+      auto& instance    = scene.instances[shape_id];
+      auto& shape       = scene.shapes[shape_id];
+      instance.material = 2;
       shape = polyline_to_cylinders(positions, 16, app.line_thickness * 0.6);
       shape.normals = compute_normals(shape);
       updated_shapes += shape_id;
+
+      auto& handle_instance    = scene.instances[anchor.handle_ids[k]];
+      handle_instance.material = 2;
+      handle_instance.frame.o  = positions.back();
+      auto& handle_shape       = scene.shapes[handle_instance.shape];
+      if (handle_shape.triangles.empty()) {
+        auto radius  = app.line_thickness * 2;
+        handle_shape = make_sphere(8, radius, 1);
+        updated_shapes += anchor.handle_ids[k];
+      }
     }
-    scene.instances[anchor.anchor_id].frame.o = eval_position(
+    auto& anchor_instance    = scene.instances[anchor.anchor_id];
+    anchor_instance.material = 1;
+    anchor_instance.frame.o  = eval_position(
         app.mesh, input.control_points[point_id].point);
+    auto& anchor_shape = scene.shapes[anchor_instance.shape];
+    if (anchor_shape.triangles.empty()) {
+      auto radius  = app.line_thickness * 2;
+      anchor_shape = make_sphere(8, radius, 1);
+      updated_shapes += anchor.anchor_id;
+    }
   }
   cache.points_to_update.clear();
   cache.curves_to_update.clear();
