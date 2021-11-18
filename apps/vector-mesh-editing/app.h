@@ -55,16 +55,16 @@ struct Spline_Cache {
     int           shape_id  = -1;
   };
   struct Tangent {
-    geodesic_path path     = {};  // TODO(giacomo): use mesh_paths?
+    geodesic_path path     = {};
     int           shape_id = -1;
   };
   struct Point {
     int                    anchor_id     = -1;
     int                    handle_ids[2] = {-1, -1};
-    std::array<Tangent, 2> tangents = {};  // TODO(giacomo): use mesh_paths?
+    std::array<Tangent, 2> tangents      = {};
   };
-  std::vector<Curve> curves           = {};  // TODO(giacomo): use mesh_paths?
-  std::vector<Point> points           = {};  // id of shape in scene_data
+  std::vector<Curve> curves           = {};
+  std::vector<Point> points           = {};
   hash_set<int>      curves_to_update = {};
   hash_set<int>      points_to_update = {};
 };
@@ -153,19 +153,6 @@ inline vec2f tangent_path_direction(
 }
 
 struct App {
-  // struct Mesh : shape_data {
-  //   vector<vec3i>        adjacencies = {};
-  //   dual_geodesic_solver dual_solver = {};
-  // bool_borders         borders     = {};
-
-  // shape_bvh                  bvh                = {};
-  // bbox3f                     bbox               = {};
-  // int                        num_triangles      = 0;
-  // int                        num_positions      = 0;
-  // hash_map<int, vector<int>> triangulated_faces = {};
-  // geodesic_solver            graph              = {};
-  // };
-
   scene_data scene = {};
   bool_mesh  mesh  = {};
   shape_bvh  bvh   = {};
@@ -179,6 +166,8 @@ struct App {
 
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
+
+  bool flag = true;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -202,7 +191,10 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
   if (selection.handle_id == -1) {
     auto& point_cache = spline.cache.points[selection.control_point_id];
     auto  offset      = shortest_path(mesh, anchor.point, point);
-    auto  rot         = parallel_transport_rotation(
+
+#if 0
+    // Old implementation. Probably faster but less stable.
+    auto rot = parallel_transport_rotation(
         mesh.triangles, mesh.positions, mesh.adjacencies, offset);
 
     for (int k = 0; k < 2; k++) {
@@ -214,8 +206,23 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
       tangent           = straightest_path(mesh, point, dir, len);
       anchor.handles[k] = point_cache.tangents[k].path.end;
     }
+#endif
 
+    auto offset_dir = tangent_path_direction(mesh, offset);
+    auto offset_len = path_length(
+        offset, mesh.triangles, mesh.positions, mesh.adjacencies);
+    for (int k = 0; k < 2; k++) {
+      auto& tangent = point_cache.tangents[k].path;
+      auto  rot     = parallel_transport_rotation(
+          mesh.triangles, mesh.positions, mesh.adjacencies, tangent);
+
+      auto dir          = rot * offset_dir;
+      auto p            = straightest_path(mesh, tangent.end, dir, offset_len);
+      tangent           = shortest_path(app.mesh, point, p.end);
+      anchor.handles[k] = tangent.end;
+    }
     anchor.point = point;
+
   } else {
     auto& handle = anchor.handles[selection.handle_id];
     handle       = point;
@@ -559,7 +566,10 @@ void update_cache(const App& app, Spline_Cache& cache,
       shape.normals = compute_normals(shape);
       updated_shapes += shape_id;
     }
+    scene.instances[anchor.shape_id].frame.o = eval_position(
+        app.mesh.triangles, app.mesh.positions, app.splinesurf[].point);
   }
+  cache.points_to_update.clear();
   cache.curves_to_update.clear();
 }
 

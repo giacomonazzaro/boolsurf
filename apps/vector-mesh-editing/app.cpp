@@ -149,6 +149,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   };
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_glcombobox("name", selected, names);
+    draw_glcheckbox("flag", app.flag);
     if (begin_glheader("shade")) {
       draw_glcombobox("camera", params.camera, camera_names);
       draw_glcheckbox("wireframe", params.wireframe);
