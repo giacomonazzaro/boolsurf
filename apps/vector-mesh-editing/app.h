@@ -200,11 +200,22 @@ inline void move_selected_point(App& app, Splinesurf& splinesurf,
   auto  spline = splinesurf.get_spline_view(selection.spline_id);
   auto& anchor = spline.input.control_points[selection.control_point_id];
   if (selection.handle_id == -1) {
-    // auto  path       = shortest_path(mesh, old_anchor.point, point);
-    anchor.point   = point;
-    auto anchor_id = spline.cache.points[selection.control_point_id].anchor_id;
-    app.scene.instances[anchor_id].frame.o = eval_position(
-        app.mesh.triangles, app.mesh.positions, point);
+    auto& point_cache = spline.cache.points[selection.control_point_id];
+    auto  offset      = shortest_path(mesh, anchor.point, point);
+    auto  rot         = parallel_transport_rotation(
+        mesh.triangles, mesh.positions, mesh.adjacencies, offset);
+
+    for (int k = 0; k < 2; k++) {
+      auto& tangent = point_cache.tangents[k].path;
+      auto  len     = path_length(
+          tangent, mesh.triangles, mesh.positions, mesh.adjacencies);
+      auto dir          = tangent_path_direction(mesh, tangent);
+      dir               = rot * dir;
+      tangent           = straightest_path(mesh, point, dir, len);
+      anchor.handles[k] = point_cache.tangents[k].path.end;
+    }
+
+    anchor.point = point;
   } else {
     auto& handle = anchor.handles[selection.handle_id];
     handle       = point;
