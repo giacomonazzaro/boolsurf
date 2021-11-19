@@ -144,6 +144,22 @@ inline bool intersect_mesh_point(const bool_mesh& mesh, const ray3f& ray,
   return hit;
 }
 
+inline void toggle_handle_visibility(App& app, bool visible) {
+  auto selection = app.editing.selection;
+  if (selection.spline_id == -1) return;
+  for (int k = 0; k < 2; k++) {
+    auto handle_id = app.selected_spline()
+                         .cache.points[selection.control_point_id]
+                         .handle_ids[k];
+    app.scene.instances[handle_id].visible = visible;
+    auto tangent_id                        = app.selected_spline()
+                          .cache.points[selection.control_point_id]
+                          .tangents[k]
+                          .shape_id;
+    app.scene.instances[tangent_id].visible = visible;
+  }
+}
+
 inline bool update_selection(App& app, const vec2f& mouse_uv) {
   auto& selection = app.editing.selection;
   auto& camera    = app.scene.cameras[0];
@@ -190,7 +206,11 @@ inline void process_click(
   // Update selection. If it was changed, don't add new points.
   auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
       input.mouse_pos.y / float(input.window_size.y)};
-  if (update_selection(app, mouse_uv)) return;
+  toggle_handle_visibility(app, false);
+  if (update_selection(app, mouse_uv)) {
+    toggle_handle_visibility(app, true);
+    return;
+  }
 
   // If there are no splines, create the first one and select it.
   if (app.splinesurf.num_splines() == 0) {

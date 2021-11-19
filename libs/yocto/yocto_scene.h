@@ -144,6 +144,7 @@ struct instance_data {
   frame3f frame    = identity3x4f;
   int     shape    = invalidid;
   int     material = invalidid;
+  bool    visible  = true;
 };
 
 // Environment map.
