@@ -5,7 +5,6 @@
 #undef far
 #endif
 
-#include <yocto/yocto_cli.h>  // hashing vec2i
 #include <yocto/yocto_mesh.h>
 #include <yocto/yocto_scene.h>
 #include <yocto/yocto_shape.h>  // hashing vec2i

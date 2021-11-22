@@ -48,6 +48,21 @@ scope_timer::scope_timer(const string& msg) {
   start_time = get_time_();
 }
 
+// Format duration string from nanoseconds
+static string format_duration(int64_t duration) {
+  auto elapsed = duration / 1000000;  // milliseconds
+  auto hours   = (int)(elapsed / 3600000);
+  elapsed %= 3600000;
+  auto mins = (int)(elapsed / 60000);
+  elapsed %= 60000;
+  auto secs  = (int)(elapsed / 1000);
+  auto msecs = (int)(elapsed % 1000);
+  char buffer[256];
+  snprintf(
+      buffer, sizeof(buffer), "%02d:%02d:%02d.%03d", hours, mins, secs, msecs);
+  return buffer;
+}
+
 scope_timer::~scope_timer() {
   scope_timer_indent -= 1;
   if (start_time < 0) return;
@@ -1238,10 +1253,10 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
       mesh.triangulated_faces[face] = {facet{nodes, face}};
       return;
     }
-      
+
     auto triangulated_faces = vector<facet>{};
-    auto triangles = vector<vec3i>();
-    auto adjacency = vector<vec3i>();
+    auto triangles          = vector<vec3i>();
+    auto adjacency          = vector<vec3i>();
 
     // Se il triangolo ha al suo interno un solo segmento allora chiamiamo
     // la funzione di triangolazione più semplice, altrimenti chiamiamo CDT
