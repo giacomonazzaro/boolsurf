@@ -12,6 +12,10 @@
 
 #include <cassert>
 #include <deque>
+namespace yocto {
+struct ogl_texture;
+}
+
 using namespace yocto;
 
 #define _PRINT_CALL(function, file, line) \
@@ -214,78 +218,78 @@ inline vec3f get_color(int i) {
   return colors[i % colors.size()];
 }
 
-namespace std {
+// namespace std {
 
-inline string to_string(const vec3i& v) {
-  return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " +
-         std::to_string(v.z) + "}";
-}
+// inline string to_string(const vec3i& v) {
+//   return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " +
+//          std::to_string(v.z) + "}";
+// }
 
-inline string to_string(const vec3f& v) {
-  return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " +
-         std::to_string(v.z) + "}";
-}
+// inline string to_string(const vec3f& v) {
+//   return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + ", " +
+//          std::to_string(v.z) + "}";
+// }
 
-inline string to_string(const vec2i& v) {
-  return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + "}";
-}
+// inline string to_string(const vec2i& v) {
+//   return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + "}";
+// }
 
-inline string to_string(const vec2f& v) {
-  return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + "}";
-}
+// inline string to_string(const vec2f& v) {
+//   return "{" + std::to_string(v.x) + ", " + std::to_string(v.y) + "}";
+// }
 
-inline string to_string(const mesh_point& p) {
-  return "{" + std::to_string(p.face) + ", " + std::to_string(p.uv) + "}";
-}
+// inline string to_string(const mesh_point& p) {
+//   return "{" + std::to_string(p.face) + ", " + std::to_string(p.uv) + "}";
+// }
 
-// TODO(giacomo): doesn't work
-template <typename T>
-string to_string(const vector<T>& vec) {
-  auto max_elements = 100;
-  auto result       = string{};
-  result.reserve(1e5);
-  auto count = 0;
-  auto str   = (char*)result.data();
-  count += sprintf(str, "[size: %lu] ", vec.size());
-  if (vec.empty()) {
-    count += sprintf(str, "]\n");
-    goto end;
-  }
-  for (int i = 0; i < min((int)vec.size() - 1, max_elements); i++) {
-    count += sprintf(str, "%s, ", std::to_string(vec[i]).c_str());
-  }
-  if (vec.size() > max_elements) {
-    count += sprintf(str, "...]");
-  } else {
-    count += sprintf(str, "%s]", std::to_string(vec.back()).c_str());
-  }
-end:
-  count += sprintf(str, "\n");
-  result.resize(count);
-  return result;
-}
+// // TODO(giacomo): doesn't work
+// template <typename T>
+// string to_string(const vector<T>& vec) {
+//   auto max_elements = 100;
+//   auto result       = string{};
+//   result.reserve(1e5);
+//   auto count = 0;
+//   auto str   = (char*)result.data();
+//   count += sprintf(str, "[size: %lu] ", vec.size());
+//   if (vec.empty()) {
+//     count += sprintf(str, "]\n");
+//     goto end;
+//   }
+//   for (int i = 0; i < min((int)vec.size() - 1, max_elements); i++) {
+//     count += sprintf(str, "%s, ", std::to_string(vec[i]).c_str());
+//   }
+//   if (vec.size() > max_elements) {
+//     count += sprintf(str, "...]");
+//   } else {
+//     count += sprintf(str, "%s]", std::to_string(vec.back()).c_str());
+//   }
+// end:
+//   count += sprintf(str, "\n");
+//   result.resize(count);
+//   return result;
+// }
 
-template <typename T>
-string to_string(const hash_set<T>& vec) {
-  auto max_elements = 100;
-  auto result       = string{};
-  result.reserve(1e5);
-  auto count = 0;
-  auto str   = (char*)result.data();
-  count += sprintf(str, "[size: %lu] [", vec.size());
+// template <typename T>
+// string to_string(const hash_set<T>& vec) {
+//   auto max_elements = 100;
+//   auto result       = string{};
+//   result.reserve(1e5);
+//   auto count = 0;
+//   auto str   = (char*)result.data();
+//   count += sprintf(str, "[size: %lu] [", vec.size());
 
-  int i = 0;
-  for (auto& item : vec) {
-    if (i > max_elements) break;
-    i += 1;
-    count += sprintf(str, "%s, ", std::to_string(item).c_str());
-  }
+//   int i = 0;
+//   for (auto& item : vec) {
+//     if (i > max_elements) break;
+//     i += 1;
+//     count += sprintf(str, "%s, ", std::to_string(item).c_str());
+//   }
 
-  count += sprintf(str, "]\n");
-  result.resize(count);
-  return result;
-}
-}  // namespace std
+//   count += sprintf(str, "]\n");
+//   result.resize(count);
+//   return result;
+// }
+// }  // namespace std
 
 template <typename T>
 void print(const string& name, const T& v) {
@@ -334,10 +338,6 @@ void print(
   printf("\n");
 }
 
-namespace yocto {
-struct ogl_texture;
-}
-
 void draw_triangulation(
     ogl_texture* texture, int face, vec2i size = {2048, 2048});
 
@@ -382,38 +382,38 @@ inline T sum(const vector<T>& vec) {
   return result;
 }
 
-template <>
-struct std::hash<vector<int>> {
-  size_t operator()(const vector<int>& V) const {
-    auto hash = V.size();
-    for (auto& i : V) {
-      hash ^= i + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-    }
-    return hash;
-  }
-};
+// template <>
+// struct std::hash<vector<int>> {
+//   size_t operator()(const vector<int>& V) const {
+//     auto hash = V.size();
+//     for (auto& i : V) {
+//       hash ^= i + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+//     }
+//     return hash;
+//   }
+// };
 
-template <class T>
-struct std::hash<vector<T>> {
-  size_t operator()(const vector<T>& V) const {
-    auto hash = V.size();
-    for (auto& i : V) {
-      hash ^= std::hash<T>{}(i);
-    }
-    return hash;
-  }
-};
+// template <class T>
+// struct std::hash<vector<T>> {
+//   size_t operator()(const vector<T>& V) const {
+//     auto hash = V.size();
+//     for (auto& i : V) {
+//       hash ^= std::hash<T>{}(i);
+//     }
+//     return hash;
+//   }
+// };
 
-template <>
-struct std::hash<std::unordered_set<int>> {
-  size_t operator()(const std::unordered_set<int>& V) const {
-    auto hash = V.size();
-    for (auto& i : V) {
-      hash ^= std::hash<int>{}(i);
-    }
-    return hash;
-  }
-};
+// template <>
+// struct std::hash<std::unordered_set<int>> {
+//   size_t operator()(const std::unordered_set<int>& V) const {
+//     auto hash = V.size();
+//     for (auto& i : V) {
+//       hash ^= std::hash<int>{}(i);
+//     }
+//     return hash;
+//   }
+// };
 
 hash_map<int, vector<vec3i>>& debug_triangles();
 hash_map<int, vector<vec2i>>& debug_edges();
