@@ -1,5 +1,6 @@
 #pragma once
 #include <boolsurf/boolsurf.h>
+#include <boolsurf/boolsurf_io.h>
 #include <yocto/yocto_geometry.h>
 #include <yocto/yocto_math.h>
 #include <yocto/yocto_mesh.h>
@@ -17,10 +18,11 @@
 using namespace yocto;  // TODO(giacomo): Remove this.
 
 struct App {
-  scene_data scene = {};
-  bool_mesh  mesh  = {};
-  shape_bvh  bvh   = {};
-  float      time  = 0;
+  scene_data scene      = {};
+  bool_mesh  mesh       = {};
+  bool_state bool_state = {};
+  shape_bvh  bvh        = {};
+  float      time       = 0;
 
   Editing    editing    = {};
   Splinesurf splinesurf = {};
@@ -50,10 +52,19 @@ template <typename Params>
 void init_app(App& app, const Params& params) {
   // loading shape
   auto error = string{};
-  if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
+
+  auto test = bool_test{};
+  load_test(test, params.shape);
+
+  if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
   init_mesh(app.mesh);
 
+  app.bool_state = state_from_test(app.mesh, test, 0.0, false);
+
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
+
+  compute_cells(app.mesh, app.bool_state);
+  app.mesh.normals = compute_normals(app.mesh);
 
   // make scene
   app.scene = make_shape_scene(app.mesh, params.addsky);
