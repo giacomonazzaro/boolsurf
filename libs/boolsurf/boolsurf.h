@@ -22,17 +22,22 @@ struct bool_borders {
   vector<bool> tags = {};
 };
 
-struct bool_mesh : shape_data {
+struct facet {
+  std::array<vec2f, 3> corners = {};
+  int                  id      = -1;
+};
+
+struct bool_mesh : scene_shape {
   vector<vec3i>        adjacencies = {};
   dual_geodesic_solver dual_solver = {};
   bool_borders         borders     = {};
 
-  shape_bvh                  bvh                = {};
-  bbox3f                     bbox               = {};
-  int                        num_triangles      = 0;
-  int                        num_positions      = 0;
-  hash_map<int, vector<int>> triangulated_faces = {};
-  geodesic_solver            graph              = {};
+  shape_bvh                    bvh                = {};
+  bbox3f                       bbox               = {};
+  int                          num_triangles      = 0;
+  int                          num_positions      = 0;
+  hash_map<int, vector<facet>> triangulated_faces = {};
+  geodesic_solver              graph              = {};
 
   vector<vec3i> polygon_borders = {};
   vector<int>   face_tags       = {};
@@ -51,6 +56,7 @@ struct shade_instance;
 struct mesh_polygon {
   vector<int>                  points = {};
   vector<vector<mesh_segment>> edges  = {};
+  int                          length = 0;
 
   bool is_contained_in_single_face = false;
 };
@@ -88,17 +94,36 @@ struct mesh_cell {
   hash_set<vec2i> adjacency = {};  // {cell_id, crossed_polygon_id}
 };
 
-struct bool_state {
-  vector<shape>      bool_shapes = {{}};
-  vector<mesh_point> points      = {};
+// struct mesh_shape {
+//   int         shape      = 0;
+//   vector<int> generators = {-1, -1};
+//   bool        is_root    = true;
 
-  // hash_map<int, vec2i> isecs_generators = {};
+//   vec3f         color = {0, 0, 0};
+//   hash_set<int> cells = {};
+
+//   vector<vector<int>> border_points = {};
+//   shade_instance*     borders_shape = nullptr;
+// };
+
+struct bool_state {
+  vector<mesh_polygon> polygons    = {{}};
+  vector<shape>        bool_shapes = {{}};
+  vector<mesh_point>   points      = {};
+
+  int                  num_original_points = 0;
+  hash_map<int, int>   control_points      = {};
+  hash_map<int, vec2i> isecs_generators    = {};
 
   vector<mesh_cell>   cells          = {};
   vector<vector<int>> labels         = {};
   hash_set<int>       invalid_shapes = {};
-  vector<int>         shapes_sorting = {};
-  bool                failed         = false;
+  // vector<int>           ambient_cells = {};
+  // vector<vector<vec2i>> cycles        = {};
+
+  // vector<mesh_shape> shapes         = {};
+  vector<int> shapes_sorting = {};
+  bool        failed         = false;
 };
 
 namespace yocto {  // TODO(giacomo): Fix this.
@@ -148,8 +173,8 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
-void recompute_polygon_segments(
-    const bool_mesh& mesh, const bool_state& state, mesh_polygon& polygon);
+void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
+    mesh_polygon& polygon, int index = 0);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {
