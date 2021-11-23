@@ -48,6 +48,30 @@ struct App {
   }
 };
 
+void add_mesh_edges(scene_data& scene, const shape_data& mesh) {
+  auto& instance     = scene.instances.emplace_back();
+  instance.shape     = (int)scene.shapes.size();
+  instance.material  = (int)scene.materials.size();
+  auto& material     = scene.materials.emplace_back();
+  material.color     = {0, 0, 0};
+  material.type      = scene_material_type::glossy;
+  material.roughness = 0.5;
+  auto& edges        = scene.shapes.emplace_back();
+  for (auto& tr : mesh.triangles) {
+    for (int k = 0; k < 3; k++) {
+      auto a = tr[k];
+      auto b = tr[(k + 1) % 3];
+      if (a > b) continue;
+      auto index = (int)edges.positions.size();
+      edges.radius.push_back(0.001);
+      edges.radius.push_back(0.001);
+      edges.lines.push_back({index, index + 1});
+      edges.positions.push_back(mesh.positions[a]);
+      edges.positions.push_back(mesh.positions[b]);
+    }
+  }
+}
+
 template <typename Params>
 void init_app(App& app, const Params& params) {
   // loading shape
@@ -62,10 +86,10 @@ void init_app(App& app, const Params& params) {
   app.bool_state = state_from_test(app.mesh, test, 0.0, false);
 
   compute_cells(app.mesh, app.bool_state);
+  //  compute_shapes(app.bool_state);
   app.mesh.triangles.resize(app.mesh.num_triangles);
   app.mesh.positions.resize(app.mesh.num_positions);
   app.mesh.normals = compute_normals(app.mesh);
-
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
@@ -79,6 +103,8 @@ void init_app(App& app, const Params& params) {
   auto tangent_material  = spline_material;
   tangent_material.color = {0, 0, 1};
   app.scene.materials.push_back(tangent_material);
+
+  // add_mesh_edges(app.scene, app.mesh);
 }
 
 inline mesh_point intersect_mesh(App& app, const glinput_state& input) {

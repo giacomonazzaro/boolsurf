@@ -379,7 +379,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
       reset_display();
     }
 
-    {
+    if (0) {
       process_click(app, updated_shapes, input);
       process_mouse(app, updated_shapes, input);
 

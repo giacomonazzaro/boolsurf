@@ -577,11 +577,42 @@ material_point eval_material(const scene_data& scene,
     if (point.roughness < min_roughness) point.roughness = 0;
   }
 
+  auto sign = [](vec2f p1, vec2f p2, vec2f p3) {
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+  };
+
+  auto is_inside_triangle = [&](vec2f pt, vec2f v1, vec2f v2, vec2f v3) {
+    float d1, d2, d3;
+    bool  has_neg, has_pos;
+
+    d1 = sign(pt, v1, v2);
+    d2 = sign(pt, v2, v3);
+    d3 = sign(pt, v3, v1);
+
+    has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+    return !(has_neg && has_pos);
+  };
+
+  auto face_id = element;
   if (global_mesh()) {
-    if (auto it = global_mesh()->triangulated_faces.find(element) !=
-                  global_mesh()->triangulated_faces.end()) {
-      point.color = {1, 0, 0};
+    if (auto it = global_mesh()->triangulated_faces.find(element);
+        it != global_mesh()->triangulated_faces.end()) {
+      auto& facets = it->second;
+      for (auto& facet : facets) {
+        auto inside = is_inside_triangle(
+            uv, facet.corners[0], facet.corners[1], facet.corners[2]);
+        if (inside) {
+          face_id = facet.id;
+          break;
+        }
+      }
     }
+
+    auto cell_id = global_mesh()->face_tags[face_id];
+    // auto shape_id = global_state()->shape_from_cell[cell_id];
+    point.color = get_color(cell_id);
   }
 
   return point;

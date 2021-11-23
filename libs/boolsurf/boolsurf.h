@@ -115,9 +115,10 @@ struct bool_state {
   hash_map<int, int>   control_points      = {};
   hash_map<int, vec2i> isecs_generators    = {};
 
-  vector<mesh_cell>   cells          = {};
-  vector<vector<int>> labels         = {};
-  hash_set<int>       invalid_shapes = {};
+  vector<mesh_cell>   cells           = {};
+  vector<int>         shape_from_cell = {};
+  vector<vector<int>> labels          = {};
+  hash_set<int>       invalid_shapes  = {};
   // vector<int>           ambient_cells = {};
   // vector<vector<vec2i>> cycles        = {};
 
@@ -126,7 +127,11 @@ struct bool_state {
   bool        failed         = false;
 };
 
-static bool_state* global_state;
+inline bool_state*& global_state() {
+  static bool_state* state = nullptr;
+  return state;
+}
+
 inline bool_mesh*& global_mesh() {
   static bool_mesh* mesh = nullptr;
   return mesh;

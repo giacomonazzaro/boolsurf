@@ -512,7 +512,7 @@ static vector<mesh_cell> make_mesh_cells(vector<int>& cell_tags,
     auto first_face = start;
 
     // static int c = 0;
-    // // save_tree_png(*global_state,
+    // // save_tree_png(*global_state(),
     // // "data/tests/flood_fill_" + to_string(c) + ".png", "", false);
     // c += 1;
 
@@ -776,7 +776,7 @@ static vector<vector<int>> propagate_cell_labels(bool_state& state) {
     queue.pop_front();
     // static int c = 0;
     // save_tree_png(
-    //     *global_state, "data/tests/" + to_string(c) + ".png", "", false);
+    //     *global_state(), "data/tests/" + to_string(c) + ".png", "", false);
     // c += 1;
 
     auto& cell = cells[cell_id];
@@ -1045,7 +1045,8 @@ static pair<vector<vec3i>, vector<vec3i>> single_split_triangulation(
 
 // Constrained Delaunay Triangulation
 static pair<vector<vec3i>, vector<vec3i>> constrained_triangulation(
-    vector<vec2f>& nodes, const vector<vec2i>& edges, int face) {
+    const vector<vec2f>& _nodes, const vector<vec2i>& edges, int face) {
+  auto nodes = _nodes;
   // Questo purtroppo serve.
   for (auto& n : nodes) n *= 1e9;
 
@@ -1090,7 +1091,7 @@ static pair<vector<vec3i>, vector<vec3i>> constrained_triangulation(
     auto& c           = nodes[verts.z];
     auto  orientation = cross(b - a, c - b);
     if (fabs(orientation) < 0.00001) {
-      global_state->failed = true;
+      global_state()->failed = true;
       printf("[%s]: Collinear in face : %d\n", __FUNCTION__, face);
       return {};
     }
@@ -1393,11 +1394,11 @@ void compute_cell_labels(bool_state& state) {
 bool compute_cells(bool_mesh& mesh, bool_state& state) {
   // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
   _PROFILE();
-  global_state  = &state;
-  global_mesh() = &mesh;
+  global_state() = &state;
+  global_mesh()  = &mesh;
   slice_mesh(mesh, state);
 
-  if (global_state->failed) return false;
+  if (global_state()->failed) return false;
 
   // Trova celle e loro adiacenza via flood-fill.
   state.cells = make_cell_graph(mesh);
@@ -1426,11 +1427,13 @@ void compute_shapes(bool_state& state) {
   //      state.ambient_cells.begin(), state.ambient_cells.end());
   //  shapes[0].is_root = false;
 
+  state.shape_from_cell.resize(state.labels[0].size());
   for (auto c = 0; c < state.cells.size(); c++) {
     auto count = 0;
     for (auto p = 1; p < state.labels[c].size(); p++) {
       if (state.labels[c][p] > 0) {
         shapes[p].cells.insert(c);
+        state.shape_from_cell[c] = p;
         count += 1;
       }
     }
