@@ -7,8 +7,6 @@
 
 constexpr auto adjacent_to_nothing = -2;
 
-static bool_state* global_state = nullptr;
-
 #define DEBUG_DATA 0
 #if DEBUG_DATA
 #define add_debug_triangle(face, triangle) debug_triangles()[face] = triangle
@@ -937,7 +935,7 @@ triangulation_info triangulation_constraints(const bool_mesh& mesh, int face,
       // Aggiungiamo l'edge ai constraints della triangolazione.
       info.edges.push_back({local_vertices[0], local_vertices[1]});
 
-      // Extra: Se i nodi sono su un lato k != -1 di un triangolo allora li
+      // Extra: Se i nodi sono su un edge del triangolo, allora li
       // salviamo nella edgemap.
       for (int j = 0; j < 2; j++) {
         auto [k, lerp] = get_edge_lerp_from_uv(uvs[j]);
@@ -1306,8 +1304,8 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
     auto mesh_triangles_old_size = 0;
     {
       auto lock               = std::lock_guard{mesh_mutex};
-      mesh_triangles_old_size = (int)mesh.triangles.size();
-      mesh.triangles.resize(mesh_triangles_old_size + triangles.size());
+      mesh_triangles_old_size = (int)mesh.adjacencies.size();
+      // mesh.triangles.resize(mesh_triangles_old_size + triangles.size());
       mesh.adjacencies.resize(mesh_triangles_old_size + triangles.size());
       for (int i = 0; i < triangles.size(); i++) {
         triangulated_faces[i].id = mesh_triangles_old_size + i;
@@ -1340,7 +1338,7 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
 
 void compute_border_tags(bool_mesh& mesh, bool_state& state) {
   _PROFILE();
-  mesh.borders.tags = vector<bool>(3 * mesh.triangles.size(), false);
+  mesh.borders.tags = vector<bool>(3 * mesh.adjacencies.size(), false);
   for (auto& [polygon_id, inner_face, outer_face] : mesh.polygon_borders) {
     if (inner_face < 0 || outer_face < 0) continue;
     auto k = find_in_vec(mesh.adjacencies[inner_face], outer_face);
@@ -1395,7 +1393,8 @@ void compute_cell_labels(bool_state& state) {
 bool compute_cells(bool_mesh& mesh, bool_state& state) {
   // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
   _PROFILE();
-  global_state = &state;
+  global_state  = &state;
+  global_mesh() = &mesh;
   slice_mesh(mesh, state);
 
   if (global_state->failed) return false;

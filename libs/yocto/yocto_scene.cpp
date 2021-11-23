@@ -45,6 +45,8 @@
 #include "yocto_parallel.h"
 #include "yocto_shading.h"
 #include "yocto_shape.h"
+//
+#include "../boolsurf/boolsurf.h"
 
 // -----------------------------------------------------------------------------
 // USING DIRECTIVES
@@ -573,6 +575,13 @@ material_point eval_material(const scene_data& scene,
     point.roughness = 0;
   } else {
     if (point.roughness < min_roughness) point.roughness = 0;
+  }
+
+  if (global_mesh()) {
+    if (auto it = global_mesh()->triangulated_faces.find(element) !=
+                  global_mesh()->triangulated_faces.end()) {
+      point.color = {1, 0, 0};
+    }
   }
 
   return point;

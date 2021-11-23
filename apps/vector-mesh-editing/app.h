@@ -61,10 +61,12 @@ void init_app(App& app, const Params& params) {
 
   app.bool_state = state_from_test(app.mesh, test, 0.0, false);
 
-  app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
-
   compute_cells(app.mesh, app.bool_state);
+  app.mesh.triangles.resize(app.mesh.num_triangles);
+  app.mesh.positions.resize(app.mesh.num_positions);
   app.mesh.normals = compute_normals(app.mesh);
+
+  app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
   app.scene = make_shape_scene(app.mesh, params.addsky);

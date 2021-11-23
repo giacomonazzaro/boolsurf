@@ -126,6 +126,12 @@ struct bool_state {
   bool        failed         = false;
 };
 
+static bool_state* global_state;
+inline bool_mesh*& global_mesh() {
+  static bool_mesh* mesh = nullptr;
+  return mesh;
+}
+
 namespace yocto {  // TODO(giacomo): Fix this.
 struct bool_operation {
   enum struct Type {
