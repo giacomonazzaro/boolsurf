@@ -234,6 +234,18 @@ vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
 
 void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
   auto faces = hash_set<int>();
+
+  auto get_segments = [&](const mesh_point& start, const mesh_point& end) {
+    auto path      = compute_geodesic_path(mesh, start, end);
+    auto threshold = 0.001f;
+    for (auto& l : path.lerps) {
+      l = yocto::clamp(l, 0 + threshold, 1 - threshold);
+    }
+    auto segments = mesh_segments(
+        mesh.triangles, path.strip, path.lerps, path.start, path.end);
+    return segments;
+  };
+
   for (int i = 0; i < polygon.points.size(); i++) {
     auto& start = polygon.points[i];
     faces.insert(polygon.points[i].point.face);
@@ -242,14 +254,18 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     auto end = polygon.points[(i + 1) % polygon.points.size()];
 
     if (start.point == start.handles[1] && end.handles[0] == end.point) {
-      auto path      = compute_geodesic_path(mesh, start.point, end.point);
-      auto threshold = 0.001f;
-      for (auto& l : path.lerps) {
-        l = yocto::clamp(l, 0 + threshold, 1 - threshold);
-      }
-      auto segments = mesh_segments(
-          mesh.triangles, path.strip, path.lerps, path.start, path.end);
-      polygon.edges.push_back(segments);
+      polygon.edges.push_back(get_segments(start.point, end.point));
+    } else {
+      polygon.edges.push_back(get_segments(start.point, start.handles[1]));
+      polygon.edges.push_back(get_segments(start.handles[1], end.handles[0]));
+      polygon.edges.push_back(get_segments(end.handles[0], end.point));
+      // auto threshold = 0.001f;
+      // for (auto& l : path.lerps) {
+      //   l = yocto::clamp(l, 0 + threshold, 1 - threshold);
+      // }
+      // auto segments = mesh_segments(
+      //     mesh.triangles, path.strip, path.lerps, path.start, path.end);
+      // polygon.edges.push_back(segments);
     }
   }
 

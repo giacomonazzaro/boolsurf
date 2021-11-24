@@ -328,7 +328,15 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     draw_gllabel("selected spline", app.editing.selection.spline_id);
     draw_gllabel(
         "selected control_point", app.editing.selection.control_point_id);
-
+    if (draw_glbutton("add spline")) {
+      auto spline_id                  = add_spline(app.splinesurf);
+      app.editing.selection           = {};
+      app.editing.selection.spline_id = spline_id;
+    }
+    if (draw_glbutton("close spline")) {
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      close_spline(app.selected_spline(), add_app_shape);
+    }
     if (begin_glheader("render")) {
       auto edited  = 0;
       auto tparams = params;
@@ -379,9 +387,37 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
       reset_display();
     }
 
-    if (0) {
+    if (1) {
       process_click(app, updated_shapes, input);
       process_mouse(app, updated_shapes, input);
+
+      if (input.mouse_right_click) {
+        stop_render();
+        auto& state = app.bool_state;
+        state       = {};
+        auto& mesh  = app.mesh;
+        for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+          auto spline = app.splinesurf.get_spline_view(i);
+
+          // Add new 1-polygon shape to state
+          // if (test_polygon.empty()) continue;
+
+          auto& bool_shape = state.bool_shapes.emplace_back();
+          auto& polygon    = bool_shape.polygons.emplace_back();
+          //      polygon.points   = test_polygon;
+          for (auto& anchor : spline.input.control_points) {
+            polygon.points.push_back(
+                {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+          }
+          recompute_polygon_segments(mesh, polygon);
+        }
+
+        compute_cells(app.mesh, app.bool_state);
+        //  compute_shapes(app.bool_state);
+        app.mesh.triangles.resize(app.mesh.num_triangles);
+        app.mesh.positions.resize(app.mesh.num_positions);
+        reset_display();
+      }
 
       if (app.jobs.size()) {
         stop_render();

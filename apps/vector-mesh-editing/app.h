@@ -80,15 +80,11 @@ void init_app(App& app, const Params& params) {
   auto test = bool_test{};
   load_test(test, params.shape);
 
-  if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
+  // if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
+  if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
   init_mesh(app.mesh);
 
-  app.bool_state = state_from_test(app.mesh, test, 0.0, false);
-
-  compute_cells(app.mesh, app.bool_state);
-  //  compute_shapes(app.bool_state);
-  app.mesh.triangles.resize(app.mesh.num_triangles);
-  app.mesh.positions.resize(app.mesh.num_positions);
+  app.bool_state   = state_from_test(app.mesh, test, 0.0, false);
   app.mesh.normals = compute_normals(app.mesh);
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
@@ -245,9 +241,9 @@ inline void process_click(
   // Update selection. If it was changed, don't add new points.
   auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
       input.mouse_pos.y / float(input.window_size.y)};
-  toggle_handle_visibility(app, false);
+//  toggle_handle_visibility(app, false);
   if (update_selection(app, mouse_uv)) {
-    toggle_handle_visibility(app, true);
+//    toggle_handle_visibility(app, true);
     return;
   }
 
