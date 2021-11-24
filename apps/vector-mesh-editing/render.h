@@ -15,6 +15,109 @@ struct scene_selection {
   int subdiv      = 0;
 };
 
+// renderer update
+struct Render {
+  const scene_data&   scene;
+  const bvh_data&     bvh;
+  const trace_lights& lights;
+  trace_params&       params;
+
+  trace_state state   = {};
+  image_data  image   = {};
+  image_data  display = {};
+  image_data  render  = {};
+
+  // opengl image
+  glimage_state  glimage  = {};
+  glimage_params glparams = {};
+
+  std::atomic<bool> render_update  = {};
+  std::atomic<int>  render_current = {};
+  std::mutex        render_mutex   = {};
+  future<void>      render_worker  = {};
+  atomic<bool>      render_stop    = {};
+
+  Render(const scene_data& _scene, const bvh_data& _bvh,
+      const trace_lights& _lights, trace_params& _params)
+      : scene(_scene), bvh(_bvh), lights(_lights), params(_params) {
+    state   = make_state(scene, params);
+    image   = make_image(state.width, state.height, true);
+    display = make_image(state.width, state.height, false);
+    render  = make_image(state.width, state.height, true);
+  }
+
+  auto render_scene() {
+    for (auto sample = 0; sample < params.samples; sample += params.batch) {
+      if (render_stop) return;
+      parallel_for(state.width, state.height, [&](int i, int j) {
+        for (auto s = 0; s < params.batch; s++) {
+          if (render_stop) return;
+          trace_sample(state, scene, bvh, lights, i, j, params);
+        }
+      });
+      state.samples += params.batch;
+      if (!render_stop) {
+        auto lock      = std::lock_guard{render_mutex};
+        render_current = state.samples;
+        if (!params.denoise || render_stop) {
+          get_render(render, state);
+        } else {
+          get_denoised(render, state);
+        }
+        image = render;
+        tonemap_image_mt(display, image, params.exposure, params.filmic);
+        render_update = true;
+      }
+    }
+  }
+
+  auto reset_display() {
+    // stop render
+    render_stop = true;
+    if (render_worker.valid()) render_worker.get();
+
+    state   = make_state(scene, params);
+    image   = make_image(state.width, state.height, true);
+    display = make_image(state.width, state.height, false);
+    render  = make_image(state.width, state.height, true);
+
+    render_worker = {};
+    render_stop   = false;
+
+    // preview
+    auto pparams = params;
+    pparams.resolution /= params.pratio;
+    pparams.samples = 1;
+    auto pstate     = make_state(scene, pparams);
+    trace_samples(pstate, scene, bvh, lights, pparams);
+    auto preview = get_render(pstate);
+    for (auto idx = 0; idx < state.width * state.height; idx++) {
+      auto i = idx % render.width, j = idx / render.width;
+      auto pi            = clamp(i / params.pratio, 0, preview.width - 1),
+           pj            = clamp(j / params.pratio, 0, preview.height - 1);
+      render.pixels[idx] = preview.pixels[pj * preview.width + pi];
+    }
+    // if (current > 0) return;
+    {
+      auto lock      = std::lock_guard{render_mutex};
+      render_current = 0;
+      image          = render;
+      tonemap_image_mt(display, image, params.exposure, params.filmic);
+      render_update = true;
+    }
+
+    // start renderer
+    render_worker = std::async(
+        std::launch::async, [this]() { this->render_scene(); });
+  }
+
+  // stop render
+  void stop_render() {
+    render_stop = true;
+    if (render_worker.valid()) render_worker.get();
+  }
+};
+
 static void update_image_params(const glinput_state& input,
     const image_data& image, glimage_params& glparams) {
   glparams.window                           = input.window_size;
@@ -38,6 +141,141 @@ static bool uiupdate_image_params(
     }
   }
   return false;
+}
+
+inline void draw_widgets(App& app, Render& render, const glinput_state& input);
+
+// Open a window and show an scene via path tracing
+void view_raytraced_scene(App& app, const string& title, const string& name,
+    scene_data& scene, const trace_params& params_ = {}, bool print = true,
+    bool edit = false) {
+  // copy params and camera
+  auto  params         = params_;
+  auto  glscene        = glscene_state{};  // TODO(giacomo): Not used!!!
+  auto  updated_shapes = vector<int>{};
+  auto& new_shapes     = app.new_shapes;
+  auto& new_instances  = app.new_instances;
+
+  // build bvh
+  if (print) print_progress_begin("build bvh");
+  auto bvh = make_bvh(scene, params);
+  if (print) print_progress_end();
+
+  // init renderer
+  if (print) print_progress_begin("init lights");
+  auto lights = make_lights(scene, params);
+  if (print) print_progress_end();
+
+  // fix renderer type if no lights
+  if (lights.lights.empty() && is_sampler_lit(params)) {
+    if (print) print_info("no lights presents --- switching to eyelight");
+    params.sampler = trace_sampler_type::eyelight;
+  }
+
+  // init state
+  if (print) print_progress_begin("init state");
+  auto render = Render(scene, bvh, lights, params);
+  if (print) print_progress_end();
+
+  // top level combo
+  auto names    = vector<string>{name};
+  auto selected = 0;
+
+  // start rendering
+  render.reset_display();
+
+  // prepare selection
+  auto selection = scene_selection{};
+
+  // callbacks
+  auto callbacks    = glwindow_callbacks{};
+  callbacks.init_cb = [&](const glinput_state& input) {
+    auto lock = std::lock_guard{render.render_mutex};
+    init_image(render.glimage);
+    set_image(render.glimage, render.display);
+  };
+  callbacks.clear_cb = [&](const glinput_state& input) {
+    clear_image(render.glimage);
+  };
+  callbacks.draw_cb = [&](const glinput_state& input) {
+    // update image
+    if (render.render_update) {
+      auto lock = std::lock_guard{render.render_mutex};
+      set_image(render.glimage, render.display);
+      render.render_update = false;
+    }
+    update_image_params(input, render.image, render.glparams);
+    draw_image(render.glimage, render.glparams);
+  };
+  callbacks.widgets_cb = [&](const glinput_state& input) {
+    draw_widgets(app, render, input);
+  };
+  callbacks.uiupdate_cb = [&](const glinput_state& input) {
+    auto camera = scene.cameras[params.camera];
+    if (uiupdate_camera_params(input, camera)) {
+      render.stop_render();
+      scene.cameras[params.camera] = camera;
+      render.reset_display();
+    }
+
+    if (1) {
+      process_click(app, updated_shapes, input);
+      process_mouse(app, updated_shapes, input);
+
+      if (input.mouse_right_click) {
+        render.stop_render();
+        auto& state = app.bool_state;
+        state       = {};
+        auto& mesh  = app.mesh;
+        for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+          auto spline = app.splinesurf.get_spline_view(i);
+
+          // Add new 1-polygon shape to state
+          // if (test_polygon.empty()) continue;
+
+          auto& bool_shape = state.bool_shapes.emplace_back();
+          auto& polygon    = bool_shape.polygons.emplace_back();
+          //      polygon.points   = test_polygon;
+          for (auto& anchor : spline.input.control_points) {
+            polygon.points.push_back(
+                {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+          }
+          recompute_polygon_segments(mesh, polygon);
+        }
+
+        compute_cells(app.mesh, app.bool_state);
+        //  compute_shapes(app.bool_state);
+        app.mesh.triangles.resize(app.mesh.num_triangles);
+        app.mesh.positions.resize(app.mesh.num_positions);
+        render.reset_display();
+      }
+
+      if (app.jobs.size()) {
+        render.stop_render();
+        for (auto& job : app.jobs) job();
+        app.jobs.clear();
+        render.reset_display();
+      }
+
+      if (new_instances.size()) {
+        render.stop_render();
+        scene.shapes += new_shapes;
+        scene.instances += new_instances;
+        update_splines(app, scene, updated_shapes);
+        updated_shapes.clear();
+        new_shapes.clear();
+        new_instances.clear();
+        bvh = make_bvh(scene, params);
+        render.reset_display();
+      }
+    }
+  };
+
+  // run ui
+  run_ui({1280 + 320, 720}, title, callbacks);
+
+  // done
+  render.stop_render();
 }
 
 static bool draw_image_inspector(const glinput_state& input,
@@ -168,281 +406,59 @@ static bool draw_scene_editor(scene_data& scene, scene_selection& selection,
   return (bool)edited;
 }
 
-// Open a window and show an scene via path tracing
-void view_raytraced_scene(App& app, const string& title, const string& name,
-    scene_data& scene, const trace_params& params_ = {}, bool print = true,
-    bool edit = false) {
-  // copy params and camera
-  auto  params         = params_;
-  auto  glscene        = glscene_state{};  // TODO(giacomo): Not used!!!
-  auto  updated_shapes = vector<int>{};
-  auto& new_shapes     = app.new_shapes;
-  auto& new_instances  = app.new_instances;
+inline void draw_widgets(App& app, Render& render, const glinput_state& input) {
+  auto edited = 0;
+  //  draw_glcombobox("name", selected, names);
+  auto current = (int)render.render_current;
+  draw_glprogressbar("sample", current, render.params.samples);
 
-  // build bvh
-  if (print) print_progress_begin("build bvh");
-  auto bvh = make_bvh(scene, params);
-  if (print) print_progress_end();
-
-  // init renderer
-  if (print) print_progress_begin("init lights");
-  auto lights = make_lights(scene, params);
-  if (print) print_progress_end();
-
-  // fix renderer type if no lights
-  if (lights.lights.empty() && is_sampler_lit(params)) {
-    if (print) print_info("no lights presents --- switching to eyelight");
-    params.sampler = trace_sampler_type::eyelight;
+  draw_gllabel("selected spline", app.editing.selection.spline_id);
+  draw_gllabel(
+      "selected control_point", app.editing.selection.control_point_id);
+  if (draw_glbutton("add spline")) {
+    auto spline_id                  = add_spline(app.splinesurf);
+    app.editing.selection           = {};
+    app.editing.selection.spline_id = spline_id;
   }
-
-  // init state
-  if (print) print_progress_begin("init state");
-  auto state   = make_state(scene, params);
-  auto image   = make_image(state.width, state.height, true);
-  auto display = make_image(state.width, state.height, false);
-  auto render  = make_image(state.width, state.height, true);
-  if (print) print_progress_end();
-
-  // opengl image
-  auto glimage  = glimage_state{};
-  auto glparams = glimage_params{};
-
-  // top level combo
-  auto names    = vector<string>{name};
-  auto selected = 0;
-
-  // camera names
-  auto camera_names = scene.camera_names;
-  if (camera_names.empty()) {
-    for (auto idx = 0; idx < (int)scene.cameras.size(); idx++) {
-      camera_names.push_back("camera" + std::to_string(idx + 1));
+  if (draw_glbutton("close spline")) {
+    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+    close_spline(app.selected_spline(), add_app_shape);
+  }
+  if (begin_glheader("render")) {
+    auto edited  = 0;
+    auto tparams = render.params;
+    //    edited += draw_glcombobox("camera", tparams.camera, camera_names);
+    edited += draw_glslider("resolution", tparams.resolution, 180, 4096);
+    edited += draw_glslider("samples", tparams.samples, 16, 4096);
+    edited += draw_glcombobox(
+        "tracer", (int&)tparams.sampler, trace_sampler_names);
+    edited += draw_glcombobox(
+        "false color", (int&)tparams.falsecolor, trace_falsecolor_names);
+    edited += draw_glslider("bounces", tparams.bounces, 1, 128);
+    edited += draw_glslider("batch", tparams.batch, 1, 16);
+    edited += draw_glslider("clamp", tparams.clamp, 10, 1000);
+    edited += draw_glcheckbox("envhidden", tparams.envhidden);
+    continue_glline();
+    edited += draw_glcheckbox("filter", tparams.tentfilter);
+    edited += draw_glslider("pratio", tparams.pratio, 1, 64);
+    // edited += draw_glslider("exposure", tparams.exposure, -5, 5);
+    end_glheader();
+    if (edited) {
+      render.stop_render();
+      render.params = tparams;
+      render.reset_display();
     }
   }
-
-  // renderer update
-  auto render_update  = std::atomic<bool>{};
-  auto render_current = std::atomic<int>{};
-  auto render_mutex   = std::mutex{};
-  auto render_worker  = future<void>{};
-  auto render_stop    = atomic<bool>{};
-  auto reset_display  = [&]() {
-    // stop render
-    render_stop = true;
-    if (render_worker.valid()) render_worker.get();
-
-    state   = make_state(scene, params);
-    image   = make_image(state.width, state.height, true);
-    display = make_image(state.width, state.height, false);
-    render  = make_image(state.width, state.height, true);
-
-    render_worker = {};
-    render_stop   = false;
-
-    // preview
-    auto pparams = params;
-    pparams.resolution /= params.pratio;
-    pparams.samples = 1;
-    auto pstate     = make_state(scene, pparams);
-    trace_samples(pstate, scene, bvh, lights, pparams);
-    auto preview = get_render(pstate);
-    for (auto idx = 0; idx < state.width * state.height; idx++) {
-      auto i = idx % render.width, j = idx / render.width;
-      auto pi            = clamp(i / params.pratio, 0, preview.width - 1),
-           pj            = clamp(j / params.pratio, 0, preview.height - 1);
-      render.pixels[idx] = preview.pixels[pj * preview.width + pi];
+  auto& params = render.params;
+  if (begin_glheader("tonemap")) {
+    edited += draw_glslider("exposure", params.exposure, -5, 5);
+    edited += draw_glcheckbox("filmic", params.filmic);
+    edited += draw_glcheckbox("denoise", params.denoise);
+    end_glheader();
+    if (edited) {
+      tonemap_image_mt(
+          render.display, render.image, params.exposure, params.filmic);
+      set_image(render.glimage, render.display);
     }
-    // if (current > 0) return;
-    {
-      auto lock      = std::lock_guard{render_mutex};
-      render_current = 0;
-      image          = render;
-      tonemap_image_mt(display, image, params.exposure, params.filmic);
-      render_update = true;
-    }
-
-    // start renderer
-    render_worker = std::async(std::launch::async, [&]() {
-      for (auto sample = 0; sample < params.samples; sample += params.batch) {
-        if (render_stop) return;
-        parallel_for(state.width, state.height, [&](int i, int j) {
-          for (auto s = 0; s < params.batch; s++) {
-            if (render_stop) return;
-            trace_sample(state, scene, bvh, lights, i, j, params);
-          }
-        });
-        state.samples += params.batch;
-        if (!render_stop) {
-          auto lock      = std::lock_guard{render_mutex};
-          render_current = state.samples;
-          if (!params.denoise || render_stop) {
-            get_render(render, state);
-          } else {
-            get_denoised(render, state);
-          }
-          image = render;
-          tonemap_image_mt(display, image, params.exposure, params.filmic);
-          render_update = true;
-        }
-      }
-    });
-  };
-
-  // stop render
-  auto stop_render = [&]() {
-    render_stop = true;
-    if (render_worker.valid()) render_worker.get();
-  };
-
-  // start rendering
-  reset_display();
-
-  // prepare selection
-  auto selection = scene_selection{};
-
-  // callbacks
-  auto callbacks    = glwindow_callbacks{};
-  callbacks.init_cb = [&](const glinput_state& input) {
-    auto lock = std::lock_guard{render_mutex};
-    init_image(glimage);
-    set_image(glimage, display);
-  };
-  callbacks.clear_cb = [&](const glinput_state& input) {
-    clear_image(glimage);
-  };
-  callbacks.draw_cb = [&](const glinput_state& input) {
-    // update image
-    if (render_update) {
-      auto lock = std::lock_guard{render_mutex};
-      set_image(glimage, display);
-      render_update = false;
-    }
-    update_image_params(input, image, glparams);
-    draw_image(glimage, glparams);
-  };
-  callbacks.widgets_cb = [&](const glinput_state& input) {
-    auto edited = 0;
-    draw_glcombobox("name", selected, names);
-    auto current = (int)render_current;
-    draw_glprogressbar("sample", current, params.samples);
-
-    draw_gllabel("selected spline", app.editing.selection.spline_id);
-    draw_gllabel(
-        "selected control_point", app.editing.selection.control_point_id);
-    if (draw_glbutton("add spline")) {
-      auto spline_id                  = add_spline(app.splinesurf);
-      app.editing.selection           = {};
-      app.editing.selection.spline_id = spline_id;
-    }
-    if (draw_glbutton("close spline")) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-      close_spline(app.selected_spline(), add_app_shape);
-    }
-    if (begin_glheader("render")) {
-      auto edited  = 0;
-      auto tparams = params;
-      edited += draw_glcombobox("camera", tparams.camera, camera_names);
-      edited += draw_glslider("resolution", tparams.resolution, 180, 4096);
-      edited += draw_glslider("samples", tparams.samples, 16, 4096);
-      edited += draw_glcombobox(
-          "tracer", (int&)tparams.sampler, trace_sampler_names);
-      edited += draw_glcombobox(
-          "false color", (int&)tparams.falsecolor, trace_falsecolor_names);
-      edited += draw_glslider("bounces", tparams.bounces, 1, 128);
-      edited += draw_glslider("batch", tparams.batch, 1, 16);
-      edited += draw_glslider("clamp", tparams.clamp, 10, 1000);
-      edited += draw_glcheckbox("envhidden", tparams.envhidden);
-      continue_glline();
-      edited += draw_glcheckbox("filter", tparams.tentfilter);
-      edited += draw_glslider("pratio", tparams.pratio, 1, 64);
-      // edited += draw_glslider("exposure", tparams.exposure, -5, 5);
-      end_glheader();
-      if (edited) {
-        stop_render();
-        params = tparams;
-        reset_display();
-      }
-    }
-    if (begin_glheader("tonemap")) {
-      edited += draw_glslider("exposure", params.exposure, -5, 5);
-      edited += draw_glcheckbox("filmic", params.filmic);
-      edited += draw_glcheckbox("denoise", params.denoise);
-      end_glheader();
-      if (edited) {
-        tonemap_image_mt(display, image, params.exposure, params.filmic);
-        set_image(glimage, display);
-      }
-    }
-    draw_image_inspector(input, image, display, glparams);
-    if (edit) {
-      if (draw_scene_editor(scene, selection, [&]() { stop_render(); })) {
-        reset_display();
-      }
-    }
-  };
-  callbacks.uiupdate_cb = [&](const glinput_state& input) {
-    auto camera = scene.cameras[params.camera];
-    if (uiupdate_camera_params(input, camera)) {
-      stop_render();
-      scene.cameras[params.camera] = camera;
-      reset_display();
-    }
-
-    if (1) {
-      process_click(app, updated_shapes, input);
-      process_mouse(app, updated_shapes, input);
-
-      if (input.mouse_right_click) {
-        stop_render();
-        auto& state = app.bool_state;
-        state       = {};
-        auto& mesh  = app.mesh;
-        for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-          auto spline = app.splinesurf.get_spline_view(i);
-
-          // Add new 1-polygon shape to state
-          // if (test_polygon.empty()) continue;
-
-          auto& bool_shape = state.bool_shapes.emplace_back();
-          auto& polygon    = bool_shape.polygons.emplace_back();
-          //      polygon.points   = test_polygon;
-          for (auto& anchor : spline.input.control_points) {
-            polygon.points.push_back(
-                {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-          }
-          recompute_polygon_segments(mesh, polygon);
-        }
-
-        compute_cells(app.mesh, app.bool_state);
-        //  compute_shapes(app.bool_state);
-        app.mesh.triangles.resize(app.mesh.num_triangles);
-        app.mesh.positions.resize(app.mesh.num_positions);
-        reset_display();
-      }
-
-      if (app.jobs.size()) {
-        stop_render();
-        for (auto& job : app.jobs) job();
-        app.jobs.clear();
-        reset_display();
-      }
-
-      if (new_instances.size()) {
-        stop_render();
-        scene.shapes += new_shapes;
-        scene.instances += new_instances;
-        update_splines(app, scene, updated_shapes);
-        updated_shapes.clear();
-        new_shapes.clear();
-        new_instances.clear();
-        bvh = make_bvh(scene, params);
-        reset_display();
-      }
-    }
-  };
-
-  // run ui
-  run_ui({1280 + 320, 720}, title, callbacks);
-
-  // done
-  stop_render();
+  }
 }
