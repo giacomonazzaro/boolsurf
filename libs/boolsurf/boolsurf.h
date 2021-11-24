@@ -53,10 +53,14 @@ namespace yocto {
 struct shade_instance;
 }
 
+struct anchor_point {
+  mesh_point point      = {};
+  mesh_point handles[2] = {{}, {}};
+};
+
 struct mesh_polygon {
-  vector<int>                  points = {};
+  vector<anchor_point>         points = {};
   vector<vector<mesh_segment>> edges  = {};
-  int                          length = 0;
 
   bool is_contained_in_single_face = false;
 };
@@ -109,11 +113,11 @@ struct mesh_cell {
 struct bool_state {
   vector<mesh_polygon> polygons    = {{}};
   vector<shape>        bool_shapes = {{}};
-  vector<mesh_point>   points      = {};
+  // vector<mesh_point>   points      = {};
 
-  int                  num_original_points = 0;
-  hash_map<int, int>   control_points      = {};
-  hash_map<int, vec2i> isecs_generators    = {};
+  // int num_original_points = 0;
+  // hash_map<int, int>   control_points      = {};
+  hash_map<int, vec2i> isecs_generators = {};
 
   vector<mesh_cell>   cells           = {};
   vector<int>         shape_from_cell = {};
@@ -184,8 +188,7 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
-void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
-    mesh_polygon& polygon, int index = 0);
+void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {

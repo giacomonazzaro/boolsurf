@@ -232,33 +232,25 @@ vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
   return result;
 }
 
-void recompute_polygon_segments(const bool_mesh& mesh, const bool_state& state,
-    mesh_polygon& polygon, int index) {
-  if (index > 0) {
-    auto& last_segment = polygon.edges.back();
-    polygon.length -= last_segment.size();
-    polygon.edges.pop_back();
-  } else {
-    polygon.length = 0;
-    polygon.edges.clear();
-  }
-
+void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
   auto faces = hash_set<int>();
-  for (int i = index; i < polygon.points.size(); i++) {
-    auto start = polygon.points[i];
-    faces.insert(state.points[start].face);
-    auto end  = polygon.points[(i + 1) % polygon.points.size()];
-    auto path = compute_geodesic_path(
-        mesh, state.points[start], state.points[end]);
-    auto threshold = 0.001f;
-    for (auto& l : path.lerps) {
-      l = yocto::clamp(l, 0 + threshold, 1 - threshold);
-    }
-    auto segments = mesh_segments(
-        mesh.triangles, path.strip, path.lerps, path.start, path.end);
+  for (int i = 0; i < polygon.points.size(); i++) {
+    auto& start = polygon.points[i];
+    faces.insert(polygon.points[i].point.face);
+    faces.insert(polygon.points[i].handles[0].face);
+    faces.insert(polygon.points[i].handles[1].face);
+    auto end = polygon.points[(i + 1) % polygon.points.size()];
 
-    polygon.edges.push_back(segments);
-    polygon.length += segments.size();
+    if (start.point == start.handles[1] && end.handles[0] == end.point) {
+      auto path      = compute_geodesic_path(mesh, start.point, end.point);
+      auto threshold = 0.001f;
+      for (auto& l : path.lerps) {
+        l = yocto::clamp(l, 0 + threshold, 1 - threshold);
+      }
+      auto segments = mesh_segments(
+          mesh.triangles, path.strip, path.lerps, path.start, path.end);
+      polygon.edges.push_back(segments);
+    }
   }
 
   polygon.is_contained_in_single_face = (faces.size() == 1);
@@ -349,8 +341,9 @@ inline int add_vertex(bool_mesh& mesh, mesh_hashgrid& hashgrid,
   return vertex;
 }
 
-static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
-    const vector<shape>& shapes, hash_map<int, int>& control_points) {
+static mesh_hashgrid compute_hashgrid(
+    bool_mesh& mesh, const vector<shape>& shapes) {
+  // }, hash_map<int, int>& control_points) {
   _PROFILE();
   // La hashgrid associa ad ogni faccia una lista di polilinee.
   // Ogni polilinea è definita da una sequenza punti in coordinate
@@ -362,9 +355,8 @@ static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
     auto& polygons = shapes[shape_id].polygons;
     for (auto polygon_id = 0; polygon_id < polygons.size(); polygon_id++) {
       auto& polygon = polygons[polygon_id];
-      if (polygon.length == 0) continue;
       if (polygon.edges.empty()) continue;
-
+      if (polygon.edges[0].empty()) continue;
       // La polilinea della prima faccia del poligono viene processata alla fine
       // (perché si trova tra il primo e l'ultimo edge)
       int  first_face   = polygon.edges[0][0].face;
@@ -419,9 +411,9 @@ static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
           last_face = segment.face;
         }
 
-        if (last_vertex != -1)
-          control_points[last_vertex] =
-              polygon.points[(e + 1) % polygon.edges.size()];
+        //        if (last_vertex != -1)
+        //          control_points[last_vertex] =
+        //              polygon.points[(e + 1) % polygon.edges.size()];
       }
 
       if (indices == vec2i{-1, -1}) {
@@ -441,9 +433,9 @@ static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
                 mesh, hashgrid, {segment.face, segment.start}, polyline_id);
           }
 
-          if (last_vertex != -1)
-            control_points[last_vertex] =
-                polygon.points[(e + 1) % polygon.edges.size()];
+          //          if (last_vertex != -1)
+          //            control_points[last_vertex] =
+          //                polygon.points[(e + 1) % polygon.edges.size()];
         }
       };
 
@@ -469,28 +461,28 @@ static mesh_hashgrid compute_hashgrid(bool_mesh& mesh,
               mesh, hashgrid, {segment.face, segment.end}, polyline_id, vertex);
         }
 
-        if (e > 0 && last_vertex != -1)
-          control_points[last_vertex] =
-              polygon.points[(e + 1) % polygon.edges.size()];
+        //        if (e > 0 && last_vertex != -1)
+        //          control_points[last_vertex] =
+        //              polygon.points[(e + 1) % polygon.edges.size()];
       }
     }
   }
   return hashgrid;
 }
 
-[[maybe_unused]] static hash_map<int, int> compute_control_points(
-    vector<mesh_polygon>&             polygons,
-    const vector<vector<vector<int>>> vertices) {
-  auto control_points = hash_map<int, int>();
-  for (auto p = 0; p < vertices.size(); p++) {
-    for (auto e = 0; e < vertices[p].size(); e++) {
-      auto control_point_idx            = vertices[p][e][0];
-      auto mesh_point_idx               = polygons[p].points[e];
-      control_points[control_point_idx] = mesh_point_idx;
-    }
-  }
-  return control_points;
-}
+//[[maybe_unused]] static hash_map<int, int> compute_control_points(
+//    vector<mesh_polygon>&             polygons,
+//    const vector<vector<vector<int>>> vertices) {
+//  auto control_points = hash_map<int, int>();
+//  for (auto p = 0; p < vertices.size(); p++) {
+//    for (auto e = 0; e < vertices[p].size(); e++) {
+//      auto control_point_idx            = vertices[p][e][0];
+//      auto mesh_point_idx               = polygons[p].points[e];
+//      control_points[control_point_idx] = mesh_point_idx;
+//    }
+//  }
+//  return control_points;
+//}
 
 void save_tree_png(const bool_state& state, string filename,
     const string& extra, bool color_shapes);
@@ -843,13 +835,13 @@ static void add_polygon_intersection_points(bool_state& state,
             continue;
           }
 
-          auto uv                      = lerp(start1, end1, l.y);
-          auto point                   = mesh_point{face, uv};
-          auto vertex                  = add_vertex(mesh, hashgrid, point, -1);
-          state.control_points[vertex] = (int)state.points.size();
+          auto uv     = lerp(start1, end1, l.y);
+          auto point  = mesh_point{face, uv};
+          auto vertex = add_vertex(mesh, hashgrid, point, -1);
+          //          state.control_points[vertex] = (int)state.points.size();
           state.isecs_generators[vertex] = {poly.polygon, poly.polygon};
 
-          state.points.push_back(point);
+          //          state.points.push_back(point);
           // printf("self-intersection: polygon %d, vertex %d\n", poly.polygon,
           //     vertex);
 
@@ -884,10 +876,11 @@ static void add_polygon_intersection_points(bool_state& state,
             auto uv     = lerp(start1, end1, l.y);
             auto point  = mesh_point{face, uv};
             auto vertex = add_vertex(mesh, hashgrid, point, -1);
-            state.control_points[vertex]   = (int)state.points.size();
+            //            state.control_points[vertex]   =
+            //            (int)state.points.size();
             state.isecs_generators[vertex] = {poly0.polygon, poly1.polygon};
 
-            state.points.push_back(point);
+            //            state.points.push_back(point);
 
             insert(poly0.points, s0 + 1, uv);
             insert(poly0.vertices, s0 + 1, vertex);
@@ -1357,11 +1350,11 @@ void slice_mesh(bool_mesh& mesh, bool_state& state) {
 
   // Calcoliamo i vertici nuovi della mesh
   // auto vertices             = add_vertices(mesh, polygons);
-  state.num_original_points = (int)state.points.size();
+  // state.num_original_points = (int)state.points.size();
 
   // Calcoliamo hashgrid e intersezioni tra poligoni,
   // aggiungendo ulteriori vertici nuovi alla mesh
-  auto hashgrid = compute_hashgrid(mesh, shapes, state.control_points);
+  auto hashgrid = compute_hashgrid(mesh, shapes);
   add_polygon_intersection_points(state, hashgrid, mesh);
 
   // Triangolazione e aggiornamento dell'adiacenza
@@ -1398,13 +1391,17 @@ bool compute_cells(bool_mesh& mesh, bool_state& state) {
   global_mesh()  = &mesh;
   slice_mesh(mesh, state);
 
+  assert(!global_state()->failed);
   if (global_state()->failed) return false;
 
   // Trova celle e loro adiacenza via flood-fill.
+  assert(!global_state()->failed);
   state.cells = make_cell_graph(mesh);
 
   // Calcola i label delle celle con una visita sulla loro adiacenza.
+  assert(!global_state()->failed);
   compute_cell_labels(state);
+  assert(!global_state()->failed);
   return true;
 }
 
@@ -1536,19 +1533,22 @@ void compute_shape_borders(const bool_mesh& mesh, bool_state& state) {
 
           // Se il vertice corrente è un punto di controllo lo aggiungo al
           // bordo
-          if (contains(state.control_points, current)) {
-            // Se è un punto di intersezione controlliamo che i poligoni che
-            // lo hanno generato siano entrambi compresi nei poligoni che
-            // hanno generato anche la shape.
-            if (contains(state.isecs_generators, current)) {
-              auto& isec_generators = state.isecs_generators.at(current);
-
-              if (contains(generator_polygons, isec_generators.x) &&
-                  contains(generator_polygons, isec_generators.y))
-                border_points.push_back(current);
-            } else
-              border_points.push_back(current);
-          }
+          //          if (contains(state.control_points, current)) {
+          //            // Se è un punto di intersezione controlliamo che i
+          //            poligoni che
+          //            // lo hanno generato siano entrambi compresi nei
+          //            poligoni che
+          //            // hanno generato anche la shape.
+          //            if (contains(state.isecs_generators, current)) {
+          //              auto& isec_generators =
+          //              state.isecs_generators.at(current);
+          //
+          //              if (contains(generator_polygons, isec_generators.x) &&
+          //                  contains(generator_polygons, isec_generators.y))
+          //                border_points.push_back(current);
+          //            } else
+          //              border_points.push_back(current);
+          //          }
 
           // Se un bordo è stato chiuso correttamente lo inseriamo tra i bordi
           // della shape
@@ -1564,20 +1564,20 @@ void compute_shape_borders(const bool_mesh& mesh, bool_state& state) {
 }
 
 bool_state compute_border_polygons(const bool_state& state) {
-  auto new_state   = bool_state{};
-  new_state.points = state.points;
-
-  for (auto& bool_shape : state.bool_shapes) {
-    if (!bool_shape.is_root) continue;
-    auto& test_shape = new_state.bool_shapes.emplace_back();
-    for (auto& border : bool_shape.border_points) {
-      auto& polygon = test_shape.polygons.emplace_back();
-      for (auto v : border) {
-        auto id = state.control_points.at(v);
-        polygon.points.push_back(id);
-      }
-    }
-  }
+  auto new_state = bool_state{};
+  //  new_state.points = state.points;
+  //
+  //  for (auto& bool_shape : state.bool_shapes) {
+  //    if (!bool_shape.is_root) continue;
+  //    auto& test_shape = new_state.bool_shapes.emplace_back();
+  //    for (auto& border : bool_shape.border_points) {
+  //      auto& polygon = test_shape.polygons.emplace_back();
+  //      for (auto v : border) {
+  //        auto id = state.control_points.at(v);
+  //        polygon.points.push_back(id);
+  //      }
+  //    }
+  //  }
   return new_state;
 }
 

@@ -110,7 +110,7 @@ bool load_test(bool_test& test, const string& filename) {
 bool_state state_from_test(const bool_mesh& mesh, const bool_test& test,
     float drawing_size, bool use_projection) {
   auto state   = bool_state{};
-  state.points = test.points;
+  auto state_points = test.points;
   state.bool_shapes.clear();
   // state.polygons.clear();
 
@@ -127,16 +127,24 @@ bool_state state_from_test(const bool_mesh& mesh, const bool_test& test,
 
       auto& bool_shape = state.bool_shapes.emplace_back();
       auto& polygon    = bool_shape.polygons.emplace_back();
-      polygon.points   = test_polygon;
-      recompute_polygon_segments(mesh, state, polygon);
+//      polygon.points   = test_polygon;
+        for(auto& id : test_polygon) {
+            auto point = state_points[id];
+            polygon.points.push_back({point, {point, point}});
+        }
+      recompute_polygon_segments(mesh, polygon);
     }
   } else {
     for (auto& test_shape : test.shapes) {
       auto& bool_shape = state.bool_shapes.emplace_back();
       for (auto& polygon_id : test_shape) {
         auto& polygon  = bool_shape.polygons.emplace_back();
-        polygon.points = test.polygons[polygon_id];
-        recompute_polygon_segments(mesh, state, polygon);
+//        polygon.points = test.polygons[polygon_id];
+          for(auto& id : test.polygons[polygon_id]) {
+              auto point = state_points[id];
+              polygon.points.push_back({point, {point, point}});
+          }
+        recompute_polygon_segments(mesh, polygon);
       }
     }
   }
@@ -249,8 +257,8 @@ void add_polygons(bool_state& state, const bool_mesh& mesh,
         if (point.face == -1) continue;
 
         // Add point to state.
-        bool_polygon.points.push_back((int)state.points.size());
-        state.points.push_back(point);
+          bool_polygon.points.push_back({point, {point, point}});
+//        state.points.push_back(point);
       }
 
       if (bool_polygon.points.size() <= 2) {
@@ -260,7 +268,7 @@ void add_polygons(bool_state& state, const bool_mesh& mesh,
       }
 
       bool_shape.polygons.push_back(bool_polygon);
-      recompute_polygon_segments(mesh, state, bool_polygon);
+      recompute_polygon_segments(mesh, bool_polygon);
     }
     if (bool_shape.polygons.size()) state.bool_shapes.push_back(bool_shape);
   }
@@ -415,7 +423,7 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
       for (int i = 0; i < bool_shape.polygons.size(); i++) {
         auto& polygon   = bool_shape.polygons[i];
         auto  positions = vector<vec3f>();
-        positions.reserve(polygon.length + 1);
+//        positions.reserve(polygon.length + 1);
 
         for (auto& edge : polygon.edges) {
           for (auto& segment : edge) {
@@ -634,8 +642,9 @@ void init_from_svg(bool_state& state, const bool_mesh& mesh,
 
       for (int i = 0; i < bezier.size() - 1; i++) {
         if (i > 0 && bezier[i] == bezier[i - 1]) continue;
-        polygon.points += (int)state.points.size();
-        state.points += bezier[i];
+        auto point = bezier[i];
+        polygon.points += {point, {point, point}};
+//        state.points += bezier[i];
       }
     }
   }

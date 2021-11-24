@@ -222,13 +222,13 @@ inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
       auto point = path.end;
 
       // Add point to state.
-      state.polygons[polygon_id].points.push_back((int)state.points.size());
+        state.polygons[polygon_id].points.push_back({point, {point, point}});
 
       // for (auto& p : state.points) {
       //   assert(!(p.face == point.face && p.uv == point.uv));
       // }
 
-      state.points.push_back(point);
+//      state.points.push_back(point);
     }
 
     if (state.polygons[polygon_id].points.size() <= 2) {
@@ -237,7 +237,7 @@ inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
       continue;
     }
 
-    recompute_polygon_segments(mesh, state, state.polygons[polygon_id]);
+    recompute_polygon_segments(mesh, state.polygons[polygon_id]);
   }
 }
 
@@ -269,8 +269,8 @@ inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
         if (point.face == -1) continue;
 
         // Add point to state.
-        state.polygons[polygon_id].points.push_back((int)state.points.size());
-        state.points.push_back(point);
+        state.polygons[polygon_id].points.push_back({point, {point, point}});
+//        state.points.push_back(point);
       }
 
       if (state.polygons[polygon_id].points.size() <= 2) {
@@ -279,7 +279,7 @@ inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
         continue;
       }
 
-      recompute_polygon_segments(mesh, state, state.polygons[polygon_id]);
+      recompute_polygon_segments(mesh, state.polygons[polygon_id]);
     }
   }
 
