@@ -256,16 +256,27 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     if (start.point == start.handles[1] && end.handles[0] == end.point) {
       polygon.edges.push_back(get_segments(start.point, end.point));
     } else {
-      polygon.edges.push_back(get_segments(start.point, start.handles[1]));
-      polygon.edges.push_back(get_segments(start.handles[1], end.handles[0]));
-      polygon.edges.push_back(get_segments(end.handles[0], end.point));
-      // auto threshold = 0.001f;
-      // for (auto& l : path.lerps) {
-      //   l = yocto::clamp(l, 0 + threshold, 1 - threshold);
-      // }
-      // auto segments = mesh_segments(
-      //     mesh.triangles, path.strip, path.lerps, path.start, path.end);
-      // polygon.edges.push_back(segments);
+      auto& curve          = polygon.edges.emplace_back();
+      auto  control_points = array<mesh_point, 4>{
+          start.point, start.handles[1], end.handles[0], end.point};
+      auto points = compute_bezier_path(mesh.dual_solver, mesh.triangles,
+          mesh.positions, mesh.adjacencies, control_points, 4);
+      for (int k = 0; k < points.size() - 1; k++) {
+        auto path      = compute_geodesic_path(mesh, points[k], points[k + 1]);
+        auto threshold = 0.001f;
+        for (auto& l : path.lerps) {
+          l = yocto::clamp(l, 0 + threshold, 1 - threshold);
+        }
+        auto segments = mesh_segments(
+            mesh.triangles, path.strip, path.lerps, path.start, path.end);
+        curve += segments;
+      }
+
+      //      polygon.edges.push_back(get_segments(start.point,
+      //      start.handles[1]));
+      //      polygon.edges.push_back(get_segments(start.handles[1],
+      //      end.handles[0]));
+      //      polygon.edges.push_back(get_segments(end.handles[0], end.point));
     }
   }
 
