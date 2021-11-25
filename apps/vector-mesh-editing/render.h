@@ -71,15 +71,16 @@ struct Render {
     }
   }
 
-  auto reset_display() {
-    // stop render
-    render_stop = true;
-    if (render_worker.valid()) render_worker.get();
-
+  auto reset() {
     state   = make_state(scene, params);
     image   = make_image(state.width, state.height, true);
     display = make_image(state.width, state.height, false);
     render  = make_image(state.width, state.height, true);
+  }
+
+  auto restart() {
+    stop_render();
+    reset();
 
     render_worker = {};
     render_stop   = false;
@@ -106,6 +107,10 @@ struct Render {
       render_update = true;
     }
 
+    start();
+  }
+
+  void start() {
     // start renderer
     render_worker = std::async(
         std::launch::async, [this]() { this->render_scene(); });

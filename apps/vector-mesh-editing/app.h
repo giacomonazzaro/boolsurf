@@ -408,7 +408,7 @@ inline void draw_widgets(App& app, Render& render, const glinput_state& input) {
     if (edited) {
       render.stop_render();
       render.params = tparams;
-      render.reset_display();
+      render.restart();
     }
   }
   auto& params = render.params;
@@ -451,7 +451,7 @@ inline void update(
   if (uiupdate_camera_params(input, camera)) {
     render.stop_render();
     scene.cameras[params.camera] = camera;
-    render.reset_display();
+    render.restart();
   }
 
   {
@@ -483,14 +483,14 @@ inline void update(
       //  compute_shapes(app.bool_state);
       app.mesh.triangles.resize(app.mesh.num_triangles);
       app.mesh.positions.resize(app.mesh.num_positions);
-      render.reset_display();
+      render.restart();
     }
 
     if (app.jobs.size()) {
       render.stop_render();
       for (auto& job : app.jobs) job();
       app.jobs.clear();
-      render.reset_display();
+      render.restart();
     }
 
     if (app.new_instances.size()) {
@@ -502,7 +502,7 @@ inline void update(
       app.new_shapes.clear();
       app.new_instances.clear();
       bvh = make_bvh(scene, params);
-      render.reset_display();
+      render.restart();
     }
   }
 }
@@ -545,7 +545,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
   if (print) print_progress_end();
 
   // start rendering
-  render.reset_display();
+  render.restart();
 
   // prepare selection
   auto selection = scene_selection{};
