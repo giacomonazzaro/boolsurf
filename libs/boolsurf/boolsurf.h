@@ -100,13 +100,14 @@ struct mesh_cell {
   hash_set<vec2i> adjacency = {};  // {cell_id, crossed_polygon_id}
 };
 
+struct mesh_shape_point {
+  int   shape_id = -1;
+  int   curve_id = -1;
+  float t        = 0.0f;
+};
+
 struct shape_boundary_intersection {
-  struct shape_location {
-    int   shape_id = -1;
-    int   curve_id = -1;
-    float t        = 0.0f;
-  };
-  shape_location locations[2];
+  mesh_shape_point locations[2];
 };
 
 struct bool_state {

@@ -282,6 +282,8 @@ struct hashgrid_polyline {
   int           polygon  = -1;
   vector<vec2f> points   = {};
   vector<int>   vertices = {};
+  vector<int>   side_ids = {};
+  vector<float> t        = {};
 
   bool is_closed = false;
 };
@@ -314,12 +316,17 @@ using mesh_hashgrid = hash_map<int, vector<hashgrid_polyline>>;
 // struct mesh_hashgrid : hash_map<int, vector<hashgrid_polyline>> {};
 
 inline int add_vertex(bool_mesh& mesh, mesh_hashgrid& hashgrid,
-    const mesh_point& point, int polyline_id, int vertex = -1) {
-  float eps             = 0.00001;
-  auto  update_polyline = [&](int v) {
-    if (polyline_id < 0) return;
-    auto& polyline = hashgrid[point.face][polyline_id];
+    const mesh_point& point, const mesh_shape_point& shape_location,
+    int vertex = -1) {
+  float eps = 0.00001;
+
+  auto update_polyline = [&](int v) {
+    auto [shape_id, side_id, t] = shape_location;
+    if (shape_id < 0) return;
+    auto& polyline = hashgrid[point.face][shape_id];
     polyline.vertices.push_back(v);
+    polyline.side_ids.push_back(side_id);
+    polyline.t.push_back(t);
     polyline.points.push_back(point.uv);
   };
 
@@ -415,19 +422,20 @@ static mesh_hashgrid compute_hashgrid(
             polyline.polygon = shape_id;
 
             last_vertex = add_vertex(mesh, hashgrid,
-                {segment.face, segment.start}, polyline_id, last_vertex);
+                {segment.face, segment.start},
+                {polyline_id, e, segment.t_start}, last_vertex);
             if (first_vertex == -1) first_vertex = last_vertex;
 
-            last_vertex = add_vertex(
-                mesh, hashgrid, {segment.face, segment.end}, polyline_id);
+            last_vertex = add_vertex(mesh, hashgrid,
+                {segment.face, segment.end}, {polyline_id, e, segment.t_end});
 
           } else {
             auto  polyline_id = (int)entry.size() - 1;
             auto& polyline    = entry.back();
             assert(segment.end != polyline.points.back());
 
-            last_vertex = add_vertex(
-                mesh, hashgrid, {segment.face, segment.end}, polyline_id);
+            last_vertex = add_vertex(mesh, hashgrid,
+                {segment.face, segment.end}, {polyline_id, e, segment.t_end});
           }
 
           last_face = segment.face;
@@ -451,8 +459,9 @@ static mesh_hashgrid compute_hashgrid(
           for (int s = 0; s < edge.size(); s++) {
             auto& segment = edge[s];
 
-            last_vertex = add_vertex(
-                mesh, hashgrid, {segment.face, segment.start}, polyline_id);
+            last_vertex = add_vertex(mesh, hashgrid,
+                {segment.face, segment.start},
+                {polyline_id, e, segment.t_start});
           }
 
           //          if (last_vertex != -1)
@@ -479,8 +488,8 @@ static mesh_hashgrid compute_hashgrid(
 
           // auto& polyline    = entry.back();
           assert(segment.face == last_face);
-          last_vertex = add_vertex(
-              mesh, hashgrid, {segment.face, segment.end}, polyline_id, vertex);
+          last_vertex = add_vertex(mesh, hashgrid, {segment.face, segment.end},
+              {polyline_id, e, segment.t_end}, vertex);
         }
 
         //        if (e > 0 && last_vertex != -1)
@@ -859,10 +868,13 @@ static void add_polygon_intersection_points(bool_state& state,
 
           auto uv     = lerp(start1, end1, l.y);
           auto point  = mesh_point{face, uv};
-          auto vertex = add_vertex(mesh, hashgrid, point, -1);
+          auto vertex = add_vertex(
+              mesh, hashgrid, point, {-1, -1, -1});  // don't add to polyline
           //          state.control_points[vertex] = (int)state.points.size();
           state.isecs_generators[vertex] = {poly.polygon, poly.polygon};
-
+          state.intersections.push_back(
+              {{{poly.polygon, poly.side_ids[s0], poly.t[s0]},
+                  {poly.polygon, poly.side_ids[s1], poly.t[s1]}}});
           //          state.points.push_back(point);
           // printf("self-intersection: polygon %d, vertex %d\n", poly.polygon,
           //     vertex);
@@ -897,11 +909,13 @@ static void add_polygon_intersection_points(bool_state& state,
 
             auto uv     = lerp(start1, end1, l.y);
             auto point  = mesh_point{face, uv};
-            auto vertex = add_vertex(mesh, hashgrid, point, -1);
+            auto vertex = add_vertex(mesh, hashgrid, point, {-1, -1, -1});
             //            state.control_points[vertex]   =
             //            (int)state.points.size();
             state.isecs_generators[vertex] = {poly0.polygon, poly1.polygon};
-
+            state.intersections.push_back(
+                {{{poly0.polygon, poly0.side_ids[s0], poly0.t[s0]},
+                    {poly1.polygon, poly1.side_ids[s1], poly1.t[s1]}}});
             //            state.points.push_back(point);
 
             insert(poly0.points, s0 + 1, uv);
@@ -1565,7 +1579,8 @@ void compute_shape_borders(const bool_mesh& mesh, bool_state& state) {
           //              auto& isec_generators =
           //              state.isecs_generators.at(current);
           //
-          //              if (contains(generator_polygons, isec_generators.x) &&
+          //              if (contains(generator_polygons, isec_generators.x)
+          //              &&
           //                  contains(generator_polygons, isec_generators.y))
           //                border_points.push_back(current);
           //            } else
