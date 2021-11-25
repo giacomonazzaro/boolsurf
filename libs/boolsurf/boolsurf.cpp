@@ -196,38 +196,40 @@ mesh_point eval_geodesic_path(
       path, mesh.triangles, mesh.positions, mesh.adjacencies, t);
 }
 
-vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
-    const vector<int>& strip, const vector<float>& lerps,
-    const mesh_point& start, const mesh_point& end) {
+vector<mesh_segment> mesh_segments(
+    const vector<vec3i>& triangles, const geodesic_path& path) {
   auto result = vector<mesh_segment>{};
-  result.reserve(strip.size());
+  result.reserve(path.strip.size());
 
-  for (int i = 0; i < strip.size(); ++i) {
+  //  auto t = path_parameters();
+
+  for (int i = 0; i < path.strip.size(); ++i) {
     vec2f start_uv;
     if (i == 0) {
-      start_uv = start.uv;
+      start_uv = path.start.uv;
     } else {
       vec2f uvw[3] = {{0, 0}, {1, 0}, {0, 1}};
       auto  k      = find_adjacent_triangle(
-          triangles[strip[i]], triangles[strip[i - 1]]);
+          triangles[path.strip[i]], triangles[path.strip[i - 1]]);
       auto a   = uvw[mod3(k)];
       auto b   = uvw[mod3(k + 1)];
-      start_uv = lerp(a, b, 1 - lerps[i - 1]);
+      start_uv = lerp(a, b, 1 - path.lerps[i - 1]);
     }
 
     vec2f end_uv;
-    if (i == strip.size() - 1) {
-      end_uv = end.uv;
+    if (i == path.strip.size() - 1) {
+      end_uv = path.end.uv;
     } else {
       vec2f uvw[3] = {{0, 0}, {1, 0}, {0, 1}};
       auto  k      = find_adjacent_triangle(
-          triangles[strip[i]], triangles[strip[i + 1]]);
+          triangles[path.strip[i]], triangles[path.strip[i + 1]]);
       auto a = uvw[k];
       auto b = uvw[mod3(k + 1)];
-      end_uv = lerp(a, b, lerps[i]);
+      end_uv = lerp(a, b, path.lerps[i]);
     }
     if (start_uv == end_uv) continue;
-    result.push_back({start_uv, end_uv, strip[i]});
+
+    result.push_back({start_uv, end_uv, 0, 0, path.strip[i]});
   }
   return result;
 }
@@ -241,8 +243,7 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     for (auto& l : path.lerps) {
       l = yocto::clamp(l, 0 + threshold, 1 - threshold);
     }
-    auto segments = mesh_segments(
-        mesh.triangles, path.strip, path.lerps, path.start, path.end);
+    auto segments = mesh_segments(mesh.triangles, path);
     return segments;
   };
 

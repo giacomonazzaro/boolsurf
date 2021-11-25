@@ -44,9 +44,11 @@ struct bool_mesh : scene_shape {
 };
 
 struct mesh_segment {
-  vec2f start = {};
-  vec2f end   = {};
-  int   face  = -1;
+  vec2f start   = {};
+  vec2f end     = {};
+  float t_start = 0.0f;
+  float t_end   = 0.0f;
+  int   face    = -1;
 };
 
 namespace yocto {
@@ -98,37 +100,28 @@ struct mesh_cell {
   hash_set<vec2i> adjacency = {};  // {cell_id, crossed_polygon_id}
 };
 
-// struct mesh_shape {
-//   int         shape      = 0;
-//   vector<int> generators = {-1, -1};
-//   bool        is_root    = true;
-
-//   vec3f         color = {0, 0, 0};
-//   hash_set<int> cells = {};
-
-//   vector<vector<int>> border_points = {};
-//   shade_instance*     borders_shape = nullptr;
-// };
+struct shape_boundary_intersection {
+  struct shape_location {
+    int   shape_id = -1;
+    int   curve_id = -1;
+    float t        = 0.0f;
+  };
+  shape_location locations[2];
+};
 
 struct bool_state {
-  vector<mesh_polygon> polygons    = {{}};
+  vector<mesh_polygon> polygons    = {{}};  // TODO(giacomo): Remove.
   vector<shape>        bool_shapes = {{}};
-  // vector<mesh_point>   points      = {};
 
-  // int num_original_points = 0;
-  // hash_map<int, int>   control_points      = {};
-  hash_map<int, vec2i> isecs_generators = {};
+  vector<shape_boundary_intersection> intersections    = {};
+  hash_map<int, vec2i>                isecs_generators = {};
 
   vector<mesh_cell>   cells           = {};
   vector<int>         shape_from_cell = {};
   vector<vector<int>> labels          = {};
   hash_set<int>       invalid_shapes  = {};
-  // vector<int>           ambient_cells = {};
-  // vector<vector<vec2i>> cycles        = {};
-
-  // vector<mesh_shape> shapes         = {};
-  vector<int> shapes_sorting = {};
-  bool        failed         = false;
+  vector<int>         shapes_sorting  = {};
+  bool                failed          = false;
 };
 
 inline bool_state*& global_state() {
@@ -178,9 +171,8 @@ void       compute_bool_operations(
 void compute_symmetrical_difference(
     bool_state& state, const vector<int>& shapes);
 
-vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
-    const vector<int>& strip, const vector<float>& lerps,
-    const mesh_point& start, const mesh_point& end);
+vector<mesh_segment> mesh_segments(
+    const vector<vec3i>& triangles, const geodesic_path& path);
 
 geodesic_path compute_geodesic_path(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end);

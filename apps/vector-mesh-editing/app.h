@@ -314,7 +314,7 @@ void update_cache(const App& app, Spline_Cache& cache,
       auto& tangent   = anchor.tangents[k];
       auto  shape_id  = tangent.shape_id;
       auto  positions = path_positions(tangent.path, app.mesh.triangles,
-          app.mesh.positions, app.mesh.adjacencies);
+          app.mesh.positions);
 
       auto& instance    = scene.instances[shape_id];
       auto& shape       = scene.shapes[shape_id];

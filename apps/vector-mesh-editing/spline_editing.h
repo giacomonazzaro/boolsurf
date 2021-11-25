@@ -4,12 +4,6 @@
 
 using namespace yocto;
 
-// struct Anchor_Point {
-//   mesh_point point      = {};
-//   mesh_point handles[2] = {{}, {}};
-//   bool       is_smooth  = true;
-// };
-
 using Anchor_Point = anchor_point;
 
 struct Spline_Input {
@@ -208,7 +202,7 @@ inline void move_selected_point(Splinesurf& splinesurf,
 
     auto offset_dir = tangent_path_direction(mesh, offset);
     auto offset_len = path_length(
-        offset, mesh.triangles, mesh.positions, mesh.adjacencies);
+        offset, mesh.triangles, mesh.positions);
     for (int k = 0; k < 2; k++) {
       auto& tangent = point_cache.tangents[k].path;
       auto  rot     = parallel_transport_rotation(
@@ -234,7 +228,7 @@ inline void move_selected_point(Splinesurf& splinesurf,
     if (is_smooth) {
       auto dir = tangent_path_direction(mesh, point_cache.tangents[k].path);
       auto len = path_length(point_cache.tangents[k].path, mesh.triangles,
-          mesh.positions, mesh.adjacencies);
+          mesh.positions);
       point_cache.tangents[1 - k].path = straightest_path(
           mesh, anchor.point, -dir, len);
       anchor.handles[1 - k] = point_cache.tangents[1 - k].path.end;
