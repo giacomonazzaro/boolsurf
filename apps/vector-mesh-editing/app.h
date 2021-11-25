@@ -313,8 +313,8 @@ void update_cache(const App& app, Spline_Cache& cache,
     for (int k = 0; k < 2; k++) {
       auto& tangent   = anchor.tangents[k];
       auto  shape_id  = tangent.shape_id;
-      auto  positions = path_positions(tangent.path, app.mesh.triangles,
-          app.mesh.positions);
+      auto  positions = path_positions(
+          tangent.path, app.mesh.triangles, app.mesh.positions);
 
       auto& instance    = scene.instances[shape_id];
       auto& shape       = scene.shapes[shape_id];
@@ -480,6 +480,21 @@ inline void update(
       }
 
       compute_cells(app.mesh, app.bool_state);
+
+      for (auto& isec : state.intersections) {
+        auto isec0 = isec.locations[0];
+        auto isec1 = isec.locations[1];
+        auto cp0   = app.splinesurf.get_spline_view(isec0.shape_id - 1)
+                       .input.control_polygon(isec0.curve_id);
+        auto cp1 = app.splinesurf.get_spline_view(isec1.shape_id - 1)
+                       .input.control_polygon(isec1.curve_id);
+        auto t0            = isec0.t;
+        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
+            t0, false, -1);
+          
+          assert(left[0].face >= 0);
+      }
       //  compute_shapes(app.bool_state);
       app.mesh.triangles.resize(app.mesh.num_triangles);
       app.mesh.positions.resize(app.mesh.num_positions);

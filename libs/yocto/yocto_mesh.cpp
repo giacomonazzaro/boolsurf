@@ -4549,7 +4549,7 @@ array<spline_polygon, 2> insert_bezier_point(const dual_geodesic_solver& solver,
     return lane_riesenfeld_insert(
         solver, triangles, positions, adjacencies, polygon, t, precision);
   } else {
-    throw de_casteljau_insert(
+    return de_casteljau_insert(
         solver, triangles, positions, adjacencies, polygon, t);
   }
 }
