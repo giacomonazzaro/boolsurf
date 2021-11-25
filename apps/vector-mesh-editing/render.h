@@ -22,10 +22,10 @@ struct Render {
   const trace_lights& lights;
   trace_params&       params;
 
-  trace_state state   = {};
-  image_data  image   = {};
-  image_data  display = {};
-  image_data  render  = {};
+  trace_state state     = {};
+  image_data  image     = {};
+  image_data  display   = {};
+  image_data  rendering = {};
 
   // opengl image
   glimage_state  glimage  = {};
@@ -40,13 +40,13 @@ struct Render {
   Render(const scene_data& _scene, const bvh_data& _bvh,
       const trace_lights& _lights, trace_params& _params)
       : scene(_scene), bvh(_bvh), lights(_lights), params(_params) {
-    state   = make_state(scene, params);
-    image   = make_image(state.width, state.height, true);
-    display = make_image(state.width, state.height, false);
-    render  = make_image(state.width, state.height, true);
+    state     = make_state(scene, params);
+    image     = make_image(state.width, state.height, true);
+    display   = make_image(state.width, state.height, false);
+    rendering = make_image(state.width, state.height, true);
   }
 
-  auto render_scene() {
+  auto render() {
     for (auto sample = 0; sample < params.samples; sample += params.batch) {
       if (render_stop) return;
       parallel_for(state.width, state.height, [&](int i, int j) {
@@ -60,22 +60,34 @@ struct Render {
         auto lock      = std::lock_guard{render_mutex};
         render_current = state.samples;
         if (!params.denoise || render_stop) {
-          get_render(render, state);
+          get_render(rendering, state);
         } else {
-          get_denoised(render, state);
+          get_denoised(rendering, state);
         }
-        image = render;
+        image = rendering;
         tonemap_image_mt(display, image, params.exposure, params.filmic);
         render_update = true;
       }
     }
   }
 
+  void render_async() {
+    // start renderer
+    render_worker = std::async(
+        std::launch::async, [this]() { this->render(); });
+  }
+
+  // stop render
+  void stop_render() {
+    render_stop = true;
+    if (render_worker.valid()) render_worker.get();
+  }
+
   auto reset() {
-    state   = make_state(scene, params);
-    image   = make_image(state.width, state.height, true);
-    display = make_image(state.width, state.height, false);
-    render  = make_image(state.width, state.height, true);
+    state     = make_state(scene, params);
+    image     = make_image(state.width, state.height, true);
+    display   = make_image(state.width, state.height, false);
+    rendering = make_image(state.width, state.height, true);
   }
 
   auto restart() {
@@ -93,32 +105,20 @@ struct Render {
     trace_samples(pstate, scene, bvh, lights, pparams);
     auto preview = get_render(pstate);
     for (auto idx = 0; idx < state.width * state.height; idx++) {
-      auto i = idx % render.width, j = idx / render.width;
-      auto pi            = clamp(i / params.pratio, 0, preview.width - 1),
-           pj            = clamp(j / params.pratio, 0, preview.height - 1);
-      render.pixels[idx] = preview.pixels[pj * preview.width + pi];
+      auto i = idx % rendering.width, j = idx / rendering.width;
+      auto pi               = clamp(i / params.pratio, 0, preview.width - 1),
+           pj               = clamp(j / params.pratio, 0, preview.height - 1);
+      rendering.pixels[idx] = preview.pixels[pj * preview.width + pi];
     }
     // if (current > 0) return;
     {
       auto lock      = std::lock_guard{render_mutex};
       render_current = 0;
-      image          = render;
+      image          = rendering;
       tonemap_image_mt(display, image, params.exposure, params.filmic);
       render_update = true;
     }
 
-    start();
-  }
-
-  void start() {
-    // start renderer
-    render_worker = std::async(
-        std::launch::async, [this]() { this->render_scene(); });
-  }
-
-  // stop render
-  void stop_render() {
-    render_stop = true;
-    if (render_worker.valid()) render_worker.get();
+    render_async();
   }
 };
