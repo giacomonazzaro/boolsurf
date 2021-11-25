@@ -22,6 +22,16 @@ static bool draw_image_inspector(const glinput_state& input,
   return false;
 }
 
+struct scene_selection {
+  int camera      = 0;
+  int instance    = 0;
+  int environment = 0;
+  int shape       = 0;
+  int texture     = 0;
+  int material    = 0;
+  int subdiv      = 0;
+};
+
 static bool draw_scene_editor(scene_data& scene, scene_selection& selection,
     const function<void()>& before_edit) {
   auto edited = 0;

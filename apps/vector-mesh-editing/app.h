@@ -12,8 +12,8 @@
 #include <yocto_gui/yocto_glview.h>
 #endif
 
-#include "spline_editing.h"
 #include "render.h"
+#include "spline_editing.h"
 #include "utils.h"
 
 using namespace yocto;  // TODO(giacomo): Remove this.
@@ -542,13 +542,8 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
   // init state
   if (print) print_progress_begin("init state");
   auto render = Render(scene, bvh, lights, params);
-  if (print) print_progress_end();
-
-  // start rendering
   render.restart();
-
-  // prepare selection
-  auto selection = scene_selection{};
+  if (print) print_progress_end();
 
   // callbacks
   auto callbacks    = glwindow_callbacks{};

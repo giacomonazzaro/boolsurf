@@ -5,16 +5,6 @@
 
 #include "app.h"
 
-struct scene_selection {
-  int camera      = 0;
-  int instance    = 0;
-  int environment = 0;
-  int shape       = 0;
-  int texture     = 0;
-  int material    = 0;
-  int subdiv      = 0;
-};
-
 // renderer update
 struct Render {
   const scene_data&   scene;
@@ -97,7 +87,7 @@ struct Render {
     render_worker = {};
     render_stop   = false;
 
-    // preview
+    // render preview
     auto pparams = params;
     pparams.resolution /= params.pratio;
     pparams.samples = 1;

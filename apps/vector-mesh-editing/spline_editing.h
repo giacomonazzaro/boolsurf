@@ -1,16 +1,20 @@
 #pragma once
+#include <boolsurf/boolsurf.h>
 #include <yocto/yocto_mesh.h>
 
 using namespace yocto;
 
-struct Anchor_Point {
-  mesh_point point      = {};
-  mesh_point handles[2] = {{}, {}};
-  bool       is_smooth  = true;
-};
+// struct Anchor_Point {
+//   mesh_point point      = {};
+//   mesh_point handles[2] = {{}, {}};
+//   bool       is_smooth  = true;
+// };
+
+using Anchor_Point = anchor_point;
 
 struct Spline_Input {
   vector<Anchor_Point> control_points   = {};
+  vector<bool>         is_smooth        = {};
   int                  num_subdivisions = 4;
   bool                 is_closed        = false;
 
@@ -156,6 +160,7 @@ inline int add_anchor_point(
   // Add point to input.
   auto point_id = (int)spline.input.control_points.size();
   spline.input.control_points.push_back(anchor);
+  spline.input.is_smooth.push_back(true);
 
   // Add shapes for point, handles and tangents to cache.
   auto& cache                = spline.cache.points.emplace_back();
@@ -177,8 +182,10 @@ inline void move_selected_point(Splinesurf& splinesurf,
     const mesh_point& point) {
   assert(selection.spline_id != -1);
   assert(selection.control_point_id != -1);
-  auto  spline = splinesurf.get_spline_view(selection.spline_id);
-  auto& anchor = spline.input.control_points[selection.control_point_id];
+  auto  spline    = splinesurf.get_spline_view(selection.spline_id);
+  auto& anchor    = spline.input.control_points[selection.control_point_id];
+  auto  is_smooth = spline.input.is_smooth[selection.control_point_id];
+
   if (selection.handle_id == -1) {
     auto& point_cache = spline.cache.points[selection.control_point_id];
     auto  offset      = shortest_path(mesh, anchor.point, point);
@@ -224,7 +231,7 @@ inline void move_selected_point(Splinesurf& splinesurf,
     point_cache.tangents[k].path = shortest_path(
         mesh, anchor.point, anchor.handles[k]);
 
-    if (anchor.is_smooth) {
+    if (is_smooth) {
       auto dir = tangent_path_direction(mesh, point_cache.tangents[k].path);
       auto len = path_length(point_cache.tangents[k].path, mesh.triangles,
           mesh.positions, mesh.adjacencies);
