@@ -196,12 +196,12 @@ mesh_point eval_geodesic_path(
       path, mesh.triangles, mesh.positions, mesh.adjacencies, t);
 }
 
-vector<mesh_segment> mesh_segments(
-    const vector<vec3i>& triangles, const geodesic_path& path) {
+vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
+    const vector<vec3f>& positions, const geodesic_path& path) {
   auto result = vector<mesh_segment>{};
   result.reserve(path.strip.size());
 
-  //  auto t = path_parameters();
+  auto t = path_parameters(path, triangles, positions);
 
   for (int i = 0; i < path.strip.size(); ++i) {
     vec2f start_uv;
@@ -243,7 +243,7 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     for (auto& l : path.lerps) {
       l = yocto::clamp(l, 0 + threshold, 1 - threshold);
     }
-    auto segments = mesh_segments(mesh.triangles, path);
+    auto segments = mesh_segments(mesh.triangles, mesh.positions, path);
     return segments;
   };
 
@@ -263,7 +263,14 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
       auto points = compute_bezier_path(mesh.dual_solver, mesh.triangles,
           mesh.positions, mesh.adjacencies, control_points, 4);
       for (int k = 0; k < points.size() - 1; k++) {
-        curve += get_segments(points[k], points[k + 1]);
+        auto segments = get_segments(points[k], points[k + 1]);
+        auto min      = float(k) / points.size();
+        auto max      = float(k + 1) / points.size();
+        for (auto& s : segments) {
+          s.t_start = s.t_start * (max - min) + min;
+          s.t_end   = s.t_end * (max - min) + min;
+        }
+        curve += segments;
       }
     }
   }
