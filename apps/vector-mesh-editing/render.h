@@ -145,16 +145,78 @@ static bool uiupdate_image_params(
 
 inline void draw_widgets(App& app, Render& render, const glinput_state& input);
 
+inline void update(
+    App& app, Render& render, bvh_data& bvh, const glinput_state& input) {
+  static auto updated_shapes = vector<int>{};
+
+  auto& scene  = app.scene;
+  auto& params = render.params;
+  auto  camera = scene.cameras[params.camera];
+  if (uiupdate_camera_params(input, camera)) {
+    render.stop_render();
+    scene.cameras[params.camera] = camera;
+    render.reset_display();
+  }
+
+  {
+    process_click(app, updated_shapes, input);
+    process_mouse(app, updated_shapes, input);
+
+    if (input.mouse_right_click) {
+      render.stop_render();
+      auto& state = app.bool_state;
+      state       = {};
+      auto& mesh  = app.mesh;
+      for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+        auto spline = app.splinesurf.get_spline_view(i);
+
+        // Add new 1-polygon shape to state
+        // if (test_polygon.empty()) continue;
+
+        auto& bool_shape = state.bool_shapes.emplace_back();
+        auto& polygon    = bool_shape.polygons.emplace_back();
+        //      polygon.points   = test_polygon;
+        for (auto& anchor : spline.input.control_points) {
+          polygon.points.push_back(
+              {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+        }
+        recompute_polygon_segments(mesh, polygon);
+      }
+
+      compute_cells(app.mesh, app.bool_state);
+      //  compute_shapes(app.bool_state);
+      app.mesh.triangles.resize(app.mesh.num_triangles);
+      app.mesh.positions.resize(app.mesh.num_positions);
+      render.reset_display();
+    }
+
+    if (app.jobs.size()) {
+      render.stop_render();
+      for (auto& job : app.jobs) job();
+      app.jobs.clear();
+      render.reset_display();
+    }
+
+    if (app.new_instances.size()) {
+      render.stop_render();
+      scene.shapes += app.new_shapes;
+      scene.instances += app.new_instances;
+      update_splines(app, scene, updated_shapes);
+      updated_shapes.clear();
+      app.new_shapes.clear();
+      app.new_instances.clear();
+      bvh = make_bvh(scene, params);
+      render.reset_display();
+    }
+  }
+}
+
 // Open a window and show an scene via path tracing
 void view_raytraced_scene(App& app, const string& title, const string& name,
     scene_data& scene, const trace_params& params_ = {}, bool print = true,
     bool edit = false) {
   // copy params and camera
-  auto  params         = params_;
-  auto  glscene        = glscene_state{};  // TODO(giacomo): Not used!!!
-  auto  updated_shapes = vector<int>{};
-  auto& new_shapes     = app.new_shapes;
-  auto& new_instances  = app.new_instances;
+  auto params = params_;
 
   // build bvh
   if (print) print_progress_begin("build bvh");
@@ -176,10 +238,6 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
   if (print) print_progress_begin("init state");
   auto render = Render(scene, bvh, lights, params);
   if (print) print_progress_end();
-
-  // top level combo
-  auto names    = vector<string>{name};
-  auto selected = 0;
 
   // start rendering
   render.reset_display();
@@ -211,64 +269,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     draw_widgets(app, render, input);
   };
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
-    auto camera = scene.cameras[params.camera];
-    if (uiupdate_camera_params(input, camera)) {
-      render.stop_render();
-      scene.cameras[params.camera] = camera;
-      render.reset_display();
-    }
-
-    if (1) {
-      process_click(app, updated_shapes, input);
-      process_mouse(app, updated_shapes, input);
-
-      if (input.mouse_right_click) {
-        render.stop_render();
-        auto& state = app.bool_state;
-        state       = {};
-        auto& mesh  = app.mesh;
-        for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-          auto spline = app.splinesurf.get_spline_view(i);
-
-          // Add new 1-polygon shape to state
-          // if (test_polygon.empty()) continue;
-
-          auto& bool_shape = state.bool_shapes.emplace_back();
-          auto& polygon    = bool_shape.polygons.emplace_back();
-          //      polygon.points   = test_polygon;
-          for (auto& anchor : spline.input.control_points) {
-            polygon.points.push_back(
-                {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-          }
-          recompute_polygon_segments(mesh, polygon);
-        }
-
-        compute_cells(app.mesh, app.bool_state);
-        //  compute_shapes(app.bool_state);
-        app.mesh.triangles.resize(app.mesh.num_triangles);
-        app.mesh.positions.resize(app.mesh.num_positions);
-        render.reset_display();
-      }
-
-      if (app.jobs.size()) {
-        render.stop_render();
-        for (auto& job : app.jobs) job();
-        app.jobs.clear();
-        render.reset_display();
-      }
-
-      if (new_instances.size()) {
-        render.stop_render();
-        scene.shapes += new_shapes;
-        scene.instances += new_instances;
-        update_splines(app, scene, updated_shapes);
-        updated_shapes.clear();
-        new_shapes.clear();
-        new_instances.clear();
-        bvh = make_bvh(scene, params);
-        render.reset_display();
-      }
-    }
+    update(app, render, bvh, input);
   };
 
   // run ui
@@ -407,7 +408,10 @@ static bool draw_scene_editor(scene_data& scene, scene_selection& selection,
 }
 
 inline void draw_widgets(App& app, Render& render, const glinput_state& input) {
+  // auto names    = vector<string>{name};
+  // auto selected = 0;
   auto edited = 0;
+
   //  draw_glcombobox("name", selected, names);
   auto current = (int)render.render_current;
   draw_glprogressbar("sample", current, render.params.samples);
