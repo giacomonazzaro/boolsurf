@@ -4452,6 +4452,7 @@ static std::array<spline_polygon, 2> de_casteljau_insert(
     auto Pp2_dir = tangent_path_direction(
         solver, triangles, positions, adjacencies, left_side);
     //    assert(left_leaf.start == P);
+    assert(t0 - t_start > 0);
     auto delta_len = t_start * Pp2_len / (t0 - t_start);
     auto path      = straightest_path(
         triangles, positions, adjacencies, P, Pp2_dir, delta_len + Pp2_len);

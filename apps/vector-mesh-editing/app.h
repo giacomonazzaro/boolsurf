@@ -35,7 +35,7 @@ struct App {
   bool                               update_bvh = false;
 
   bool  flag           = true;
-  float line_thickness = 0.005;
+  float line_thickness = 0.001;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -129,6 +129,7 @@ inline int add_shape(App& app, const shape_data& shape = {},
 
 inline void process_mouse(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
+  if (input.modifier_alt) return;
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
     return;
@@ -233,6 +234,88 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
 
 inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
+  if (input.modifier_alt) return;
+  if (input.mouse_right_click) {
+    //    render.stop_render();
+    auto& state = app.bool_state;
+    state       = {};
+    auto& mesh  = app.mesh;
+    for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+      auto spline = app.splinesurf.get_spline_view(i);
+
+      // Add new 1-polygon shape to state
+      // if (test_polygon.empty()) continue;
+
+      auto& bool_shape = state.bool_shapes.emplace_back();
+      auto& polygon    = bool_shape.polygons.emplace_back();
+      //      polygon.points   = test_polygon;
+      for (auto& anchor : spline.input.control_points) {
+        polygon.points.push_back(
+            {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+      }
+      recompute_polygon_segments(mesh, polygon);
+    }
+
+    compute_cells(app.mesh, app.bool_state);
+    reset_mesh(app.mesh);
+
+    for (auto& isec : state.intersections) {
+      auto isec0   = isec.locations[0];
+      auto isec1   = isec.locations[1];
+      auto spline0 = app.splinesurf.get_spline_view(isec0.shape_id - 1);
+      auto cp0     = spline0.input.control_polygon(isec0.curve_id);
+      auto spline1 = app.splinesurf.get_spline_view(isec1.shape_id - 1);
+      auto cp1     = spline1.input.control_polygon(isec1.curve_id);
+      auto t0      = isec0.t;
+      auto t1      = isec1.t;
+
+      auto p0 = anchor_point{};
+      auto p1 = anchor_point{};
+      if (isec0.shape_id == isec1.shape_id) {
+        {
+          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
+              t0, false, -1);
+          spline0.input.control_points[isec0.curve_id].handles[1] = left[1];
+          p0 = anchor_point{right[0], {left[2], right[1]}};
+          spline1.input.control_points[isec0.curve_id + 1].handles[0] =
+              right[2];
+        }
+
+        {
+          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp1,
+              t1, false, -1);
+          spline1.input.control_points[isec1.curve_id].handles[1] = left[1];
+          p1 = anchor_point{right[0], {left[2], right[1]}};
+          spline1.input.control_points[isec1.curve_id + 1].handles[0] =
+              right[2];
+          auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+        }
+
+        auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+        insert_anchor_point(
+            spline0, p0, isec0.curve_id + 1, app.mesh, add_app_shape);
+        insert_anchor_point(
+            spline1, p1, isec1.curve_id + 2, app.mesh, add_app_shape);
+      }
+      for (int i = 0; i < spline0.cache.points.size(); i++) {
+        spline0.cache.points_to_update.insert(i);
+      }
+      for (int i = 0; i < spline0.cache.curves.size(); i++) {
+        spline0.cache.curves_to_update.insert(i);
+      }
+      for (int i = 0; i < spline1.cache.points.size(); i++) {
+        spline1.cache.points_to_update.insert(i);
+      }
+      for (int i = 0; i < spline1.cache.curves.size(); i++) {
+        spline1.cache.curves_to_update.insert(i);
+      }
+    }
+
+    //    render.restart();
+  }
+
   if (!input.mouse_left_click) return;
 
   // Compute clicked point and exit if it mesh was not clicked.
@@ -457,49 +540,6 @@ inline void update(
   {
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
-
-    if (input.mouse_right_click) {
-      render.stop_render();
-      auto& state = app.bool_state;
-      state       = {};
-      auto& mesh  = app.mesh;
-      for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-        auto spline = app.splinesurf.get_spline_view(i);
-
-        // Add new 1-polygon shape to state
-        // if (test_polygon.empty()) continue;
-
-        auto& bool_shape = state.bool_shapes.emplace_back();
-        auto& polygon    = bool_shape.polygons.emplace_back();
-        //      polygon.points   = test_polygon;
-        for (auto& anchor : spline.input.control_points) {
-          polygon.points.push_back(
-              {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-        }
-        recompute_polygon_segments(mesh, polygon);
-      }
-
-      compute_cells(app.mesh, app.bool_state);
-
-      for (auto& isec : state.intersections) {
-        auto isec0 = isec.locations[0];
-        auto isec1 = isec.locations[1];
-        auto cp0   = app.splinesurf.get_spline_view(isec0.shape_id - 1)
-                       .input.control_polygon(isec0.curve_id);
-        auto cp1 = app.splinesurf.get_spline_view(isec1.shape_id - 1)
-                       .input.control_polygon(isec1.curve_id);
-        auto t0            = isec0.t;
-        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
-            t0, false, -1);
-          
-          assert(left[0].face >= 0);
-      }
-      //  compute_shapes(app.bool_state);
-      app.mesh.triangles.resize(app.mesh.num_triangles);
-      app.mesh.positions.resize(app.mesh.num_positions);
-      render.restart();
-    }
 
     if (app.jobs.size()) {
       render.stop_render();

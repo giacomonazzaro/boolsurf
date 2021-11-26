@@ -140,7 +140,7 @@ void reset_mesh(bool_mesh& mesh) {
   mesh.positions.resize(mesh.num_positions);
   mesh.adjacencies.resize(mesh.num_triangles);
   mesh.dual_solver.graph.resize(mesh.num_triangles);
-  mesh.triangulated_faces.clear();
+  // mesh.triangulated_faces.clear();
 
   auto get_triangle_center = [](const vector<vec3i>&  triangles,
                                  const vector<vec3f>& positions,
@@ -244,6 +244,11 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
       l = yocto::clamp(l, 0 + threshold, 1 - threshold);
     }
     auto segments = mesh_segments(mesh.triangles, mesh.positions, path);
+    auto t        = path_parameters(path, mesh.triangles, mesh.positions);
+    for (int i = 0; i < segments.size(); i++) {
+      segments[i].t_start = t[i];
+      segments[i].t_end   = t[i + 1];
+    }
     return segments;
   };
 
@@ -872,9 +877,15 @@ static void add_polygon_intersection_points(bool_state& state,
               mesh, hashgrid, point, {-1, -1, -1});  // don't add to polyline
           //          state.control_points[vertex] = (int)state.points.size();
           state.isecs_generators[vertex] = {poly.polygon, poly.polygon};
-          state.intersections.push_back(
-              {{{poly.polygon, poly.side_ids[s0], poly.t[s0]},
-                  {poly.polygon, poly.side_ids[s1], poly.t[s1]}}});
+          {
+            auto t0 = lerp(poly.t[s0], poly.t[s0 + 1], l.x);
+            auto t1 = lerp(poly.t[s1], poly.t[s1 + 1], l.y);
+            assert(t0 != 0 && t0 != 1 && int(t0 * 64) - t0 * 4 != 0);
+            assert(t1 != 0 && t1 != 1 && int(t1 * 64) - t0 * 4 != 0);
+            state.intersections.push_back(
+                {{{poly.polygon, poly.side_ids[s0], t0},
+                    {poly.polygon, poly.side_ids[s1], t1}}});
+          }
           //          state.points.push_back(point);
           // printf("self-intersection: polygon %d, vertex %d\n", poly.polygon,
           //     vertex);
@@ -913,10 +924,16 @@ static void add_polygon_intersection_points(bool_state& state,
             //            state.control_points[vertex]   =
             //            (int)state.points.size();
             state.isecs_generators[vertex] = {poly0.polygon, poly1.polygon};
-            state.intersections.push_back(
-                {{{poly0.polygon, poly0.side_ids[s0], poly0.t[s0]},
-                    {poly1.polygon, poly1.side_ids[s1], poly1.t[s1]}}});
-            //            state.points.push_back(point);
+
+            {
+              auto t0 = lerp(poly0.t[s0], poly0.t[s0 + 1], l.x);
+              auto t1 = lerp(poly1.t[s1], poly1.t[s1 + 1], l.y);
+              assert(t0 != 0 && t0 != 1 && int(t0 * 64) - t0 * 4 != 0);
+              assert(t1 != 0 && t1 != 1 && int(t1 * 64) - t0 * 4 != 0);
+              state.intersections.push_back(
+                  {{{poly0.polygon, poly0.side_ids[s0], t0},
+                      {poly1.polygon, poly1.side_ids[s1], t1}}});
+            }
 
             insert(poly0.points, s0 + 1, uv);
             insert(poly0.vertices, s0 + 1, vertex);
