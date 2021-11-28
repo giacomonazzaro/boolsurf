@@ -19,6 +19,7 @@
 using namespace yocto;  // TODO(giacomo): Remove this.
 
 struct App {
+  Render     render;
   scene_data scene      = {};
   bool_mesh  mesh       = {};
   bool_state bool_state = {};
@@ -236,7 +237,7 @@ inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (input.mouse_right_click) {
-    //    render.stop_render();
+    app.render.stop_render();
     auto& state = app.bool_state;
     state       = {};
     auto& mesh  = app.mesh;
@@ -313,7 +314,7 @@ inline void process_click(
       }
     }
 
-    //    render.restart();
+    app.render.restart();
   }
 
   if (!input.mouse_left_click) return;
@@ -448,10 +449,11 @@ inline void update_splines(
   }
 }
 
-inline void draw_widgets(App& app, Render& render, const glinput_state& input) {
+inline void draw_widgets(App& app, const glinput_state& input) {
   // auto names    = vector<string>{name};
   // auto selected = 0;
-  auto edited = 0;
+  auto& render = app.render;
+  auto  edited = 0;
 
   //  draw_glcombobox("name", selected, names);
   auto current = (int)render.render_current;
@@ -596,7 +598,8 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
 
   // init state
   if (print) print_progress_begin("init state");
-  auto render = Render(scene, bvh, lights, params);
+  auto& render = app.render;
+  render       = Render(scene, bvh, lights, params);
   render.restart();
   if (print) print_progress_end();
 
@@ -621,7 +624,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
     draw_image(render.glimage, render.glparams);
   };
   callbacks.widgets_cb = [&](const glinput_state& input) {
-    draw_widgets(app, render, input);
+    draw_widgets(app, input);
   };
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
     update(app, render, bvh, input);
