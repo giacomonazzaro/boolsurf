@@ -36,8 +36,8 @@ struct Render {
   future<void>      render_worker  = {};
   atomic<bool>      render_stop    = {};
 
-  void init(const scene_data& scene, const bvh_data& bvh, const trace_lights& lights,
-      trace_params& params) {
+  void init(const scene_data& scene, const bvh_data& bvh,
+      const trace_lights& lights, trace_params& params) {
     scene_ptr  = &scene;
     bvh_ptr    = &bvh;
     lights_ptr = &lights;
@@ -83,11 +83,13 @@ struct Render {
 
   // stop render
   void stop_render() {
+    if (!scene_ptr) return;
     render_stop = true;
     if (render_worker.valid()) render_worker.get();
   }
 
   void reset() {
+    if (!scene_ptr) return;
     state     = make_state(*scene_ptr, *params_ptr);
     image     = make_image(state.width, state.height, true);
     display   = make_image(state.width, state.height, false);
@@ -95,6 +97,7 @@ struct Render {
   }
 
   void restart() {
+    if (!scene_ptr) return;
     stop_render();
     reset();
 
