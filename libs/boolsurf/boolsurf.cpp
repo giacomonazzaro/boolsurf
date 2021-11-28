@@ -854,7 +854,7 @@ static void add_polygon_intersection_points(bool_state& state,
 
       for (int s0 = 0; s0 < num_segments(poly) - 1; s0++) {
         auto [start0, end0] = get_segment(poly, s0);
-        int num_added       = 0;
+        int num_added       = 0;  // number of points added to poly
 
         for (int s1 = s0 + 1; s1 < num_segments(poly); s1++) {
           // Skip adjacent segments.
@@ -908,7 +908,7 @@ static void add_polygon_intersection_points(bool_state& state,
         auto& poly1 = polylines[p1];
         for (int s0 = 0; s0 < num_segments(poly0); s0++) {
           auto [start0, end0] = get_segment(poly0, s0);
-          int num_added       = 0;
+          int num_added       = 0;  // number of points added to poly0
 
           for (int s1 = 0; s1 < num_segments(poly1); s1++) {
             auto [start1, end1] = get_segment(poly1, s1);

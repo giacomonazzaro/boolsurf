@@ -5,17 +5,26 @@
 
 #include "app.h"
 
-// renderer update
-struct Render {
+struct Render_View {
   const scene_data&   scene;
   const bvh_data&     bvh;
   const trace_lights& lights;
   trace_params&       params;
+  Render_View(const scene_data& _scene, const bvh_data& _bvh,
+      const trace_lights& _lights, trace_params& _params)
+      : scene(_scene), bvh(_bvh), lights(_lights), params(_params) {}
+};
 
-  trace_state state     = {};
-  image_data  image     = {};
-  image_data  display   = {};
-  image_data  rendering = {};
+// renderer update
+struct Render {
+  const scene_data*   scene_ptr;
+  const bvh_data*     bvh_ptr;
+  const trace_lights* lights_ptr;
+  trace_params*       params_ptr;
+  trace_state         state     = {};
+  image_data          image     = {};
+  image_data          display   = {};
+  image_data          rendering = {};
 
   // opengl image
   glimage_state  glimage  = {};
@@ -27,16 +36,21 @@ struct Render {
   future<void>      render_worker  = {};
   atomic<bool>      render_stop    = {};
 
-  Render(const scene_data& _scene, const bvh_data& _bvh,
-      const trace_lights& _lights, trace_params& _params)
-      : scene(_scene), bvh(_bvh), lights(_lights), params(_params) {
-    state     = make_state(scene, params);
-    image     = make_image(state.width, state.height, true);
-    display   = make_image(state.width, state.height, false);
-    rendering = make_image(state.width, state.height, true);
+  void init(const scene_data& scene, const bvh_data& bvh, const trace_lights& lights,
+      trace_params& params) {
+    scene_ptr  = &scene;
+    bvh_ptr    = &bvh;
+    lights_ptr = &lights;
+    params_ptr = &params;
+    restart();
   }
 
-  auto render() {
+  void render() {
+    const auto& scene  = *scene_ptr;
+    const auto& bvh    = *bvh_ptr;
+    const auto& lights = *lights_ptr;
+    auto&       params = *params_ptr;
+
     for (auto sample = 0; sample < params.samples; sample += params.batch) {
       if (render_stop) return;
       parallel_for(state.width, state.height, [&](int i, int j) {
@@ -73,19 +87,24 @@ struct Render {
     if (render_worker.valid()) render_worker.get();
   }
 
-  auto reset() {
-    state     = make_state(scene, params);
+  void reset() {
+    state     = make_state(*scene_ptr, *params_ptr);
     image     = make_image(state.width, state.height, true);
     display   = make_image(state.width, state.height, false);
     rendering = make_image(state.width, state.height, true);
   }
 
-  auto restart() {
+  void restart() {
     stop_render();
     reset();
 
     render_worker = {};
     render_stop   = false;
+
+    const auto& scene  = *scene_ptr;
+    const auto& bvh    = *bvh_ptr;
+    const auto& lights = *lights_ptr;
+    auto&       params = *params_ptr;
 
     // render preview
     auto pparams = params;

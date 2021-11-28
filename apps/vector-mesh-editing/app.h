@@ -457,7 +457,7 @@ inline void draw_widgets(App& app, const glinput_state& input) {
 
   //  draw_glcombobox("name", selected, names);
   auto current = (int)render.render_current;
-  draw_glprogressbar("sample", current, render.params.samples);
+  draw_glprogressbar("sample", current, render.params_ptr->samples);
 
   draw_gllabel("selected spline", app.editing.selection.spline_id);
   draw_gllabel(
@@ -473,7 +473,7 @@ inline void draw_widgets(App& app, const glinput_state& input) {
   }
   if (begin_glheader("render")) {
     auto edited  = 0;
-    auto tparams = render.params;
+    auto tparams = *render.params_ptr;
     //    edited += draw_glcombobox("camera", tparams.camera, camera_names);
     edited += draw_glslider("resolution", tparams.resolution, 180, 4096);
     edited += draw_glslider("samples", tparams.samples, 16, 4096);
@@ -492,11 +492,11 @@ inline void draw_widgets(App& app, const glinput_state& input) {
     end_glheader();
     if (edited) {
       render.stop_render();
-      render.params = tparams;
+      *render.params_ptr = tparams;
       render.restart();
     }
   }
-  auto& params = render.params;
+  auto& params = *render.params_ptr;
   if (begin_glheader("tonemap")) {
     edited += draw_glslider("exposure", params.exposure, -5, 5);
     edited += draw_glcheckbox("filmic", params.filmic);
@@ -531,7 +531,7 @@ inline void update(
   static auto updated_shapes = vector<int>{};
 
   auto& scene  = app.scene;
-  auto& params = render.params;
+  auto& params = *render.params_ptr;
   auto  camera = scene.cameras[params.camera];
   if (uiupdate_camera_params(input, camera)) {
     render.stop_render();
@@ -599,8 +599,7 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
   // init state
   if (print) print_progress_begin("init state");
   auto& render = app.render;
-  render       = Render(scene, bvh, lights, params);
-  render.restart();
+  render.init(scene, bvh, lights, params);
   if (print) print_progress_end();
 
   // callbacks
