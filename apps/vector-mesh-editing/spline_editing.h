@@ -85,6 +85,7 @@ struct Editing {
   Selection  selection             = {};
   mesh_point clicked_point         = {};
   bool       holding_control_point = false;
+  bool       creating_new_point    = false;
 };
 
 inline int add_spline(Splinesurf& splinesurf) {
@@ -215,7 +216,7 @@ inline int add_anchor_point(
 
 inline void move_selected_point(Splinesurf& splinesurf,
     const Editing::Selection& selection, const bool_mesh& mesh,
-    const mesh_point& point) {
+    const mesh_point& point, bool symmetric_length) {
   assert(selection.spline_id != -1);
   assert(selection.control_point_id != -1);
   auto  spline    = splinesurf.get_spline_view(selection.spline_id);
@@ -268,8 +269,9 @@ inline void move_selected_point(Splinesurf& splinesurf,
 
     if (is_smooth) {
       auto dir = tangent_path_direction(mesh, point_cache.tangents[k].path);
+      auto kk  = symmetric_length ? k : 1 - k;
       auto len = path_length(
-          point_cache.tangents[k].path, mesh.triangles, mesh.positions);
+          point_cache.tangents[kk].path, mesh.triangles, mesh.positions);
       point_cache.tangents[1 - k].path = straightest_path(
           mesh, anchor.point, -dir, len);
       anchor.handles[1 - k] = point_cache.tangents[1 - k].path.end;

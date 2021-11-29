@@ -133,6 +133,7 @@ inline void process_mouse(
   if (input.modifier_alt) return;
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
+    app.editing.creating_new_point    = false;
     return;
   }
 
@@ -148,7 +149,8 @@ inline void process_mouse(
   app.editing.holding_control_point = true;
 
   auto spline = app.selected_spline();
-  move_selected_point(app.splinesurf, app.editing.selection, app.mesh, point);
+  move_selected_point(app.splinesurf, app.editing.selection, app.mesh, point,
+      app.editing.creating_new_point);
 
   updated_shapes +=
       spline.cache.points[app.editing.selection.control_point_id].anchor_id;
@@ -347,6 +349,7 @@ inline void process_click(
   auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
   app.editing.selection.control_point_id = anchor_id;
   app.editing.selection.handle_id        = 1;
+  app.editing.creating_new_point         = true;
 }
 
 // TODO(giacomo): Put following stuff in splinesurf.h
