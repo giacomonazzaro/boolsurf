@@ -325,13 +325,14 @@ inline void process_click(
       app.scene.instances[0].visible = false;
     }
     reset_mesh(app.mesh);
-    auto t              = app.mesh.triangles;
-    auto p              = app.mesh.positions;
-    app.mesh            = {};
-    app.mesh.triangles  = t;
-    app.mesh.positions  = p;
-    app.scene.shapes[0] = app.mesh;
-    init_mesh(app.mesh);
+
+    // auto t              = app.mesh.triangles;
+    // auto p              = app.mesh.positions;
+    // app.mesh            = {};
+    // app.mesh.triangles  = t;
+    // app.mesh.positions  = p;
+    // app.scene.shapes[0] = app.mesh;
+    // init_mesh(app.mesh);
 
     //
     //    struct Intersection {

@@ -340,6 +340,18 @@ void print(
 void draw_triangulation(
     ogl_texture* texture, int face, vec2i size = {2048, 2048});
 
+//template <class K, class V, class F>
+//inline bool maybe_add(const hash_map<K, V>& map, const K& k, F&& f) {
+//  auto it = map.find(i);
+//  if (it == map.end()) {
+//    key      = f();
+//    map[key] = key;
+//  } else {
+//    key = it->second;
+//  }
+//  return key;
+//}
+
 template <class K, class V>
 inline bool contains(const hash_map<K, V>& map, const K& x) {
   return map.find(x) != map.end();

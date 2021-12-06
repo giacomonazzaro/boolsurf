@@ -109,10 +109,16 @@ void init_mesh(bool_mesh& mesh) {
     mesh.quads.clear();
   }
 
-  mesh.normals       = compute_normals(mesh);
-  mesh.adjacencies   = face_adjacencies_fast(mesh.triangles);
-  mesh.num_triangles = (int)mesh.triangles.size();
-  mesh.num_positions = (int)mesh.positions.size();
+  mesh.normals     = compute_normals(mesh);
+  mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
+
+  mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
+  mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
+  mesh.polygon_borders = vector<vec3i>();
+
+  mesh.old_adjacencies = mesh.adjacencies;
+  mesh.num_triangles   = (int)mesh.triangles.size();
+  mesh.num_positions   = (int)mesh.positions.size();
 
   // Fit shape in [-1, +1]^3
   auto bbox = invalidb3f;
@@ -138,47 +144,30 @@ void init_mesh(bool_mesh& mesh) {
 void reset_mesh(bool_mesh& mesh) {
   mesh.triangles.resize(mesh.num_triangles);
   mesh.positions.resize(mesh.num_positions);
-  mesh.adjacencies.resize(mesh.num_triangles);
-  mesh.dual_solver.graph.resize(mesh.num_triangles);
+  mesh.triangulated_faces.clear();
+
+  mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
+  mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
+  mesh.polygon_borders = vector<vec3i>();
+
+  // mesh.dual_solver.graph.resize(mesh.num_triangles);
   // mesh.triangulated_faces.clear();
 
-#if 1
-  mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
-  mesh.dual_solver = make_dual_geodesic_solver(
-      mesh.triangles, mesh.positions, mesh.adjacencies);
-  return;
+  // for (auto& [face, _] : mesh.triangulated_faces) {
+  //   for (int k = 0; k < 3; k++) {
+  //     auto neighbor = mesh.adjacencies[face][k];
+  //     if (neighbor == -1) continue;
+  //     auto kk = find_adjacent_triangle(
+  //         mesh.triangles[neighbor], mesh.triangles[face]);
 
-#endif
+  //     // Fix adjacencies.
+  //     mesh.adjacencies[neighbor][kk] = face;
+  //   }
+  // }
 
-  auto get_triangle_center = [](const vector<vec3i>&  triangles,
-                                 const vector<vec3f>& positions,
-                                 int                  face) -> vec3f {
-    vec3f pos[3] = {positions[triangles[face].x], positions[triangles[face].y],
-        positions[triangles[face].z]};
-    auto  l0     = length(pos[0] - pos[1]);
-    auto  p0     = (pos[0] + pos[1]) / 2;
-    auto  l1     = length(pos[1] - pos[2]);
-    auto  p1     = (pos[1] + pos[2]) / 2;
-    auto  l2     = length(pos[2] - pos[0]);
-    auto  p2     = (pos[2] + pos[0]) / 2;
-    return (l0 * p0 + l1 * p1 + l2 * p2) / (l0 + l1 + l2);
-  };
-
-  for (auto& [face, _] : mesh.triangulated_faces) {
-    for (int k = 0; k < 3; k++) {
-      auto neighbor = mesh.adjacencies[face][k];
-      if (neighbor == -1) continue;
-      auto kk = find_adjacent_triangle(
-          mesh.triangles[neighbor], mesh.triangles[face]);
-
-      // Fix adjacencies and dual_solver.
-      mesh.adjacencies[neighbor][kk]              = face;
-      mesh.dual_solver.graph[neighbor][kk].node   = face;
-      mesh.dual_solver.graph[neighbor][kk].length = length(
-          get_triangle_center(mesh.triangles, mesh.positions, neighbor) -
-          get_triangle_center(mesh.triangles, mesh.positions, face));
-    }
-  }
+  // assert(mesh.old_adjacencies == mesh.adjacencies);
+  // mesh.adjacencies.resize(mesh.num_triangles);
+  mesh.adjacencies = mesh.old_adjacencies;
 }
 
 geodesic_path compute_geodesic_path(

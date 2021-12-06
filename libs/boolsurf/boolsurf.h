@@ -28,9 +28,10 @@ struct facet {
 };
 
 struct bool_mesh : scene_shape {
-  vector<vec3i>        adjacencies = {};
-  dual_geodesic_solver dual_solver = {};
-  bool_borders         borders     = {};
+  vector<vec3i>        adjacencies     = {};
+  vector<vec3i>        old_adjacencies = {};
+  dual_geodesic_solver dual_solver     = {};
+  bool_borders         borders         = {};
 
   shape_bvh                    bvh                = {};
   bbox3f                       bbox               = {};
