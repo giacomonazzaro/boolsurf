@@ -145,10 +145,10 @@ void reset_mesh(bool_mesh& mesh) {
   mesh.triangles.resize(mesh.num_triangles);
   mesh.positions.resize(mesh.num_positions);
   mesh.triangulated_faces.clear();
+  mesh.polygon_borders.clear();
 
-  mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
-  mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
-  mesh.polygon_borders = vector<vec3i>();
+  // mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
+  // mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
 
   // mesh.dual_solver.graph.resize(mesh.num_triangles);
   // mesh.triangulated_faces.clear();

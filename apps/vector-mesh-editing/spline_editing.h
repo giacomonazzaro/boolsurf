@@ -65,6 +65,12 @@ struct Spline_View {
   Spline_Cache&  cache;
 };
 
+struct Const_Spline_View {
+  const Spline_Input&  input;
+  const Spline_Output& output;
+  const Spline_Cache&  cache;
+};
+
 struct Splinesurf {
   vector<Spline_Input>  spline_input  = {};
   vector<Spline_Output> spline_output = {};
@@ -73,6 +79,9 @@ struct Splinesurf {
   Spline_View get_spline_view(int id) {
     return Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
   }
+    const Const_Spline_View get_spline_view(int id) const {
+      return Const_Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
+    }
   inline int num_splines() const { return (int)spline_input.size(); }
 };
 
