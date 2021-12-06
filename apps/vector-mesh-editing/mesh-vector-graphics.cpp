@@ -195,6 +195,8 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
   };
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
+    auto timer = scope_timer("frame");
+
     // handle mouse and keyboard for navigation
     if (uiupdate_callback) {
       uiupdate_callback(input, app);
@@ -210,11 +212,11 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
 
     process_click(app, updated_shapes, input);
+    process_mouse(app, updated_shapes, input);
     for (auto& entry : app.new_shapes) {
       glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
     }
     update_new_shapes(app);
-    process_mouse(app, updated_shapes, input);
 
     update_splines(app, scene, updated_shapes);
 

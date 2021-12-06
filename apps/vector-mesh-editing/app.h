@@ -161,6 +161,65 @@ inline void update_new_shapes(App& app) {
   app.num_new_shapes = 0;
 }
 
+void update_boolsurf_input(bool_state& state, const App& app) {
+  auto& mesh = app.mesh;
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    auto spline = app.splinesurf.get_spline_view(i);
+
+    // Add new 1-polygon shape to state
+    // if (test_polygon.empty()) continue;
+
+    auto& bool_shape = state.bool_shapes.emplace_back();
+    auto& polygon    = bool_shape.polygons.emplace_back();
+    //      polygon.points   = test_polygon;
+    for (auto& anchor : spline.input.control_points) {
+      polygon.points.push_back(
+          {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+    }
+    recompute_polygon_segments(mesh, polygon);
+  }
+}
+
+inline void update_cell_graphics(
+    App& app, const bool_state& state, vector<int>& updated_shapes) {
+  static auto cell_to_shape = hash_map<int, int>{};
+  auto&       mesh          = app.mesh;
+
+  auto timer = scope_timer("update graphics");
+  for (int i = 0; i < state.cells.size(); i++) {
+    auto& cell        = state.cells[i];
+    auto  material_id = app.scene.materials.size();
+    auto& material    = app.scene.materials.emplace_back();
+
+    if (state.labels.size())
+      material.color = get_cell_color(state, i, false);
+    else
+      material.color = vec3f{1.0f, 1.0f, 1.0f};
+
+    material.type      = scene_material_type::glossy;
+    material.roughness = 0.5;
+
+    auto shape = shape_data{};
+    // TODO(giacomo): Too many copies of positions.
+    shape.positions = mesh.positions;
+    shape.triangles.resize(cell.faces.size());
+    for (int i = 0; i < cell.faces.size(); i++) {
+      shape.triangles[i] = mesh.triangles[cell.faces[i]];
+    }
+
+    auto shape_id = -1;
+    if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
+      shape_id         = add_shape(app, shape, {}, material_id);
+      cell_to_shape[i] = shape_id;
+    } else {
+      shape_id = it->second;
+      set_shape(app, shape_id, shape, {}, material_id);
+    }
+    updated_shapes += shape_id;
+  }
+  app.scene.instances[0].visible = false;
+}
+
 inline void process_mouse(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
@@ -175,6 +234,12 @@ inline void process_mouse(
     app.editing.selection.spline_id = {};
     return;
   }
+
+  app.bool_state = {};
+  update_boolsurf_input(app.bool_state, app);
+  compute_cells(app.mesh, app.bool_state);
+  update_cell_graphics(app, app.bool_state, updated_shapes);
+  reset_mesh(app.mesh);
 
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
@@ -268,77 +333,12 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
   return false;
 }
 
-void update_boolsurf_input(bool_state& state, const App& app) {
-  auto& mesh = app.mesh;
-  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-    auto spline = app.splinesurf.get_spline_view(i);
-
-    // Add new 1-polygon shape to state
-    // if (test_polygon.empty()) continue;
-
-    auto& bool_shape = state.bool_shapes.emplace_back();
-    auto& polygon    = bool_shape.polygons.emplace_back();
-    //      polygon.points   = test_polygon;
-    for (auto& anchor : spline.input.control_points) {
-      polygon.points.push_back(
-          {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-    }
-    recompute_polygon_segments(mesh, polygon);
-  }
-}
-
-inline void update_cell_graphics(
-    App& app, const bool_state& state, vector<int>& updated_shapes) {
-  static auto cell_to_shape = hash_map<int, int>{};
-  auto&       mesh          = app.mesh;
-
-  auto timer = scope_timer("update graphics");
-  for (int i = 0; i < state.cells.size(); i++) {
-    auto& cell        = state.cells[i];
-    auto  material_id = app.scene.materials.size();
-    auto& material    = app.scene.materials.emplace_back();
-
-    if (state.labels.size())
-      material.color = get_cell_color(state, i, false);
-    else
-      material.color = vec3f{1.0f, 1.0f, 1.0f};
-
-    material.type      = scene_material_type::glossy;
-    material.roughness = 0.5;
-
-    auto shape = shape_data{};
-    // TODO(giacomo): Too many copies of positions.
-    shape.positions = mesh.positions;
-    shape.triangles.resize(cell.faces.size());
-    for (int i = 0; i < cell.faces.size(); i++) {
-      shape.triangles[i] = mesh.triangles[cell.faces[i]];
-    }
-
-    auto shape_id = -1;
-    if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
-      shape_id         = add_shape(app, shape, {}, material_id);
-      cell_to_shape[i] = shape_id;
-    } else {
-      shape_id = it->second;
-      set_shape(app, shape_id, shape, {}, material_id);
-    }
-    updated_shapes += shape_id;
-  }
-  app.scene.instances[0].visible = false;
-}
-
 inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (input.mouse_right_click) {
     auto click_timer = scope_timer("click-timer");
     app.render.stop_render();
-
-    app.bool_state = {};
-    update_boolsurf_input(app.bool_state, app);
-    compute_cells(app.mesh, app.bool_state);
-    update_cell_graphics(app, app.bool_state, updated_shapes);
-    reset_mesh(app.mesh);
 
     // auto t              = app.mesh.triangles;
     // auto p              = app.mesh.positions;
