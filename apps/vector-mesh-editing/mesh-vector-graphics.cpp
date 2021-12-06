@@ -133,8 +133,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   auto updated_textures = vector<int>{};
 
   // scene
-  auto& new_instances = app.new_instances;
-  auto& new_shapes    = app.new_shapes;
+  auto& new_shapes = app.new_shapes;
 
   // callbacks
   auto callbacks    = glwindow_callbacks{};
@@ -211,13 +210,11 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
 
     process_click(app, updated_shapes, input);
-    scene.shapes += new_shapes;
-    scene.instances += new_instances;
-    process_mouse(app, updated_shapes, input);
-
-    for (auto& _ : new_shapes) {
-      glscene.shapes.emplace_back();
+    for (auto& entry : app.new_shapes) {
+      glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
     }
+    update_new_shapes(app);
+    process_mouse(app, updated_shapes, input);
 
     update_splines(app, scene, updated_shapes);
 
@@ -228,7 +225,6 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
 
     new_shapes.clear();
-    new_instances.clear();
     // updated_shapes.clear();
   };
   // run ui

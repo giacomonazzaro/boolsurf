@@ -142,6 +142,14 @@ void reset_mesh(bool_mesh& mesh) {
   mesh.dual_solver.graph.resize(mesh.num_triangles);
   // mesh.triangulated_faces.clear();
 
+#if 1
+  mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
+  mesh.dual_solver = make_dual_geodesic_solver(
+      mesh.triangles, mesh.positions, mesh.adjacencies);
+  return;
+
+#endif
+
   auto get_triangle_center = [](const vector<vec3i>&  triangles,
                                  const vector<vec3f>& positions,
                                  int                  face) -> vec3f {
@@ -1352,7 +1360,7 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
     {
       auto lock               = std::lock_guard{mesh_mutex};
       mesh_triangles_old_size = (int)mesh.adjacencies.size();
-      // mesh.triangles.resize(mesh_triangles_old_size + triangles.size());
+      mesh.triangles.resize(mesh_triangles_old_size + triangles.size());
       mesh.adjacencies.resize(mesh_triangles_old_size + triangles.size());
       for (int i = 0; i < triangles.size(); i++) {
         triangulated_faces[i].id = mesh_triangles_old_size + i;

@@ -1369,6 +1369,7 @@ void set_shape(glscene_shape& glshape, const shape_data& shape) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0,
             data.size() * sizeof(data.front()), data.data());
+        num = (int)data.size();
       }
     }
   };

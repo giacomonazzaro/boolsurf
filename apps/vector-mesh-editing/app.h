@@ -18,6 +18,13 @@
 
 using namespace yocto;  // TODO(giacomo): Remove this.
 
+struct Shape_Entry {
+  int        id       = -1;
+  shape_data shape    = {};
+  frame3f    frame    = {};
+  int        material = -1;
+};
+
 struct App {
   Render     render;
   scene_data scene      = {};
@@ -29,8 +36,9 @@ struct App {
   Editing    editing    = {};
   Splinesurf splinesurf = {};
 
-  vector<shape_data>    new_shapes;
-  vector<instance_data> new_instances;
+  vector<Shape_Entry> new_shapes     = {};
+  int                 num_new_shapes = 0;
+  // vector<instance_data> new_instances;
 
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
@@ -120,12 +128,30 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
+inline void set_shape(App& app, int id, const shape_data& shape,
+    const frame3f& frame = identity3x4f, int material = 1) {
+  app.new_shapes.push_back({id, shape, frame, material});
+}
+
 inline int add_shape(App& app, const shape_data& shape = {},
     const frame3f& frame = identity3x4f, int material = 1) {
-  auto id = (int)app.scene.shapes.size() + (int)app.new_shapes.size();
-  app.new_shapes.push_back(shape);
-  app.new_instances.push_back({frame, id, material});
+  auto id = (int)app.scene.shapes.size() + app.num_new_shapes;
+  set_shape(app, id, shape, frame, material);
+  app.num_new_shapes += 1;
   return id;
+}
+
+inline void update_new_shapes(App& app) {
+  auto& scene = app.scene;
+  for (auto& [id, shape, frame, material] : app.new_shapes) {
+    scene.shapes.resize(max((int)scene.shapes.size(), id + 1));
+    scene.instances.resize(max((int)scene.instances.size(), id + 1));
+    scene.shapes[id]    = shape;
+    scene.instances[id] = {frame, id, material, true};
+  }
+
+  app.new_shapes.clear();
+  app.num_new_shapes = 0;
 }
 
 inline void process_mouse(
@@ -239,6 +265,7 @@ inline void process_click(
     App& app, vector<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (input.mouse_right_click) {
+    auto click_timer = scope_timer("click-timer");
     app.render.stop_render();
     auto& state = app.bool_state;
     state       = {};
@@ -260,62 +287,104 @@ inline void process_click(
     }
 
     compute_cells(app.mesh, app.bool_state);
-    reset_mesh(app.mesh);
 
-    for (auto& isec : state.intersections) {
-      auto isec0   = isec.locations[0];
-      auto isec1   = isec.locations[1];
-      auto spline0 = app.splinesurf.get_spline_view(isec0.shape_id - 1);
-      auto cp0     = spline0.input.control_polygon(isec0.curve_id);
-      auto spline1 = app.splinesurf.get_spline_view(isec1.shape_id - 1);
-      auto cp1     = spline1.input.control_polygon(isec1.curve_id);
-      auto t0      = isec0.t;
-      auto t1      = isec1.t;
+    static auto cell_to_shape = hash_map<int, int>{};
+    {
+      auto timer = scope_timer("update graphics");
+      for (int i = 0; i < state.cells.size(); i++) {
+        auto& cell        = state.cells[i];
+        auto  material_id = app.scene.materials.size();
+        auto& material    = app.scene.materials.emplace_back();
 
-      auto p0 = anchor_point{};
-      auto p1 = anchor_point{};
-      if (isec0.shape_id == isec1.shape_id) {
-        {
-          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
-              t0, false, -1);
-          spline0.input.control_points[isec0.curve_id].handles[1] = left[1];
-          p0 = anchor_point{right[0], {left[2], right[1]}};
-          spline1.input.control_points[isec0.curve_id + 1].handles[0] =
-              right[2];
+        if (state.labels.size())
+          material.color = get_cell_color(state, i, false);
+        else
+          material.color = vec3f{1.0f, 1.0f, 1.0f};
+
+        material.type      = scene_material_type::glossy;
+        material.roughness = 0.5;
+
+        auto shape = shape_data{};
+        // TODO(giacomo): Too many copies of positions.
+        shape.positions = mesh.positions;
+        shape.triangles.resize(cell.faces.size());
+        for (int i = 0; i < cell.faces.size(); i++) {
+          shape.triangles[i] = mesh.triangles[cell.faces[i]];
         }
 
-        {
-          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp1,
-              t1, false, -1);
-          spline1.input.control_points[isec1.curve_id].handles[1] = left[1];
-          p1 = anchor_point{right[0], {left[2], right[1]}};
-          spline1.input.control_points[isec1.curve_id + 1].handles[0] =
-              right[2];
-          auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+        auto shape_id = -1;
+        if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
+          shape_id         = add_shape(app, shape, {}, material_id);
+          cell_to_shape[i] = shape_id;
+        } else {
+          shape_id = it->second;
+          set_shape(app, shape_id, shape, {}, material_id);
         }
-
-        auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-        insert_anchor_point(
-            spline0, p0, isec0.curve_id + 1, app.mesh, add_app_shape);
-        insert_anchor_point(
-            spline1, p1, isec1.curve_id + 2, app.mesh, add_app_shape);
+        updated_shapes += shape_id;
       }
-      for (int i = 0; i < spline0.cache.points.size(); i++) {
-        spline0.cache.points_to_update.insert(i);
-      }
-      for (int i = 0; i < spline0.cache.curves.size(); i++) {
-        spline0.cache.curves_to_update.insert(i);
-      }
-      for (int i = 0; i < spline1.cache.points.size(); i++) {
-        spline1.cache.points_to_update.insert(i);
-      }
-      for (int i = 0; i < spline1.cache.curves.size(); i++) {
-        spline1.cache.curves_to_update.insert(i);
-      }
+      app.scene.instances[0].visible = false;
     }
+    reset_mesh(app.mesh);
+    auto t              = app.mesh.triangles;
+    auto p              = app.mesh.positions;
+    app.mesh            = {};
+    app.mesh.triangles  = t;
+    app.mesh.positions  = p;
+    app.scene.shapes[0] = app.mesh;
+    init_mesh(app.mesh);
 
+    //
+    //    struct Intersection {
+    //      int   curve_id = -1;
+    //      float t        = 0;
+    //    };
+    //    auto intersection_map = hash_map<int, vector<Intersection>>{};
+    //
+    //    for (auto& isec : state.intersections) {
+    //      for (int k = 0; k < 2; k++) {
+    //        auto& item     = isec.locations[k];
+    //        auto  shape_id = item.shape_id;
+    //        intersection_map[shape_id].push_back({item.curve_id, item.t});
+    //      }
+    //    }
+    //    auto stuff = vector<std::function<void()>>{};
+    //    for (auto& [shape_id, insertions] : intersection_map) {
+    //      auto num_insertions = 0;
+    //      sort(insertions.begin(), insertions.end(),
+    //          [](auto& a, auto& b) { return a.curve_id < b.curve_id; });
+    //
+    //      // TODO(giacomo): [null polygon refactor].
+    //      auto spline = app.splinesurf.get_spline_view(shape_id - 1);
+    //
+    //      auto old_input = spline.input;
+    //      for (auto& insertion : insertions) {
+    //        auto curve_id = insertion.curve_id + num_insertions;
+    //        auto cp       = spline.input.control_polygon(insertion.curve_id);
+    //
+    //        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+    //            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies,
+    //            cp, insertion.t, false, -1);
+    //        spline.input.control_points[curve_id].handles[1] = left[1];
+    //        auto p = anchor_point{right[0], {left[2], right[1]}};
+    //        spline.input.control_points[curve_id + 1].handles[0] = right[2];
+    //        stuff.push_back([&, p, curve_id]() {
+    //          auto add_app_shape = [&]() -> int { return add_shape(app, {});
+    //          }; insert_anchor_point(spline, p, curve_id + 1, app.mesh,
+    //          add_app_shape);
+    //        });
+    //        num_insertions += 1;
+    //      }
+    //
+    //      for (auto& s : stuff) s();
+    //      stuff.clear();
+    //
+    //      // Update graphics.
+    //      for (int i = 0; i < spline.cache.points.size(); i++) {
+    //        spline.cache.points_to_update.insert(i);
+    //      }
+    //      for (int i = 0; i < spline.cache.curves.size(); i++) {
+    //        spline.cache.curves_to_update.insert(i);
+    //      }
     app.render.restart();
   }
 
@@ -553,14 +622,14 @@ inline void update(
       render.restart();
     }
 
-    if (app.new_instances.size()) {
+    if (app.new_shapes.size()) {
       render.stop_render();
-      scene.shapes += app.new_shapes;
-      scene.instances += app.new_instances;
+      update_new_shapes(app);
+      // scene.shapes += app.new_shapes;
+      // scene.instances += app.new_instances;
       update_splines(app, scene, updated_shapes);
       updated_shapes.clear();
-      app.new_shapes.clear();
-      app.new_instances.clear();
+
       bvh = make_bvh(scene, params);
       render.restart();
     }
