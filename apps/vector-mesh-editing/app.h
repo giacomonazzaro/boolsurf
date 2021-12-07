@@ -54,9 +54,6 @@ struct App {
   }
 
   inline Spline_View selected_spline() {
-    if (splinesurf.num_splines() == 0) {
-      editing.selection.spline_id = add_spline(splinesurf);
-    }
     return get_spline_view(editing.selection.spline_id);
   }
   inline const Const_Spline_View selected_spline() const {
@@ -194,7 +191,7 @@ inline void update_cell_graphics(
     if (state.labels.size())
       material.color = get_cell_color(state, i, false);
     else
-      material.color = vec3f{1.0f, 1.0f, 1.0f};
+      material.color = vec3f{0.8, 0.8, 0.8};
 
     material.type      = scene_material_type::glossy;
     material.roughness = 0.5;
@@ -217,7 +214,48 @@ inline void update_cell_graphics(
     }
     updated_shapes += shape_id;
   }
+
+  for (auto& [cell_id, shape_id] : cell_to_shape) {
+    if (cell_id >= state.cells.size()) {
+      set_shape(app, shape_id, {});
+      updated_shapes += shape_id;
+    }
+  }
+
   app.scene.instances[0].visible = false;
+}
+
+inline void toggle_handle_visibility(App& app, bool visible) {
+  auto selection = app.editing.selection;
+  if (selection.spline_id == -1) return;
+  if (selection.control_point_id == -1) return;
+  for (int k = 0; k < 2; k++) {
+    auto handle_id = app.selected_spline()
+                         .cache.points[selection.control_point_id]
+                         .handle_ids[k];
+    app.scene.instances[handle_id].visible = visible;
+    auto tangent_id                        = app.selected_spline()
+                          .cache.points[selection.control_point_id]
+                          .tangents[k]
+                          .shape_id;
+    app.scene.instances[tangent_id].visible = visible;
+  }
+}
+
+inline void set_selected_spline(App& app, int spline_id) {
+  toggle_handle_visibility(app, false);
+  app.editing.selection           = {};
+  app.editing.selection.spline_id = spline_id;
+}
+
+inline void set_selected_point(
+    App& app, int spline_id, int anchor_id, int handle_id) {
+  toggle_handle_visibility(app, false);
+  app.editing.selection                  = {};
+  app.editing.selection.spline_id        = spline_id;
+  app.editing.selection.control_point_id = anchor_id;
+  app.editing.selection.handle_id        = handle_id;
+  toggle_handle_visibility(app, true);
 }
 
 inline void process_mouse(
@@ -231,7 +269,8 @@ inline void process_mouse(
 
   auto point = intersect_mesh(app, input);
   if (point.face == -1) {
-    app.editing.selection.spline_id = {};
+    // app.editing.selection.spline_id = {};
+    set_selected_spline(app, -1);
     return;
   }
 
@@ -282,22 +321,6 @@ inline bool intersect_mesh_point(const bool_mesh& mesh, const ray3f& ray,
   return hit;
 }
 
-inline void toggle_handle_visibility(App& app, bool visible) {
-  auto selection = app.editing.selection;
-  if (selection.spline_id == -1) return;
-  for (int k = 0; k < 2; k++) {
-    auto handle_id = app.selected_spline()
-                         .cache.points[selection.control_point_id]
-                         .handle_ids[k];
-    app.scene.instances[handle_id].visible = visible;
-    auto tangent_id                        = app.selected_spline()
-                          .cache.points[selection.control_point_id]
-                          .tangents[k]
-                          .shape_id;
-    app.scene.instances[tangent_id].visible = visible;
-  }
-}
-
 inline bool update_selection(App& app, const vec2f& mouse_uv) {
   auto& selection = app.editing.selection;
   auto& camera    = app.scene.cameras[0];
@@ -314,18 +337,20 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
         auto hit = intersect_mesh_point(
             app.mesh, ray, anchor.handles[k], radius);
         if (hit) {
-          selection.spline_id        = spline_id;
-          selection.control_point_id = i;
-          selection.handle_id        = k;
+          set_selected_point(app, spline_id, i, k);
+          // selection.spline_id        = spline_id;
+          // selection.control_point_id = i;
+          // selection.handle_id        = k;
           return true;
         }
       }
 
       auto hit = intersect_mesh_point(app.mesh, ray, anchor.point, radius);
       if (hit) {
-        selection.spline_id        = spline_id;
-        selection.control_point_id = i;
-        selection.handle_id        = -1;
+        set_selected_point(app, spline_id, i, -1);
+        // selection.spline_id        = spline_id;
+        // selection.control_point_id = i;
+        // selection.handle_id        = -1;
         return true;
       }
     }
@@ -412,16 +437,16 @@ inline void process_click(
   // Update selection. If it was changed, don't add new points.
   auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
       input.mouse_pos.y / float(input.window_size.y)};
-  //  toggle_handle_visibility(app, false);
+  // toggle_handle_visibility(app, false);
   if (update_selection(app, mouse_uv)) {
-    //    toggle_handle_visibility(app, true);
+    // toggle_handle_visibility(app, true);
     return;
   }
 
   // If there are no splines, create the first one and select it.
   if (app.splinesurf.num_splines() == 0) {
-    app.editing.selection           = {};
-    app.editing.selection.spline_id = add_spline(app.splinesurf);
+    auto spline_id = add_spline(app.splinesurf);
+    set_selected_spline(app, spline_id);
   }
 
   // If no spline is selected, do nothing.
@@ -431,9 +456,10 @@ inline void process_click(
   auto spline        = app.selected_spline();
   auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
   auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
-  app.editing.selection.control_point_id = anchor_id;
-  app.editing.selection.handle_id        = 1;
-  app.editing.creating_new_point         = true;
+  set_selected_point(app, app.editing.selection.spline_id, anchor_id, 1);
+  // app.editing.selection.control_point_id = anchor_id;
+  // app.editing.selection.handle_id        = 1;
+  app.editing.creating_new_point = true;
 }
 
 // TODO(giacomo): Put following stuff in splinesurf.h
@@ -550,9 +576,10 @@ inline void draw_widgets(App& app, const glinput_state& input) {
   draw_gllabel(
       "selected control_point", app.editing.selection.control_point_id);
   if (draw_glbutton("add spline")) {
-    auto spline_id                  = add_spline(app.splinesurf);
-    app.editing.selection           = {};
-    app.editing.selection.spline_id = spline_id;
+    auto spline_id = add_spline(app.splinesurf);
+    set_selected_spline(app, spline_id);
+    // app.editing.selection           = {};
+    // app.editing.selection.spline_id = spline_id;
   }
   if (draw_glbutton("close spline")) {
     auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
