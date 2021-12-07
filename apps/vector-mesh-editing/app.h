@@ -7,6 +7,7 @@
 #include <yocto/yocto_shape.h>
 
 #include <functional>
+#include <utility>  // std::move?
 
 #if YOCTO_OPENGL == 1
 #include <yocto_gui/yocto_glview.h>
@@ -134,7 +135,8 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
 
 inline void set_shape(App& app, int id, const shape_data& shape,
     const frame3f& frame = identity3x4f, int material = 1) {
-  app.new_shapes.push_back({id, shape, frame, material});
+  app.new_shapes.push_back({id, (shape), frame, material});
+  // app.new_shapes.push_back({id, std::move(shape), frame, material});
 }
 
 inline int add_shape(App& app, const shape_data& shape = {},
@@ -453,9 +455,18 @@ inline void process_click(
   if (app.editing.selection.spline_id == -1) return;
 
   // Add new anchor point.
-  auto spline        = app.selected_spline();
-  auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-  auto anchor_id     = add_anchor_point(spline, point, add_app_shape);
+  auto spline          = app.selected_spline();
+  auto add_point_shape = [&]() -> int {
+    auto radius   = app.line_thickness * 2;
+    auto shape_id = add_shape(app, make_sphere(8, radius, 1), {}, 1);
+    updated_shapes += shape_id;
+    return shape_id;
+  };
+  auto add_path_shape = [&]() -> int {
+    return add_shape(app, {});
+  };
+  auto anchor_id = add_anchor_point(
+      spline, point, add_point_shape, add_path_shape);
   set_selected_point(app, app.editing.selection.spline_id, anchor_id, 1);
   // app.editing.selection.control_point_id = anchor_id;
   // app.editing.selection.handle_id        = 1;
@@ -484,8 +495,8 @@ void update_output(Spline_Output& output, const Spline_Input& input,
   }
 }
 
-void update_cache(const App& app, Spline_Cache& cache,
-    const Spline_Input& input, const Spline_Output& output, scene_data& scene,
+void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
+    const Spline_Output& output, scene_data& scene,
     vector<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
   for (auto curve_id : cache.curves_to_update) {

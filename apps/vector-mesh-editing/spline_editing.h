@@ -79,9 +79,10 @@ struct Splinesurf {
   Spline_View get_spline_view(int id) {
     return Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
   }
-    const Const_Spline_View get_spline_view(int id) const {
-      return Const_Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
-    }
+  const Const_Spline_View get_spline_view(int id) const {
+    return Const_Spline_View{
+        spline_input[id], spline_output[id], spline_cache[id]};
+  }
   inline int num_splines() const { return (int)spline_input.size(); }
 };
 
@@ -164,9 +165,9 @@ inline int add_curve(
   return curve_id;
 }
 
-template <typename Add_Shape>
-inline int add_anchor_point(
-    Spline_View& spline, const anchor_point& anchor, Add_Shape& add_shape) {
+template <typename Add_Point_Shape, typename Add_Path_Shape>
+inline int add_anchor_point(Spline_View& spline, const anchor_point& anchor,
+    Add_Point_Shape& add_point_shape, Add_Path_Shape& add_path_shape) {
   // Add point to input.
   auto point_id = (int)spline.input.control_points.size();
   spline.input.control_points.push_back(anchor);
@@ -174,16 +175,17 @@ inline int add_anchor_point(
 
   // Add shapes for point, handles and tangents to cache.
   auto& cache                = spline.cache.points.emplace_back();
-  cache.anchor_id            = add_shape();
-  cache.tangents[0].shape_id = add_shape();
-  cache.tangents[1].shape_id = add_shape();
-  for (int k = 0; k < 2; k++) cache.handle_ids[k] = add_shape();
+  cache.anchor_id            = add_point_shape();
+  cache.tangents[0].shape_id = add_point_shape();
+  cache.tangents[1].shape_id = add_point_shape();
+  for (int k = 0; k < 2; k++) cache.handle_ids[k] = add_path_shape();
 
   // Add curve
-  if (point_id > 0) add_curve(spline.cache, add_shape);
+  if (point_id > 0) add_curve(spline.cache, add_path_shape);
 
   // Trigger update of this point.
   spline.cache.points_to_update.insert(point_id);
+
   return point_id;
 }
 
@@ -215,12 +217,13 @@ inline int insert_anchor_point(Spline_View& spline, const anchor_point& anchor,
   return point_id;
 }
 
-template <typename Add_Shape>
+template <typename Add_Point_Shape, typename Add_Path_Shape>
 inline int add_anchor_point(
-    Spline_View& spline, const mesh_point& point, Add_Shape& add_shape) {
+    Spline_View& spline, const mesh_point& point, Add_Point_Shape& add_point_shape,
+                            Add_Path_Shape& add_path_shape) {
   // Create anchor point with zero-length tangents.
   auto anchor = Anchor_Point{point, {point, point}};
-  return add_anchor_point(spline, anchor, add_shape);
+  return add_anchor_point(spline, anchor, add_point_shape, add_path_shape);
 }
 
 inline void move_selected_point(Splinesurf& splinesurf,
