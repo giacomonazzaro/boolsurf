@@ -218,9 +218,8 @@ inline int insert_anchor_point(Spline_View& spline, const anchor_point& anchor,
 }
 
 template <typename Add_Point_Shape, typename Add_Path_Shape>
-inline int add_anchor_point(
-    Spline_View& spline, const mesh_point& point, Add_Point_Shape& add_point_shape,
-                            Add_Path_Shape& add_path_shape) {
+inline int add_anchor_point(Spline_View& spline, const mesh_point& point,
+    Add_Point_Shape& add_point_shape, Add_Path_Shape& add_path_shape) {
   // Create anchor point with zero-length tangents.
   auto anchor = Anchor_Point{point, {point, point}};
   return add_anchor_point(spline, anchor, add_point_shape, add_path_shape);

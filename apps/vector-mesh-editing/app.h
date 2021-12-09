@@ -164,7 +164,7 @@ void update_boolsurf_input(bool_state& state, const App& app) {
   auto& mesh = app.mesh;
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.splinesurf.get_spline_view(i);
-
+    if (spline.input.control_points.size() < 2) continue;
     // Add new 1-polygon shape to state
     // if (test_polygon.empty()) continue;
 
@@ -276,11 +276,14 @@ inline void process_mouse(
     return;
   }
 
-  app.bool_state = {};
-  update_boolsurf_input(app.bool_state, app);
-  compute_cells(app.mesh, app.bool_state);
-  update_cell_graphics(app, app.bool_state, updated_shapes);
-  reset_mesh(app.mesh);
+  {
+    auto timer     = scope_timer("update boolsurf");
+    app.bool_state = {};
+    update_boolsurf_input(app.bool_state, app);
+    compute_cells(app.mesh, app.bool_state);
+    update_cell_graphics(app, app.bool_state, updated_shapes);
+    reset_mesh(app.mesh);
+  }
 
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
@@ -462,10 +465,8 @@ inline void process_click(
     updated_shapes += shape_id;
     return shape_id;
   };
-  auto add_path_shape = [&]() -> int {
-    return add_shape(app, {});
-  };
-  auto anchor_id = add_anchor_point(
+  auto add_path_shape = [&]() -> int { return add_shape(app, {}); };
+  auto anchor_id      = add_anchor_point(
       spline, point, add_point_shape, add_path_shape);
   set_selected_point(app, app.editing.selection.spline_id, anchor_id, 1);
   // app.editing.selection.control_point_id = anchor_id;

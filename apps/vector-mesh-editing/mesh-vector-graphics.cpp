@@ -149,15 +149,15 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_glcombobox("name", selected, names);
     draw_glcheckbox("flag", app.flag);
-    if (draw_glbutton("add spline")) {
+
+    if (draw_glbutton("close spline")) {
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      close_spline(app.selected_spline(), add_app_shape);
       auto spline_id                  = add_spline(app.splinesurf);
       app.editing.selection           = {};
       app.editing.selection.spline_id = spline_id;
     }
-    if (draw_glbutton("close spline")) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-      close_spline(app.selected_spline(), add_app_shape);
-    }
+
     if (begin_glheader("shade")) {
       draw_glcombobox("camera", params.camera, camera_names);
       draw_glcheckbox("wireframe", params.wireframe);
@@ -195,8 +195,6 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
   };
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
-    auto timer = scope_timer("frame");
-
     // handle mouse and keyboard for navigation
     if (uiupdate_callback) {
       uiupdate_callback(input, app);
@@ -211,6 +209,15 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       scene.cameras.at(params.camera) = camera;
     }
 
+    if (input.modifier_ctrl && input.modifier_shift &&
+        !app.selected_spline().input.is_closed &&
+        app.selected_spline().input.control_points.size() > 1) {
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      close_spline(app.selected_spline(), add_app_shape);
+      auto spline_id = add_spline(app.splinesurf);
+      set_selected_spline(app, spline_id);
+      // app.editing.selection.spline_id = spline_id;
+    }
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
     for (auto& entry : app.new_shapes) {
