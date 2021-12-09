@@ -36,7 +36,7 @@ struct Spline_Input {
 };
 
 struct Spline_Output {
-  vector<vector<mesh_point>> points = {};
+  vector<vector<mesh_segment>> segments = {};
 };
 
 struct Spline_Cache {

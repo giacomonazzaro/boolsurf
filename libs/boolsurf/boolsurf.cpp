@@ -198,8 +198,6 @@ vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
   auto result = vector<mesh_segment>{};
   result.reserve(path.strip.size());
 
-  auto t = path_parameters(path, triangles, positions);
-
   for (int i = 0; i < path.strip.size(); ++i) {
     vec2f start_uv;
     if (i == 0) {

@@ -173,8 +173,8 @@ void       compute_bool_operations(
 void compute_symmetrical_difference(
     bool_state& state, const vector<int>& shapes);
 
-vector<mesh_segment> mesh_segments(
-    const vector<vec3i>& triangles, const geodesic_path& path);
+vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
+    const vector<vec3f>& positions, const geodesic_path& path);
 
 geodesic_path compute_geodesic_path(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end);

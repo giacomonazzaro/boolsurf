@@ -486,13 +486,51 @@ inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
       mesh.adjacencies, control_points, subdivisions);
 }
 
+inline vector<mesh_segment> make_segments(
+    const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
+  auto path      = compute_geodesic_path(mesh, start, end);
+  auto threshold = 0.001f;
+  for (auto& l : path.lerps) {
+    l = yocto::clamp(l, 0 + threshold, 1 - threshold);
+  }
+  auto segments = mesh_segments(mesh.triangles, mesh.positions, path);
+  auto t        = path_parameters(path, mesh.triangles, mesh.positions);
+  for (int i = 0; i < segments.size(); i++) {
+    segments[i].t_start = t[i];
+    segments[i].t_end   = t[i + 1];
+  }
+  return segments;
+};
+
+vector<mesh_segment> make_bezier_segments(const bool_mesh& mesh,
+    const array<mesh_point, 4>& control_polygon, int num_subdivisions) {
+  auto result = vector<mesh_segment>{};
+  auto points = bezier_spline(mesh, control_polygon, num_subdivisions);
+  for (int k = 0; k < points.size() - 1; k++) {
+    auto segments = make_segments(mesh, points[k], points[k + 1]);
+    auto min      = float(k) / points.size();
+    auto max      = float(k + 1) / points.size();
+    for (auto& s : segments) {
+      s.t_start = s.t_start * (max - min) + min;
+      s.t_end   = s.t_end * (max - min) + min;
+    }
+    result += segments;
+  }
+  return result;
+}
+
 void update_output(Spline_Output& output, const Spline_Input& input,
     const bool_mesh& mesh, const hash_set<int>& curves_to_update) {
   for (auto curve_id : curves_to_update) {
-    if (output.points.size() <= curve_id) output.points.resize(curve_id + 1);
-    auto control_polygon    = input.control_polygon(curve_id);
-    output.points[curve_id] = bezier_spline(
-        mesh, control_polygon, input.num_subdivisions);
+    if (output.segments.size() <= curve_id) output.segments.resize(curve_id + 1);
+    auto control_polygon = input.control_polygon(curve_id);
+    if (control_polygon[0] == control_polygon[3]) {
+      output.segments[curve_id] = make_segments(
+          mesh, control_polygon[0], control_polygon[3]);
+    } else {
+      output.segments[curve_id] = make_bezier_segments(
+          mesh, control_polygon, input.num_subdivisions);
+    }
   }
 }
 
@@ -501,10 +539,11 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
     vector<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
   for (auto curve_id : cache.curves_to_update) {
-    cache.curves[curve_id].positions.resize(output.points[curve_id].size());
-    for (int i = 0; i < output.points[curve_id].size(); i++) {
+    cache.curves[curve_id].positions.resize(output.segments[curve_id].size());
+    for (int i = 0; i < output.segments[curve_id].size(); i++) {
+        auto& segment = output.segments[curve_id][i];
       cache.curves[curve_id].positions[i] = eval_position(
-          mesh.triangles, mesh.positions, output.points[curve_id][i]);
+                                                          mesh.triangles, mesh.positions, {segment.face, segment.start});
     }
   }
 
