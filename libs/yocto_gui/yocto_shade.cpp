@@ -180,30 +180,31 @@ static const char* precompute_irradiance_fragment();
 static const char* precompute_reflections_fragment();
 
 static void init_environment(
-    shade_scene& scene, shade_environment& environment);
-static void init_envlight(shade_scene& scene, shade_environment& environment);
+    shade_environment& environment, const shade_texture& texture);
+static void init_envlight(shade_environment& environment,
+    int diffuse_samples = 64, int specular_samples = 256);
 
 // Initialize an OpenGL scene
-void init_scene(shade_scene& scene, bool instanced_drawing) {
-  if (is_initialized(scene.instance_program)) return;
-  set_program(scene.instance_program,
+static void init_scene_state(shade_scene& scene, bool instanced_drawing) {
+  if (is_initialized(scene.program)) return;
+  set_program(scene.program,
       instanced_drawing ? shade_instanced_vertex() : shade_instance_vertex(),
       shade_instance_fragment(), true);
   // set_program(scene.envlight_program, shade_instance_vertex(),
   //     shade_instance_fragment(), true);
-  set_program(scene.environment_program, precompute_cubemap_vertex(),
+  set_program(scene.environment.program, precompute_cubemap_vertex(),
       shade_environment_fragment(), true);
 }
 
-void init_scene(
-    shade_scene& glscene, const scene_data& scene, bool instanced_drawing) {
-  init_scene(glscene, instanced_drawing);
+void init_scene(shade_scene& glscene, const scene_data& scene,
+    bool instanced_drawing, bool precompute_envlight) {
+  init_scene_state(glscene, instanced_drawing);
 
   for (auto& shape : scene.shapes) {
     auto shape_id = add_shape(glscene);
     set_shape(glscene.shapes[shape_id], shape);
   }
-    
+
   // TODO(giacomo): Incomplete.
   // for (auto& texture : scene.textures) {
   //   auto texture_id = add_texture(glscene);
@@ -213,32 +214,32 @@ void init_scene(
   //   auto environment_id = add_environment(glscene);
   //   set_environment(glscene.environments[environment_id], environment);
   // }
-}
 
-// Initialize data for environment lighting
-void init_environments(shade_scene& scene, bool precompute_envlight) {
-  for (auto& environment : scene.environments) {
-    init_environment(scene, environment);
-    if (precompute_envlight) init_envlight(scene, environment);
+  if (scene.environments.size() > 0) {
+    assert(scene.environments.size() == 1 &&
+           "Only a single environment is supported.");
+    init_environment(glscene.environment,
+        glscene.textures[scene.environments[0].emission_tex]);
+    if (precompute_envlight) init_envlight(glscene.environment);
   }
 }
 
 // Check if we have an envlight
 bool has_envlight(const shade_scene& scene) {
-  return !scene.environments.empty() && !scene.envlight_shapes.empty();
+  return scene.environment.envlight_shape.shape_id != 0;
 }
 
 // Clear an OpenGL scene
 void clear_scene(shade_scene& scene) {
   for (auto& texture : scene.textures) clear_texture(texture);
   for (auto& shape : scene.shapes) clear_shape(shape);
-  for (auto& shape : scene.envlight_shapes) clear_shape(shape);
-  for (auto& cubemap : scene.envlight_cubemaps) clear_cubemap(cubemap);
-  for (auto& cubemap : scene.envlight_diffuses) clear_cubemap(cubemap);
-  for (auto& cubemap : scene.envlight_speculars) clear_cubemap(cubemap);
-  for (auto& texture : scene.envlight_brdfluts) clear_texture(texture);
-  clear_program(scene.environment_program);
-  clear_program(scene.instance_program);
+  clear_shape(scene.environment.envlight_shape);
+  clear_cubemap(scene.environment.envlight_cubemap);
+  clear_cubemap(scene.environment.envlight_diffuse);
+  clear_cubemap(scene.environment.envlight_specular);
+  clear_texture(scene.environment.envlight_brdflut);
+  clear_program(scene.environment.program);
+  clear_program(scene.program);
 }
 
 // add texture
@@ -267,29 +268,6 @@ void set_shape(shade_shape& glshape, const shape_data& shape, bool edges) {
   set_normals(glshape, shape.normals);
   set_texcoords(glshape, shape.texcoords);
   set_colors(glshape, shape.colors);
-}
-
-// environment properties
-glenvironment_handle add_environment(shade_scene& scene) {
-  scene.environments.emplace_back();
-  return (int)scene.environments.size() - 1;
-}
-void set_frame(shade_environment& environment, const frame3f& frame) {
-  environment.frame = frame;
-}
-void set_emission(shade_environment& environment, const vec3f& emission,
-    gltexture_handle emission_tex) {
-  environment.emission     = emission;
-  environment.emission_tex = emission_tex;
-}
-
-glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
-    const vec3f& emission, gltexture_handle emission_tex) {
-  auto  handle      = add_environment(scene);
-  auto& environment = scene.environments[handle];
-  set_frame(environment, frame);
-  set_emission(environment, emission, emission_tex);
-  return handle;
 }
 
 struct shade_view {
@@ -382,26 +360,28 @@ static void set_instance_uniforms(const shade_scene& scene,
 
 static void draw_shape(shade_shape& shape) { draw_shape((ogl_shape&)shape); }
 
-void draw_environments(
-    shade_scene& scene, const shade_view& view, const shade_params& params) {
+void draw_environment(shade_scene& glscene, const scene_data& scene,
+    const shade_view& view, const shade_params& params) {
+  if (scene.environments.empty()) return;
   if (params.hide_environment) return;
-  auto& program = scene.environment_program;
+  auto& program = glscene.environment.program;
   if (!is_initialized(program)) return;
   bind_program(program);
   set_view_uniforms(program, view);
   set_params_uniforms(program, params);
-  for (auto& environment : scene.environments) {
-    if (environment.envlight_cubemap == glinvalid_handle) continue;
-    set_uniform(program, "emission", environment.emission);
-    set_uniform(program, "emission_tex",
-        scene.envlight_cubemaps[environment.envlight_cubemap], 0);
-    draw_shape(scene.envlight_shapes[environment.envlight_shape]);
-  }
+
+  auto& environment   = scene.environments[0];
+  auto& glenvironment = glscene.environment;
+  set_uniform(program, "emission", environment.emission);
+  set_uniform(program, "emission_tex", glenvironment.envlight_cubemap, 0);
+  draw_shape(glenvironment.envlight_shape);
+
   unbind_program();
 }
 
-void set_lighting_uniforms(ogl_program& program, const shade_scene& scene,
-    const shade_view& view, const shade_params& params) {
+void set_lighting_uniforms(ogl_program& program, const shade_scene& glscene,
+    const scene_data& scene, const shade_view& view,
+    const shade_params& params) {
   struct gui_light {
     vec3f position = {0, 0, 0};
     vec3f emission = {0, 0, 0};
@@ -420,20 +400,18 @@ void set_lighting_uniforms(ogl_program& program, const shade_scene& scene,
       &camera_light0, &camera_light1, &camera_light2, &camera_light3};
 
   auto lighting = params.lighting;
-  if (lighting == shade_lighting_type::envlight && !has_envlight(scene))
-    lighting = shade_lighting_type::camlight;
-  if (lighting == shade_lighting_type::envlight && has_envlight(scene)) {
-    if (!has_envlight(scene)) return;
-    auto environment = scene.environments.front();
+
+  if (lighting == shade_lighting_type::envlight) {
+    if (!has_envlight(glscene)) return;
     set_uniform(program, "lighting", 2);
     set_uniform(program, "lights_num", 0);
-    set_uniform(program, "envlight_scale", environment.emission);
+    set_uniform(program, "envlight_scale", scene.environments.at(0).emission);
     set_uniform(program, "envlight_irradiance",
-        scene.envlight_diffuses[environment.envlight_diffuse_], 6);
+        glscene.environment.envlight_diffuse, 6);
     set_uniform(program, "envlight_reflection",
-        scene.envlight_speculars[environment.envlight_specular_], 7);
-    set_uniform(program, "envlight_brdflut",
-        scene.envlight_brdfluts[environment.envlight_brdflut_], 8);
+        glscene.environment.envlight_specular, 7);
+    set_uniform(
+        program, "envlight_brdflut", glscene.environment.envlight_brdflut, 8);
   } else if (lighting == shade_lighting_type::camlight) {
     auto& lights = camera_lights;
     set_uniform(program, "lighting", 1);
@@ -472,7 +450,7 @@ void set_lighting_uniforms(ogl_program& program, const shade_scene& scene,
 static void draw_instances(shade_scene& glscene, const scene_data& scene,
     const shade_view& view, const shade_params& params) {
   // set program
-  auto& program = glscene.instance_program;
+  auto& program = glscene.program;
   bind_program(program);
 
   // set glscene uniforms
@@ -480,7 +458,7 @@ static void draw_instances(shade_scene& glscene, const scene_data& scene,
   set_params_uniforms(program, params);
 
   // set lighting uniforms
-  set_lighting_uniforms(program, glscene, view, params);
+  set_lighting_uniforms(program, glscene, scene, view, params);
 
   set_ogl_wireframe(params.wireframe);
   for (auto& instance : scene.instances) {
@@ -511,15 +489,15 @@ static shade_view make_scene_view(const camera_data& camera,
   return view;
 }
 
-void draw_scene(shade_scene& glscene, const scene_data& scene, const vec4i& viewport,
-    const shade_params& params) {
+void draw_scene(shade_scene& glscene, const scene_data& scene,
+    const vec4i& viewport, const shade_params& params) {
   clear_ogl_framebuffer(params.background);
   set_ogl_viewport(viewport);
 
   auto& camera = scene.cameras.at(params.camera);
   auto  view   = make_scene_view(camera, viewport, params);
   draw_instances(glscene, scene, view, params);
-  draw_environments(glscene, view, params);
+  draw_environment(glscene, scene, view, params);
 }
 
 // image based lighting
@@ -606,65 +584,36 @@ static void precompute_brdflut(ogl_texture& texture) {
 }
 
 static void init_environment(
-    shade_scene& scene, shade_environment& environment) {
-  // init drawing data
-  if (environment.envlight_cubemap == glinvalid_handle) {
-    scene.envlight_cubemaps.emplace_back();
-    environment.envlight_cubemap = (int)scene.envlight_cubemaps.size() - 1;
-  }
-  if (environment.envlight_shape == glinvalid_handle) {
-    scene.envlight_shapes.emplace_back();
-    environment.envlight_shape = (int)scene.envlight_shapes.size() - 1;
-  }
-
+    shade_environment& environment, const shade_texture& texture) {
   // init program and shape for drawing the environment
-  set_cube_shape(scene.envlight_shapes[environment.envlight_shape]);
+  set_cube_shape(environment.envlight_shape);
 
   // precompute cubemap from environment texture
-  auto size    = scene.textures[environment.emission_tex].height;
-  auto program = ogl_program{};
-  set_program(program, precompute_cubemap_vertex(),
+  auto size = texture.height;
+  set_program(environment.program, precompute_cubemap_vertex(),
       precompute_environment_fragment(), true);
-  precompute_cubemap(scene.envlight_cubemaps[environment.envlight_cubemap],
-      scene.textures[environment.emission_tex], program, size, 1);
+  precompute_cubemap(
+      environment.envlight_cubemap, texture, environment.program, size, 1);
 }
 
-void init_envlight(shade_scene& scene, shade_environment& environment) {
-  // init drawing data
-  if (environment.envlight_diffuse_ == glinvalid_handle) {
-    scene.envlight_diffuses.emplace_back();
-    environment.envlight_diffuse_ = (int)scene.envlight_diffuses.size() - 1;
-  }
-  if (environment.envlight_cubemap == glinvalid_handle) {
-    scene.envlight_cubemaps.emplace_back();
-    environment.envlight_cubemap = (int)scene.envlight_cubemaps.size() - 1;
-  }
-  if (environment.envlight_specular_ == glinvalid_handle) {
-    scene.envlight_speculars.emplace_back();
-    environment.envlight_specular_ = (int)scene.envlight_speculars.size() - 1;
-  }
-  if (environment.envlight_brdflut_ == glinvalid_handle) {
-    scene.envlight_brdfluts.emplace_back();
-    environment.envlight_brdflut_ = (int)scene.envlight_brdfluts.size() - 1;
-  }
+void init_envlight(
+    shade_environment& environment, int diffuse_samples, int specular_samples) {
   // precompute irradiance map
   auto diffuse_program = ogl_program{};
   set_program(diffuse_program, precompute_cubemap_vertex(),
       precompute_irradiance_fragment(), true);
-  precompute_cubemap(scene.envlight_diffuses[environment.envlight_diffuse_],
-      scene.envlight_cubemaps[environment.envlight_cubemap], diffuse_program,
-      64);
+  precompute_cubemap(environment.envlight_diffuse, environment.envlight_cubemap,
+      diffuse_program, diffuse_samples);
 
   // precompute specular map
   auto specular_program = ogl_program{};
   set_program(specular_program, precompute_cubemap_vertex(),
       precompute_reflections_fragment(), true);
-  precompute_cubemap(scene.envlight_speculars[environment.envlight_specular_],
-      scene.envlight_cubemaps[environment.envlight_cubemap], specular_program,
-      256, 6);
+  precompute_cubemap(environment.envlight_specular,
+      environment.envlight_cubemap, specular_program, specular_samples, 6);
 
   // precompute lookup texture for specular brdf
-  precompute_brdflut(scene.envlight_brdfluts[environment.envlight_brdflut_]);
+  precompute_brdflut(environment.envlight_brdflut);
 }
 
 static const char* shade_instance_vertex() {

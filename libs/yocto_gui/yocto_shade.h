@@ -55,56 +55,41 @@ using std::vector;
 namespace yocto {
 
 // Handles
-using glcamera_handle              = int;
 using gltexture_handle             = int;
 using glcubemap_handle             = int;
 using glshape_handle               = int;
-using glmaterial_handle            = int;
-using glinstance_handle            = int;
 using glenvironment_handle         = int;
-using glscene_handle               = int;
 inline const auto glinvalid_handle = -1;
 
-// Opengl texture
+// OpenGL texture
 struct shade_texture : ogl_texture {};
 
-// Opengl shape
+// OpenGL shape
 struct shade_shape : ogl_shape {};
 
-// Opengl environment
+// OpenGL environment
 struct shade_environment {
-  // environment properties
-  frame3f          frame        = identity3x4f;
-  vec3f            emission     = {1, 1, 1};
-  gltexture_handle emission_tex = glinvalid_handle;
+  // Cube and cubemap for rendering background environment.
+  shade_shape envlight_shape = {};
 
-  // drawing data
-  glshape_handle   envlight_shape   = glinvalid_handle;
-  glcubemap_handle envlight_cubemap = glinvalid_handle;
+  // Precomputed textures for image based lighting.
+  ogl_cubemap envlight_cubemap  = {};
+  ogl_cubemap envlight_diffuse  = {};
+  ogl_cubemap envlight_specular = {};
+  ogl_texture envlight_brdflut  = {};
 
-  // envlight precomputed data
-  glcubemap_handle envlight_diffuse_  = glinvalid_handle;
-  glcubemap_handle envlight_specular_ = glinvalid_handle;
-  gltexture_handle envlight_brdflut_  = glinvalid_handle;
+  ogl_program program;
 };
 
-// Opengl scene
+// OpenGL scene
 struct shade_scene {
   // scene objects
-  vector<shade_shape>       shapes       = {};
-  vector<shade_texture>     textures     = {};
-  vector<shade_environment> environments = {};
-
-  // data for envmaps
-  vector<shade_shape> envlight_shapes    = {};
-  vector<ogl_cubemap> envlight_cubemaps  = {};
-  vector<ogl_cubemap> envlight_diffuses  = {};
-  vector<ogl_cubemap> envlight_speculars = {};
-  vector<ogl_texture> envlight_brdfluts  = {};
+  vector<shade_shape>   shapes      = {};
+  vector<shade_texture> textures    = {};
+  shade_environment     environment = {};
 
   // programs
-  ogl_program environment_program;
-  ogl_program instance_program;
+  ogl_program program;
 
   // disable copy construction
   shade_scene()                   = default;
@@ -146,11 +131,8 @@ struct shade_params {
 };
 
 // Initialize an OpenGL scene
-void init_scene(shade_scene& scene, bool instanced_drawing = false);
 void init_scene(shade_scene& glscene, const scene_data& scene,
-    bool instanced_drawing = false);
-
-bool is_initialized(const shade_scene& scene);
+    bool instanced_drawing = false, bool precompute_envlight = false);
 
 // Initialize data for environment lighting
 void init_environments(shade_scene& scene, bool precompute_envlight = true);
@@ -162,11 +144,8 @@ bool has_envlight(const shade_scene& scene);
 void clear_scene(shade_scene& scene);
 
 // add scene elements
-glcamera_handle      add_camera(shade_scene& scene);
 gltexture_handle     add_texture(shade_scene& scene);
-glmaterial_handle    add_material(shade_scene& scene);
 glshape_handle       add_shape(shade_scene& scene);
-glinstance_handle    add_instance(shade_scene& scene);
 glenvironment_handle add_environment(shade_scene& scene);
 
 // shape properties
@@ -193,12 +172,11 @@ const ogl_arraybuffer& get_texcoords(const shade_shape& shape);
 const ogl_arraybuffer& get_colors(const shade_shape& shape);
 const ogl_arraybuffer& get_tangents(const shade_shape& shape);
 
-
 // set shape object
 void set_shape(
     shade_shape& glshape, const shape_data& shape, bool edges = false);
 
-// environment 
+// environment
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
     const vec3f& emission, gltexture_handle emission_tex = glinvalid_handle);
 void set_frame(shade_environment& environment, const frame3f& frame);
