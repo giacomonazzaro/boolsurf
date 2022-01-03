@@ -602,49 +602,49 @@ vector<Svg_Shape> load_svg(const string& filename) {
 void init_from_svg(bool_state& state, const bool_mesh& mesh,
     const mesh_point& center, const vector<Svg_Shape>& svg, float svg_size,
     int svg_subdivs) {
-  auto p0  = eval_position(mesh, {center.face, {0, 0}});
-  auto p1  = eval_position(mesh, {center.face, {1, 0}});
-  auto rot = mat2f{};
-  {
-    auto frame = mat3f{};
-    frame.x    = normalize(p1 - p0);
-    frame.z    = eval_normal(mesh, center.face);
-    frame.y    = normalize(cross(frame.z, frame.x));
-
-    auto up = vec3f{0, 1, 0};
-    auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
-    rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
-  }
-
-  for (auto& shape : svg) {
-    for (auto& path : shape.paths) {
-      auto& polygon = state.polygons.emplace_back();
-
-      auto control_points = vector<mesh_point>{};
-      // polygon.center = center;
-      // polygon.frame  = mat2f{rot, vec2f{-rot.y, rot.x}};
-      // polygon.color  = shape.color;
-      for (auto& segment : path) {
-        // polygon.curves.push_back({});
-        for (int i = 0; i < 3; i++) {
-          // vec2f uv = clamp(segment[i], 0.0f, 1.0f);
-          vec2f uv = segment[i];
-          uv -= vec2f{0.5, 0.5};
-          uv = rot * uv;
-          uv *= svg_size;
-          auto line = straightest_path(mesh, center, uv);
-          control_points += line.end;
-        }
-      }
-      auto bezier = compute_bezier_path(mesh.dual_solver, mesh.triangles,
-          mesh.positions, mesh.adjacencies, control_points, svg_subdivs);
-
-      for (int i = 0; i < bezier.size() - 1; i++) {
-        if (i > 0 && bezier[i] == bezier[i - 1]) continue;
-        auto point = bezier[i];
-        polygon += {point, {point, point}};
-//        state.points += bezier[i];
-      }
-    }
-  }
+//  auto p0  = eval_position(mesh, {center.face, {0, 0}});
+//  auto p1  = eval_position(mesh, {center.face, {1, 0}});
+//  auto rot = mat2f{};
+//  {
+//    auto frame = mat3f{};
+//    frame.x    = normalize(p1 - p0);
+//    frame.z    = eval_normal(mesh, center.face);
+//    frame.y    = normalize(cross(frame.z, frame.x));
+//
+//    auto up = vec3f{0, 1, 0};
+//    auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
+//    rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
+//  }
+//
+//  for (auto& shape : svg) {
+//    for (auto& path : shape.paths) {
+//      auto& polygon = state.polygons.emplace_back();
+//
+//      auto control_points = vector<mesh_point>{};
+//      // polygon.center = center;
+//      // polygon.frame  = mat2f{rot, vec2f{-rot.y, rot.x}};
+//      // polygon.color  = shape.color;
+//      for (auto& segment : path) {
+//        // polygon.curves.push_back({});
+//        for (int i = 0; i < 3; i++) {
+//          // vec2f uv = clamp(segment[i], 0.0f, 1.0f);
+//          vec2f uv = segment[i];
+//          uv -= vec2f{0.5, 0.5};
+//          uv = rot * uv;
+//          uv *= svg_size;
+//          auto line = straightest_path(mesh, center, uv);
+//          control_points += line.end;
+//        }
+//      }
+//      auto bezier = compute_bezier_path(mesh.dual_solver, mesh.triangles,
+//          mesh.positions, mesh.adjacencies, control_points, svg_subdivs);
+//
+//      for (int i = 0; i < bezier.size() - 1; i++) {
+//        if (i > 0 && bezier[i] == bezier[i - 1]) continue;
+//        auto point = bezier[i];
+//        polygon += {point, {point, point}};
+////        state.points += bezier[i];
+//      }
+//    }
+//  }
 }

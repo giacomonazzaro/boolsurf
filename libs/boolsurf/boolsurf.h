@@ -102,12 +102,6 @@ struct shape_boundary_intersection {
 };
 
 struct bool_state {
-  vector<mesh_polygon> polygons = {{}};  // TODO(giacomo): Remove.
-
-  // input
-  // vector<vector<mesh_polygon>> splines = {};
-
-  // output
   vector<shape> bool_shapes = {{}};
 
   vector<shape_boundary_intersection> intersections    = {};
