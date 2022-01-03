@@ -35,6 +35,19 @@ struct Spline_Input {
   }
 };
 
+inline vec2i curves_adjacent_to_point(const Spline_Input& input, int point_id) {
+  auto result = vec2i{-1, -1};
+  auto prev   = point_id - 1;
+  if (prev < 0) {
+    if (input.is_closed)
+      prev = input.control_points.size() - 1;
+    else
+      prev = -1;
+  }
+  result = {prev, point_id};
+  return result;
+}
+
 struct Spline_Output {
   vector<vector<mesh_segment>> segments = {};
 };

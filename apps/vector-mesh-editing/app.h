@@ -306,17 +306,9 @@ inline void process_mouse(
   updated_shapes +=
       spline.cache.points[app.editing.selection.control_point_id].handle_ids[1];
 
-  // TODO(giacomo): Cleanup.
-  auto touched_curves = vector<int>{};
-  auto prev           = selection.control_point_id - 1;
-  if (prev < 0) {
-    if (spline.input.is_closed)
-      prev = spline.input.control_points.size() - 1;
-    else
-      prev = 0;
-  }
-  touched_curves = {selection.control_point_id, prev};
-  for (auto curve : touched_curves) {
+  auto curves = curves_adjacent_to_point(
+      spline.input, selection.control_point_id);
+  for (auto curve : curves) {
     if (curve >= 0 && curve < spline.input.num_curves())
       spline.cache.curves_to_update.insert(curve);
   }
