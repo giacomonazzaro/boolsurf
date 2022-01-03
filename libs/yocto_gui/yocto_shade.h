@@ -300,6 +300,8 @@ glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
 // draw scene
 void draw_scene(
     shade_scene& scene, const vec4i& viewport, const shade_params& params);
+void draw_scene(shade_scene& glscene, const scene_data& scene,
+    const vec4i& viewport, const shade_params& params);
 
 }  // namespace yocto
 

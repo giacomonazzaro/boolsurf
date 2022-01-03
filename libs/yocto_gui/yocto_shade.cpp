@@ -258,7 +258,8 @@ glcamera_handle add_camera(shade_scene& scene) {
   scene.cameras.emplace_back();
   return (int)scene.cameras.size() - 1;
 }
-void set_camera(shade_camera& glcamera, const camera_data& camera, float near, float far) {
+void set_camera(
+    shade_camera& glcamera, const camera_data& camera, float near, float far) {
   glcamera.frame    = camera.frame;
   glcamera.lens     = camera.lens;
   glcamera.aspect   = camera.aspect;
@@ -503,6 +504,76 @@ void set_instance_uniforms(const shade_scene& scene, ogl_program& program,
   assert_ogl_error();
 }
 
+// Draw a shape
+static void set_instance_uniforms(const shade_scene& scene,
+    ogl_program& program, const frame3f& frame, const shape_data& shape,
+    const material_data& material, const shade_params& params) {
+  auto shape_xform     = frame_to_mat(frame);
+  auto shape_inv_xform = transpose(
+      frame_to_mat(inverse(frame, params.non_rigid_frames)));
+  set_uniform(program, "frame", shape_xform);
+  set_uniform(program, "frameit", shape_inv_xform);
+  set_uniform(program, "offset", 0.0f);
+  set_uniform(program, "faceted", params.faceted || shape.normals.empty());
+  //  if (instance.highlighted) {
+  //    set_uniform(program, "highlight", vec4f{1, 1, 0, 1});
+  //  } else {
+  //    set_uniform(program, "highlight", vec4f{0, 0, 0, 0});
+  //  }
+
+  auto set_texture = [&scene](ogl_program& program, const char* name,
+                         const char* name_on, gltexture_handle texture,
+                         int unit) {
+    if (texture == glinvalid_handle) {
+      auto otexture = ogl_texture{};
+      set_uniform(program, name, name_on, otexture, unit);
+    } else {
+      set_uniform(program, name, name_on, scene.textures[texture], unit);
+    }
+  };
+
+  set_uniform(
+      program, "unlit", false);  // material.type == material_type::unlit);
+  set_uniform(program, "emission", material.emission);
+  set_uniform(program, "diffuse", material.color);
+  set_uniform(program, "specular",
+      vec3f{material.metallic, material.metallic, material.metallic});
+  set_uniform(program, "roughness", material.roughness);
+  set_uniform(program, "opacity", material.opacity);
+  set_uniform(program, "double_sided", params.double_sided);
+  set_texture(
+      program, "emission_tex", "emission_tex_on", material.emission_tex, 0);
+  set_texture(program, "diffuse_tex", "diffuse_tex_on", material.color_tex, 1);
+  set_texture(program, "specular_tex", "specular_tex_on", -1, 2);
+  set_texture(
+      program, "roughness_tex", "roughness_tex_on", material.roughness_tex, 3);
+  set_texture(program, "opacity_tex", "opacity_tex_on", -1, 4);
+  set_texture(
+      program, "normalmap_tex", "normalmap_tex_on", material.normal_tex, 5);
+
+  assert_ogl_error();
+
+  // switch (shape.elements) {
+  //   case ogl_element_type::points: set_uniform(program, "element", 1); break;
+  //   case ogl_element_type::line_strip:
+  //   case ogl_element_type::lines: set_uniform(program, "element", 2); break;
+  //   case ogl_element_type::triangle_strip:
+  //   case ogl_element_type::triangle_fan:
+  //   case ogl_element_type::triangles: set_uniform(program, "element", 3);
+  //   break;
+  // }
+  if (!shape.points.empty())
+    set_uniform(program, "element", 1);
+  else if (!shape.lines.empty())
+    set_uniform(program, "element", 2);
+  else if (!shape.triangles.empty())
+    set_uniform(program, "element", 3);
+  else if (!shape.quads.empty())
+    set_uniform(program, "element", 3);  // Quads were converted into triangles.
+
+  assert_ogl_error();
+}
+
 static void draw_shape(shade_shape& shape) { draw_shape((ogl_shape&)shape); }
 
 void draw_environments(
@@ -592,7 +663,7 @@ void set_lighting_uniforms(ogl_program& program, const shade_scene& scene,
   assert_ogl_error();
 }
 
-void draw_instances(
+static void draw_instances(
     shade_scene& scene, const shade_view& view, const shade_params& params) {
   // set program
   auto& program = scene.instance_program;
@@ -616,7 +687,49 @@ void draw_instances(
   unbind_program();
 }
 
+static void draw_instances(shade_scene& glscene, const scene_data& scene,
+    const shade_view& view, const shade_params& params) {
+  // set program
+  auto& program = glscene.instance_program;
+  bind_program(program);
+
+  // set glscene uniforms
+  set_view_uniforms(program, view);
+  set_params_uniforms(program, params);
+
+  // set lighting uniforms
+  set_lighting_uniforms(program, glscene, view, params);
+
+  set_ogl_wireframe(params.wireframe);
+  for (auto& instance : scene.instances) {
+    if (!instance.visible) continue;
+    set_instance_uniforms(glscene, program, instance.frame,
+        scene.shapes.at(instance.shape), scene.materials.at(instance.material),
+        params);
+    draw_shape(glscene.shapes.at(instance.shape));
+  }
+  unbind_program();
+}
+
 static shade_view make_scene_view(const shade_camera& camera,
+    const vec4i& viewport, const shade_params& params) {
+  auto camera_aspect = (float)viewport.z / (float)viewport.w;
+  auto camera_yfov =
+      camera_aspect >= 0
+          ? (2 * atan(camera.film / (camera_aspect * 2 * camera.lens)))
+          : (2 * atan(camera.film / (2 * camera.lens)));
+  auto view_matrix       = frame_to_mat(inverse(camera.frame));
+  auto projection_matrix = perspective_mat(
+      camera_yfov, camera_aspect, params.near, params.far);
+
+  auto view              = shade_view{};
+  view.camera_frame      = camera.frame;
+  view.view_matrix       = view_matrix;
+  view.projection_matrix = projection_matrix;
+  return view;
+}
+
+static shade_view make_scene_view(const camera_data& camera,
     const vec4i& viewport, const shade_params& params) {
   auto camera_aspect = (float)viewport.z / (float)viewport.w;
   auto camera_yfov =
@@ -643,6 +756,17 @@ void draw_scene(
   auto  view   = make_scene_view(camera, viewport, params);
   draw_instances(scene, view, params);
   draw_environments(scene, view, params);
+}
+
+void draw_scene(shade_scene& glscene, const scene_data& scene, const vec4i& viewport,
+    const shade_params& params) {
+  clear_ogl_framebuffer(params.background);
+  set_ogl_viewport(viewport);
+
+  auto& camera = scene.cameras.at(params.camera);
+  auto  view   = make_scene_view(camera, viewport, params);
+  draw_instances(glscene, scene, view, params);
+  draw_environments(glscene, view, params);
 }
 
 // image based lighting

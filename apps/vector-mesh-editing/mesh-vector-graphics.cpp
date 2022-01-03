@@ -151,8 +151,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     clear_scene(glscene);
   };
   callbacks.draw_cb = [&](const glinput_state& input) {
-    // draw_scene(glscene, scene, input.framebuffer_viewport, params);
-    draw_scene(glscene, input.framebuffer_viewport, {});
+    draw_scene(glscene, scene, input.framebuffer_viewport, {});
   };
 
   // top level combo
@@ -236,7 +235,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     for (auto& entry : app.new_shapes) {
       glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
     }
-    update_new_shapes(app);
+    add_new_shapes(app);
 
     update_splines(app, scene, updated_shapes);
 

@@ -148,7 +148,7 @@ inline int add_shape(App& app, const shape_data& shape = {},
   return id;
 }
 
-inline void update_new_shapes(App& app) {
+inline void add_new_shapes(App& app) {
   auto& scene = app.scene;
   for (auto& [id, shape, frame, material] : app.new_shapes) {
     scene.shapes.resize(max((int)scene.shapes.size(), id + 1));
@@ -721,7 +721,7 @@ inline void update(
 
     if (app.new_shapes.size()) {
       render.stop_render();
-      update_new_shapes(app);
+      add_new_shapes(app);
       // scene.shapes += app.new_shapes;
       // scene.instances += app.new_instances;
       update_splines(app, scene, updated_shapes);
