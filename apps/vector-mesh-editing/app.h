@@ -165,6 +165,8 @@ void update_boolsurf_input(bool_state& state, const App& app) {
   auto timer = scope_timer("update boolsurf input");
 
   auto& mesh = app.mesh;
+    
+  auto sssplines = vector<vector<mesh_polygon>>{};
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.splinesurf.get_spline_view(i);
     if (spline.input.control_points.size() < 2) continue;
@@ -172,13 +174,14 @@ void update_boolsurf_input(bool_state& state, const App& app) {
     // if (test_polygon.empty()) continue;
 
     auto& bool_shape = state.bool_shapes.emplace_back();
-    auto& polygon    = bool_shape.polygons.emplace_back();
+    auto& sspline    = sssplines.emplace_back();
+    auto& boundary = sspline.emplace_back();
     //      polygon.points   = test_polygon;
     for (auto& anchor : spline.input.control_points) {
-      polygon.points.push_back(
+      boundary.push_back(
           {anchor.point, {anchor.handles[0], anchor.handles[1]}});
     }
-    bool_shape.edges = {recompute_polygon_segments(mesh, polygon)};
+    bool_shape.edges = {recompute_polygon_segments(mesh, boundary)};
   }
 }
 

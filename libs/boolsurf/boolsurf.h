@@ -52,24 +52,14 @@ struct mesh_segment {
   int   face    = -1;
 };
 
-namespace yocto {
-struct shade_instance;
-}
-
 struct anchor_point {
   mesh_point point      = {};
   mesh_point handles[2] = {{}, {}};
 };
 
-struct mesh_polygon {
-  vector<anchor_point> points = {};
-
-  bool is_contained_in_single_face = false;
-};
+using mesh_polygon = vector<anchor_point>;
 
 struct shape {
-  vector<mesh_polygon> polygons = {};
-
   vector<vector<vector<mesh_segment>>> edges = {};
 
   vector<int> generators = {};
@@ -79,7 +69,6 @@ struct shape {
   hash_set<int> cells = {};
 
   vector<vector<int>> border_points = {};
-  shade_instance*     borders_shape = nullptr;
 };
 
 // Informazioni per la triangolazione di una faccia della mesh
@@ -113,8 +102,13 @@ struct shape_boundary_intersection {
 };
 
 struct bool_state {
-  vector<mesh_polygon> polygons    = {{}};  // TODO(giacomo): Remove.
-  vector<shape>        bool_shapes = {{}};
+  vector<mesh_polygon> polygons = {{}};  // TODO(giacomo): Remove.
+
+  // input
+  // vector<vector<mesh_polygon>> splines = {};
+
+  // output
+  vector<shape> bool_shapes = {{}};
 
   vector<shape_boundary_intersection> intersections    = {};
   hash_map<int, vec2i>                isecs_generators = {};
@@ -183,7 +177,8 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
-vector<vector<mesh_segment>> recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon);
+vector<vector<mesh_segment>> recompute_polygon_segments(
+    const bool_mesh& mesh, mesh_polygon& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {

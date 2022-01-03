@@ -222,18 +222,13 @@ inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
       auto point = path.end;
 
       // Add point to state.
-        state.polygons[polygon_id].points.push_back({point, {point, point}});
+      state.polygons[polygon_id].push_back({point, {point, point}});
 
-      // for (auto& p : state.points) {
-      //   assert(!(p.face == point.face && p.uv == point.uv));
-      // }
-
-//      state.points.push_back(point);
     }
 
-    if (state.polygons[polygon_id].points.size() <= 2) {
+    if (state.polygons[polygon_id].size() <= 2) {
       assert(0);
-      state.polygons[polygon_id].points.clear();
+      state.polygons[polygon_id].clear();
       continue;
     }
 
@@ -269,13 +264,12 @@ inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
         if (point.face == -1) continue;
 
         // Add point to state.
-        state.polygons[polygon_id].points.push_back({point, {point, point}});
-//        state.points.push_back(point);
+        state.polygons[polygon_id].push_back({point, {point, point}});
       }
 
-      if (state.polygons[polygon_id].points.size() <= 2) {
+      if (state.polygons[polygon_id].size() <= 2) {
         // assert(0);
-        state.polygons[polygon_id].points.clear();
+        state.polygons[polygon_id].clear();
         continue;
       }
 

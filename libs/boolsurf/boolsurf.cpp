@@ -269,21 +269,16 @@ vector<mesh_segment> make_curve_segments(
   return curve;
 }
 
-vector<vector<mesh_segment>> recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
-  auto faces = hash_set<int>();
+vector<vector<mesh_segment>> recompute_polygon_segments(
+    const bool_mesh& mesh, mesh_polygon& polygon) {
   auto result = vector<vector<mesh_segment>>{};
-  for (int i = 0; i < polygon.points.size(); i++) {
-    auto& start = polygon.points[i];
-    faces.insert(polygon.points[i].point.face);
-    faces.insert(polygon.points[i].handles[0].face);
-    faces.insert(polygon.points[i].handles[1].face);
-    auto end = polygon.points[(i + 1) % polygon.points.size()];
+  for (int i = 0; i < polygon.size(); i++) {
+    auto& start = polygon[i];
+    auto  end   = polygon[(i + 1) % polygon.size()];
 
     auto& curve = result.emplace_back();
     curve       = make_curve_segments(mesh, start, end);
   }
-
-  polygon.is_contained_in_single_face = (faces.size() == 1);
   return result;
 }
 
@@ -390,9 +385,10 @@ static mesh_hashgrid compute_hashgrid(
   auto hashgrid = mesh_hashgrid{};
 
   for (auto shape_id = 0; shape_id < shapes.size(); shape_id++) {
-    auto& polygons = shapes[shape_id].polygons;
-    for (auto polygon_id = 0; polygon_id < polygons.size(); polygon_id++) {
-      auto& polygon = polygons[polygon_id];
+    //    auto& polygons = shapes[shape_id].polygons;
+    for (auto polygon_id = 0; polygon_id < shapes[shape_id].edges.size();
+         polygon_id++) {
+      //      auto& polygon = polygons[polygon_id];
       if (shapes[shape_id].edges[polygon_id].empty()) continue;
       if (shapes[shape_id].edges[polygon_id][0].empty()) continue;
       auto& boundary = shapes[shape_id].edges[polygon_id];
@@ -880,7 +876,7 @@ static void add_polygon_intersection_points(bool_state& state,
           auto point  = mesh_point{face, uv};
           auto vertex = add_vertex(
               mesh, hashgrid, point, {-1, -1, -1});  // don't add to polyline
-          //          state.control_points[vertex] = (int)state.points.size();
+          // state.control_points[vertex] = (int)state.points.size();
           state.isecs_generators[vertex] = {poly.polygon, poly.polygon};
           {
             auto t0 = lerp(poly.t[s0], poly.t[s0 + 1], l.x);
@@ -891,7 +887,7 @@ static void add_polygon_intersection_points(bool_state& state,
                 {{{poly.polygon, poly.side_ids[s0], t0},
                     {poly.polygon, poly.side_ids[s1], t1}}});
           }
-          //          state.points.push_back(point);
+          // state.points.push_back(point);
           // printf("self-intersection: polygon %d, vertex %d\n", poly.polygon,
           //     vertex);
 
