@@ -162,6 +162,8 @@ inline void add_new_shapes(App& app) {
 }
 
 void update_boolsurf_input(bool_state& state, const App& app) {
+  auto timer = scope_timer("update boolsurf input");
+
   auto& mesh = app.mesh;
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.splinesurf.get_spline_view(i);

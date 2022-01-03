@@ -229,8 +229,9 @@ vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
   return result;
 }
 
-void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
-  auto faces = hash_set<int>();
+vector<mesh_segment> make_curve_segments(
+    const bool_mesh& mesh, const anchor_point& start, const anchor_point& end) {
+  auto curve = vector<mesh_segment>{};
 
   auto get_segments = [&](const mesh_point& start, const mesh_point& end) {
     auto path      = compute_geodesic_path(mesh, start, end);
@@ -247,6 +248,30 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     return segments;
   };
 
+  if (start.point == start.handles[1] && end.handles[0] == end.point) {
+    curve = get_segments(start.point, end.point);
+  } else {
+    auto control_points = array<mesh_point, 4>{
+        start.point, start.handles[1], end.handles[0], end.point};
+    auto points = compute_bezier_path(mesh.dual_solver, mesh.triangles,
+        mesh.positions, mesh.adjacencies, control_points, 4);
+    for (int k = 0; k < points.size() - 1; k++) {
+      auto segments = get_segments(points[k], points[k + 1]);
+      auto min      = float(k) / points.size();
+      auto max      = float(k + 1) / points.size();
+      for (auto& s : segments) {
+        s.t_start = s.t_start * (max - min) + min;
+        s.t_end   = s.t_end * (max - min) + min;
+      }
+      curve += segments;
+    }
+  }
+  return curve;
+}
+
+void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
+  auto faces = hash_set<int>();
+
   for (int i = 0; i < polygon.points.size(); i++) {
     auto& start = polygon.points[i];
     faces.insert(polygon.points[i].point.face);
@@ -254,25 +279,8 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     faces.insert(polygon.points[i].handles[1].face);
     auto end = polygon.points[(i + 1) % polygon.points.size()];
 
-    if (start.point == start.handles[1] && end.handles[0] == end.point) {
-      polygon.edges.push_back(get_segments(start.point, end.point));
-    } else {
-      auto& curve          = polygon.edges.emplace_back();
-      auto  control_points = array<mesh_point, 4>{
-          start.point, start.handles[1], end.handles[0], end.point};
-      auto points = compute_bezier_path(mesh.dual_solver, mesh.triangles,
-          mesh.positions, mesh.adjacencies, control_points, 4);
-      for (int k = 0; k < points.size() - 1; k++) {
-        auto segments = get_segments(points[k], points[k + 1]);
-        auto min      = float(k) / points.size();
-        auto max      = float(k + 1) / points.size();
-        for (auto& s : segments) {
-          s.t_start = s.t_start * (max - min) + min;
-          s.t_end   = s.t_end * (max - min) + min;
-        }
-        curve += segments;
-      }
-    }
+    auto& curve = polygon.edges.emplace_back();
+    curve       = make_curve_segments(mesh, start, end);
   }
 
   polygon.is_contained_in_single_face = (faces.size() == 1);

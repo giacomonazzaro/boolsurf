@@ -27,7 +27,7 @@ struct facet {
   int                  id      = -1;
 };
 
-struct bool_mesh : scene_shape {
+struct bool_mesh : shape_data {
   vector<vec3i>        adjacencies     = {};
   vector<vec3i>        old_adjacencies = {};
   dual_geodesic_solver dual_solver     = {};
@@ -212,10 +212,10 @@ inline vec3f eval_normal(const bool_mesh& mesh, int face) {
 }
 
 mesh_point intersect_mesh(const bool_mesh& mesh, const shape_bvh& bvh,
-    const scene_camera& camera, const vec2f& uv);
+    const camera_data& camera, const vec2f& uv);
 
 inline mesh_point intersect_mesh(
-    const bool_mesh& mesh, const scene_camera& camera, const vec2f& uv) {
+    const bool_mesh& mesh, const camera_data& camera, const vec2f& uv) {
   return intersect_mesh(mesh, mesh.bvh, camera, uv);
 }
 
