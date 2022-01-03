@@ -2,9 +2,9 @@
 #include <boolsurf/boolsurf.h>
 #include <boolsurf/boolsurf_io.h>
 #include <yocto/yocto_geometry.h>
-#include <yocto/yocto_math.h>
 #include <yocto/yocto_mesh.h>
 #include <yocto/yocto_shape.h>
+#include <yocto_gui/yocto_opengl.h>
 
 #include <functional>
 #include <utility>  // std::move?
@@ -37,6 +37,7 @@ struct App {
   Editing    editing    = {};
   Splinesurf splinesurf = {};
 
+  vector<ogl_shape>   spline_shapes  = {};
   vector<Shape_Entry> new_shapes     = {};
   int                 num_new_shapes = 0;
   // vector<instance_data> new_instances;
@@ -186,10 +187,11 @@ inline void update_cell_graphics(
 
   auto timer = scope_timer("update graphics");
   for (int i = 0; i < state.cells.size(); i++) {
-    auto& cell        = state.cells[i];
-    auto  material_id = app.scene.materials.size();
-    auto& material    = app.scene.materials.emplace_back();
-
+    auto& cell         = state.cells[i];
+    auto  material_id  = app.scene.materials.size();
+    auto& material     = app.scene.materials.emplace_back();
+    material.type      = scene_material_type::glossy;
+    material.roughness = 0.4;
     if (state.labels.size())
       material.color = get_cell_color(state, i, false);
     else
@@ -281,6 +283,7 @@ inline void process_mouse(
     app.bool_state = {};
     update_boolsurf_input(app.bool_state, app);
     compute_cells(app.mesh, app.bool_state);
+    // compute_shapes(app.bool_state);
     update_cell_graphics(app, app.bool_state, updated_shapes);
     reset_mesh(app.mesh);
   }
@@ -522,7 +525,8 @@ vector<mesh_segment> make_bezier_segments(const bool_mesh& mesh,
 void update_output(Spline_Output& output, const Spline_Input& input,
     const bool_mesh& mesh, const hash_set<int>& curves_to_update) {
   for (auto curve_id : curves_to_update) {
-    if (output.segments.size() <= curve_id) output.segments.resize(curve_id + 1);
+    if (output.segments.size() <= curve_id)
+      output.segments.resize(curve_id + 1);
     auto control_polygon = input.control_polygon(curve_id);
     if (control_polygon[0] == control_polygon[3]) {
       output.segments[curve_id] = make_segments(
@@ -541,9 +545,9 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
   for (auto curve_id : cache.curves_to_update) {
     cache.curves[curve_id].positions.resize(output.segments[curve_id].size());
     for (int i = 0; i < output.segments[curve_id].size(); i++) {
-        auto& segment = output.segments[curve_id][i];
+      auto& segment                       = output.segments[curve_id][i];
       cache.curves[curve_id].positions[i] = eval_position(
-                                                          mesh.triangles, mesh.positions, {segment.face, segment.start});
+          mesh.triangles, mesh.positions, {segment.face, segment.start});
     }
   }
 
@@ -695,12 +699,12 @@ inline void update(
     App& app, Render& render, bvh_data& bvh, const glinput_state& input) {
   static auto updated_shapes = vector<int>{};
 
-  auto& scene  = app.scene;
-  auto& params = *render.params_ptr;
-  auto  camera = scene.cameras[params.camera];
-  if (uiupdate_camera_params(input, camera)) {
+  auto& scene         = app.scene;
+  auto& params        = *render.params_ptr;
+  auto  edited_camera = scene.cameras[params.camera];
+  if (uiupdate_camera_params(input, edited_camera)) {
     render.stop_render();
-    scene.cameras[params.camera] = camera;
+    scene.cameras[params.camera] = edited_camera;
     render.restart();
   }
 

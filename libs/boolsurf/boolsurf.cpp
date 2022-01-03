@@ -109,7 +109,7 @@ void init_mesh(bool_mesh& mesh) {
     mesh.quads.clear();
   }
 
-  mesh.normals     = compute_normals(mesh);
+  mesh.normals.clear();
   mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
 
   mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);

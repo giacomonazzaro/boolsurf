@@ -3,6 +3,7 @@
 #include <yocto/yocto_parallel.h>
 #include <yocto/yocto_scene.h>
 #include <yocto/yocto_sceneio.h>
+#include <yocto_gui/yocto_shade.h>
 //
 #include "app.h"
 #include "render.h"
@@ -103,6 +104,14 @@ void run_glview(const glview_params& params) {
 
 #else
 
+void update_glscene(shade_scene& glscene, const scene_data& scene,
+    const vector<int>& updated_shapes, const vector<int>& updated_textures) {
+  for (auto shape_id : updated_shapes) {
+    set_shape(glscene.shapes[shape_id], scene.shapes[shape_id]);
+  }
+  // TODO(giacomo): Update textures.
+}
+
 using app_callback = std::function<void(const glinput_state& input, App& app)>;
 
 void run_app(App& app, const string& name, const glscene_params& params_,
@@ -115,10 +124,6 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 
   // draw params
   auto params = params_;
-
-  // top level combo
-  auto names    = vector<string>{name};
-  auto selected = 0;
 
   // camera names
   auto camera_names = scene.camera_names;
@@ -146,6 +151,10 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   callbacks.draw_cb = [&](const glinput_state& input) {
     draw_scene(glscene, scene, input.framebuffer_viewport, params);
   };
+
+  // top level combo
+  auto names           = vector<string>{name};
+  auto selected        = 0;
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_glcombobox("name", selected, names);
     draw_glcheckbox("flag", app.flag);
@@ -216,8 +225,8 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       close_spline(app.selected_spline(), add_app_shape);
       auto spline_id = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
-      // app.editing.selection.spline_id = spline_id;
     }
+
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
     for (auto& entry : app.new_shapes) {

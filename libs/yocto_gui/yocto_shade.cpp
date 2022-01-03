@@ -311,27 +311,20 @@ void set_normalmap(shade_material& material, gltexture_handle normal_tex) {
 }
 void set_unlit(shade_material& material, bool unlit) { material.unlit = unlit; }
 
-glshape_handle add_shape(shade_scene& scene, const vector<int>& points,
-    const vector<vec2i>& lines, const vector<vec3i>& triangles,
-    const vector<vec4i>& quads, const vector<vec3f>& positions,
-    const vector<vec3f>& normals, const vector<vec2f>& texcoords,
-    const vector<vec4f>& colors, bool edges) {
-  auto  handle = add_shape(scene);
-  auto& shape  = scene.shapes[handle];
-  if (points.size() != 0) {
-    set_points(shape, points);
-  } else if (lines.size() != 0) {
-    set_lines(shape, lines);
-  } else if (triangles.size() != 0) {
-    set_triangles(shape, triangles);
-  } else if (quads.size() != 0) {
-    set_quads(shape, quads);
+void set_shape(shade_shape& glshape, const shape_data& shape, bool edges) {
+  if (shape.points.size() != 0) {
+    set_points(glshape, shape.points);
+  } else if (shape.lines.size() != 0) {
+    set_lines(glshape, shape.lines);
+  } else if (shape.triangles.size() != 0) {
+    set_triangles(glshape, shape.triangles);
+  } else if (shape.quads.size() != 0) {
+    set_quads(glshape, shape.quads);
   }
-  set_positions(shape, positions);
-  set_normals(shape, normals);
-  set_texcoords(shape, texcoords);
-  set_colors(shape, colors);
-  return handle;
+  set_positions(glshape, shape.positions);
+  set_normals(glshape, shape.normals);
+  set_texcoords(glshape, shape.texcoords);
+  set_colors(glshape, shape.colors);
 }
 
 // environment properties
@@ -374,17 +367,13 @@ glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
   return handle;
 }
 
-glinstance_handle add_instance(shade_scene& scene, const frame3f& frame,
-    glshape_handle shape, glmaterial_handle material, bool hidden,
-    bool highlighted) {
-  auto  handle   = add_instance(scene);
-  auto& instance = scene.instances.back();
-  set_frame(instance, frame);
-  set_shape(instance, shape);
-  set_material(instance, material);
-  set_hidden(instance, hidden);
-  set_highlighted(instance, highlighted);
-  return handle;
+void set_instance(shade_instance& glinstance, const instance_data& instance,
+    bool hidden, bool highlighted) {
+  set_frame(glinstance, instance.frame);
+  set_shape(glinstance, instance.shape);
+  set_material(glinstance, instance.material);
+  set_hidden(glinstance, hidden);
+  set_highlighted(glinstance, highlighted);
 }
 
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,

@@ -273,22 +273,21 @@ void set_emission(shade_environment& environment, const vec3f& emission,
 // shortcuts
 glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float lens,
     float aspect, float film = 0.036, float near = 0.001, float far = 10000);
-glmaterial_handle    add_material(shade_scene& scene, const vec3f& emission,
-       const vec3f& color, float specular, float metallic, float roughness,
-       gltexture_handle emission_tex  = glinvalid_handle,
-       gltexture_handle color_tex     = glinvalid_handle,
-       gltexture_handle specular_tex  = glinvalid_handle,
-       gltexture_handle metallic_tex  = glinvalid_handle,
-       gltexture_handle roughness_tex = glinvalid_handle,
-       gltexture_handle normalmap_tex = glinvalid_handle);
-glshape_handle       add_shape(shade_scene& scene, const vector<int>& points,
-          const vector<vec2i>& lines, const vector<vec3i>& triangles,
-          const vector<vec4i>& quads, const vector<vec3f>& positions,
-          const vector<vec3f>& normals, const vector<vec2f>& texcoords,
-          const vector<vec4f>& colors, bool edges = false);
-glinstance_handle    add_instance(shade_scene& scene, const frame3f& frame,
-       glmaterial_handle shape, glmaterial_handle material, bool hidden = false,
-       bool highlighted = false);
+glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
+    const vec3f& color, float specular, float metallic, float roughness,
+    gltexture_handle emission_tex  = glinvalid_handle,
+    gltexture_handle color_tex     = glinvalid_handle,
+    gltexture_handle specular_tex  = glinvalid_handle,
+    gltexture_handle metallic_tex  = glinvalid_handle,
+    gltexture_handle roughness_tex = glinvalid_handle,
+    gltexture_handle normalmap_tex = glinvalid_handle);
+
+void set_shape(
+    shade_shape& glshape, const shape_data& shape, bool edges = false);
+
+void set_instance(shade_instance& glinstance, const instance_data& instance,
+    bool hidden = false, bool highlighted = false);
+
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
     const vec3f& emission, gltexture_handle emission_tex = glinvalid_handle);
 
