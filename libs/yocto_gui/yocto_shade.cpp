@@ -195,6 +195,38 @@ void init_scene(shade_scene& scene, bool instanced_drawing) {
       shade_environment_fragment(), true);
 }
 
+void init_scene(
+    shade_scene& glscene, const scene_data& scene, bool instanced_drawing) {
+  init_scene(glscene, instanced_drawing);
+
+  for (auto& camera : scene.cameras) {
+    auto camera_id = add_camera(glscene);
+    set_camera(glscene.cameras[camera_id], camera);
+  }
+  for (auto& instance : scene.instances) {
+    auto instance_id = add_instance(glscene);
+    set_instance(glscene.instances[instance_id], instance);
+  }
+  for (auto& shape : scene.shapes) {
+    auto shape_id = add_shape(glscene);
+    set_shape(glscene.shapes[shape_id], shape);
+  }
+  for (auto& material : scene.materials) {
+    auto material_id = add_material(glscene);
+    set_material(glscene.materials[material_id], material);
+  }
+
+  // TODO(giacomo): Incomplete.
+  // for (auto& texture : scene.textures) {
+  //   auto texture_id = add_texture(glscene);
+  //   set_texture(glscene.textures[texture_id], texture);
+  // }
+  // for (auto& environment : scene.environments) {
+  //   auto environment_id = add_environment(glscene);
+  //   set_environment(glscene.environments[environment_id], environment);
+  // }
+}
+
 // Initialize data for environment lighting
 void init_environments(shade_scene& scene, bool precompute_envlight) {
   for (auto& environment : scene.environments) {
@@ -225,6 +257,16 @@ void clear_scene(shade_scene& scene) {
 glcamera_handle add_camera(shade_scene& scene) {
   scene.cameras.emplace_back();
   return (int)scene.cameras.size() - 1;
+}
+void set_camera(shade_camera& glcamera, const camera_data& camera, float near, float far) {
+  glcamera.frame    = camera.frame;
+  glcamera.lens     = camera.lens;
+  glcamera.aspect   = camera.aspect;
+  glcamera.film     = camera.film;
+  glcamera.near     = near;
+  glcamera.far      = far;
+  glcamera.aperture = camera.aperture;
+  glcamera.focus    = camera.focus;
 }
 void set_frame(shade_camera& camera, const frame3f& frame) {
   camera.frame = frame;
@@ -351,20 +393,17 @@ glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float lens,
   set_nearfar(camera, near, far);
   return handle;
 }
-glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
-    const vec3f& color, float specular, float metallic, float roughness,
-    gltexture_handle emission_tex, gltexture_handle color_tex,
-    gltexture_handle specular_tex, gltexture_handle metallic_tex,
-    gltexture_handle roughness_tex, gltexture_handle normalmap_tex) {
-  auto  handle   = add_material(scene);
-  auto& material = scene.materials[handle];
-  set_emission(material, emission, emission_tex);
-  set_color(material, color, color_tex);
-  set_specular(material, specular, specular_tex);
-  set_metallic(material, metallic, metallic_tex);
-  set_roughness(material, roughness, roughness_tex);
-  set_normalmap(material, normalmap_tex);
-  return handle;
+void set_material(shade_material& glmaterial, const material_data& material) {
+  // // glmaterial_handle add_material(shade_scene& scene, const vec3f&
+  // emission,
+  // //     const vec3f& color, float specular, float metallic, float roughness,
+  //     gltexture_handle emission_tex, gltexture_handle color_tex,
+  //     gltexture_handle specular_tex, gltexture_handle metallic_tex,
+  //     gltexture_handle roughness_tex, gltexture_handle normalmap_tex) {
+  set_emission(glmaterial, material.emission, material.emission_tex);
+  set_color(glmaterial, material.color, material.color_tex);
+  set_roughness(glmaterial, material.roughness, material.roughness_tex);
+  set_normalmap(glmaterial, material.normal_tex);
 }
 
 void set_instance(shade_instance& glinstance, const instance_data& instance,

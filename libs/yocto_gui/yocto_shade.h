@@ -194,6 +194,9 @@ struct shade_params {
 
 // Initialize an OpenGL scene
 void init_scene(shade_scene& scene, bool instanced_drawing = false);
+void init_scene(shade_scene& glscene, const scene_data& scene,
+    bool instanced_drawing = false);
+
 bool is_initialized(const shade_scene& scene);
 
 // Initialize data for environment lighting
@@ -214,6 +217,8 @@ glinstance_handle    add_instance(shade_scene& scene);
 glenvironment_handle add_environment(shade_scene& scene);
 
 // camera properties
+void set_camera(shade_camera& glcamera, const camera_data& camera,
+    float near = 0.001, float far = 10000);
 void set_frame(shade_camera& camera, const frame3f& frame);
 void set_lens(shade_camera& camera, float lens, float aspect, float film);
 void set_nearfar(shade_camera& camera, float near, float far);
@@ -271,17 +276,18 @@ void set_emission(shade_environment& environment, const vec3f& emission,
     gltexture_handle emission_tex = glinvalid_handle);
 
 // shortcuts
-glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float lens,
-    float aspect, float film = 0.036, float near = 0.001, float far = 10000);
-glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
-    const vec3f& color, float specular, float metallic, float roughness,
-    gltexture_handle emission_tex  = glinvalid_handle,
-    gltexture_handle color_tex     = glinvalid_handle,
-    gltexture_handle specular_tex  = glinvalid_handle,
-    gltexture_handle metallic_tex  = glinvalid_handle,
-    gltexture_handle roughness_tex = glinvalid_handle,
-    gltexture_handle normalmap_tex = glinvalid_handle);
-
+// glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float
+// lens,
+//     float aspect, float film = 0.036, float near = 0.001, float far = 10000);
+// glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
+//     const vec3f& color, float specular, float metallic, float roughness,
+//     gltexture_handle emission_tex  = glinvalid_handle,
+//     gltexture_handle color_tex     = glinvalid_handle,
+//     gltexture_handle specular_tex  = glinvalid_handle,
+//     gltexture_handle metallic_tex  = glinvalid_handle,
+//     gltexture_handle roughness_tex = glinvalid_handle,
+//     gltexture_handle normalmap_tex = glinvalid_handle);
+void set_material(shade_material& glmaterial, const material_data& material);
 void set_shape(
     shade_shape& glshape, const shape_data& shape, bool edges = false);
 

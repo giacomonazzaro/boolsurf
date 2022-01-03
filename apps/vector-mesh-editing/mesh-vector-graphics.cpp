@@ -119,7 +119,8 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     const app_callback& uiupdate_callback = {},
     const app_callback& update_callback   = {}) {
   // glscene
-  auto  glscene = glscene_state{};
+  // auto  glscene = glscene_state{};
+  auto  glscene = shade_scene{};
   auto& scene   = app.scene;
 
   // draw params
@@ -143,13 +144,15 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   // callbacks
   auto callbacks    = glwindow_callbacks{};
   callbacks.init_cb = [&](const glinput_state& input) {
-    init_glscene(glscene, scene);
+    //    init_glscene(glscene, scene);
+    init_scene(glscene, scene);
   };
   callbacks.clear_cb = [&](const glinput_state& input) {
     clear_scene(glscene);
   };
   callbacks.draw_cb = [&](const glinput_state& input) {
-    draw_scene(glscene, scene, input.framebuffer_viewport, params);
+    // draw_scene(glscene, scene, input.framebuffer_viewport, params);
+    draw_scene(glscene, input.framebuffer_viewport, {});
   };
 
   // top level combo
@@ -216,6 +219,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
       scene.cameras.at(params.camera) = camera;
+      set_camera(glscene.cameras[params.camera], camera);
     }
 
     if (input.modifier_ctrl && input.modifier_shift &&
