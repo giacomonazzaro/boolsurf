@@ -199,23 +199,11 @@ void init_scene(
     shade_scene& glscene, const scene_data& scene, bool instanced_drawing) {
   init_scene(glscene, instanced_drawing);
 
-  for (auto& camera : scene.cameras) {
-    auto camera_id = add_camera(glscene);
-    set_camera(glscene.cameras[camera_id], camera);
-  }
-  for (auto& instance : scene.instances) {
-    auto instance_id = add_instance(glscene);
-    set_instance(glscene.instances[instance_id], instance);
-  }
   for (auto& shape : scene.shapes) {
     auto shape_id = add_shape(glscene);
     set_shape(glscene.shapes[shape_id], shape);
   }
-  for (auto& material : scene.materials) {
-    auto material_id = add_material(glscene);
-    set_material(glscene.materials[material_id], material);
-  }
-
+    
   // TODO(giacomo): Incomplete.
   // for (auto& texture : scene.textures) {
   //   auto texture_id = add_texture(glscene);
@@ -253,35 +241,6 @@ void clear_scene(shade_scene& scene) {
   clear_program(scene.instance_program);
 }
 
-// add camera
-glcamera_handle add_camera(shade_scene& scene) {
-  scene.cameras.emplace_back();
-  return (int)scene.cameras.size() - 1;
-}
-void set_camera(
-    shade_camera& glcamera, const camera_data& camera, float near, float far) {
-  glcamera.frame    = camera.frame;
-  glcamera.lens     = camera.lens;
-  glcamera.aspect   = camera.aspect;
-  glcamera.film     = camera.film;
-  glcamera.near     = near;
-  glcamera.far      = far;
-  glcamera.aperture = camera.aperture;
-  glcamera.focus    = camera.focus;
-}
-void set_frame(shade_camera& camera, const frame3f& frame) {
-  camera.frame = frame;
-}
-void set_lens(shade_camera& camera, float lens, float aspect, float film) {
-  camera.lens   = lens;
-  camera.aspect = aspect;
-  camera.film   = film;
-}
-void set_nearfar(shade_camera& camera, float near, float far) {
-  camera.near = near;
-  camera.far  = far;
-}
-
 // add texture
 gltexture_handle add_texture(shade_scene& scene) {
   scene.textures.emplace_back();
@@ -293,66 +252,6 @@ glshape_handle add_shape(shade_scene& scene) {
   scene.shapes.emplace_back();
   return (int)scene.shapes.size() - 1;
 }
-
-// add instance
-glinstance_handle add_instance(shade_scene& scene) {
-  scene.instances.emplace_back();
-  return (int)scene.instances.size() - 1;
-}
-void set_frame(shade_instance& instance, const frame3f& frame) {
-  instance.frame = frame;
-}
-void set_shape(shade_instance& instance, glshape_handle shape) {
-  instance.shape = shape;
-}
-void set_material(shade_instance& instance, glmaterial_handle material) {
-  instance.material = material;
-}
-void set_hidden(shade_instance& instance, bool hidden) {
-  instance.hidden = hidden;
-}
-void set_highlighted(shade_instance& instance, bool highlighted) {
-  instance.highlighted = highlighted;
-}
-
-// add material
-glmaterial_handle add_material(shade_scene& scene) {
-  scene.materials.emplace_back();
-  return (int)scene.materials.size() - 1;
-}
-void set_emission(shade_material& material, const vec3f& emission,
-    gltexture_handle emission_tex) {
-  material.emission     = emission;
-  material.emission_tex = emission_tex;
-}
-void set_color(
-    shade_material& material, const vec3f& color, gltexture_handle color_tex) {
-  material.color     = color;
-  material.color_tex = color_tex;
-}
-void set_specular(
-    shade_material& material, float specular, gltexture_handle specular_tex) {
-  material.specular     = specular;
-  material.specular_tex = specular_tex;
-}
-void set_roughness(
-    shade_material& material, float roughness, gltexture_handle roughness_tex) {
-  material.roughness     = roughness;
-  material.roughness_tex = roughness_tex;
-}
-void set_opacity(
-    shade_material& material, float opacity, gltexture_handle opacity_tex) {
-  material.opacity = opacity;
-}
-void set_metallic(
-    shade_material& material, float metallic, gltexture_handle metallic_tex) {
-  material.metallic     = metallic;
-  material.metallic_tex = metallic_tex;
-}
-void set_normalmap(shade_material& material, gltexture_handle normal_tex) {
-  material.normal_tex = normal_tex;
-}
-void set_unlit(shade_material& material, bool unlit) { material.unlit = unlit; }
 
 void set_shape(shade_shape& glshape, const shape_data& shape, bool edges) {
   if (shape.points.size() != 0) {
@@ -384,38 +283,6 @@ void set_emission(shade_environment& environment, const vec3f& emission,
   environment.emission_tex = emission_tex;
 }
 
-// shortcuts
-glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float lens,
-    float aspect, float film, float near, float far) {
-  auto  handle = add_camera(scene);
-  auto& camera = scene.cameras[handle];
-  set_frame(camera, frame);
-  set_lens(camera, lens, aspect, film);
-  set_nearfar(camera, near, far);
-  return handle;
-}
-void set_material(shade_material& glmaterial, const material_data& material) {
-  // // glmaterial_handle add_material(shade_scene& scene, const vec3f&
-  // emission,
-  // //     const vec3f& color, float specular, float metallic, float roughness,
-  //     gltexture_handle emission_tex, gltexture_handle color_tex,
-  //     gltexture_handle specular_tex, gltexture_handle metallic_tex,
-  //     gltexture_handle roughness_tex, gltexture_handle normalmap_tex) {
-  set_emission(glmaterial, material.emission, material.emission_tex);
-  set_color(glmaterial, material.color, material.color_tex);
-  set_roughness(glmaterial, material.roughness, material.roughness_tex);
-  set_normalmap(glmaterial, material.normal_tex);
-}
-
-void set_instance(shade_instance& glinstance, const instance_data& instance,
-    bool hidden, bool highlighted) {
-  set_frame(glinstance, instance.frame);
-  set_shape(glinstance, instance.shape);
-  set_material(glinstance, instance.material);
-  set_hidden(glinstance, hidden);
-  set_highlighted(glinstance, highlighted);
-}
-
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
     const vec3f& emission, gltexture_handle emission_tex) {
   auto  handle      = add_environment(scene);
@@ -441,67 +308,6 @@ void set_params_uniforms(ogl_program& program, const shade_params& params) {
   set_uniform(program, "exposure", params.exposure);
   set_uniform(program, "gamma", params.gamma);
   set_uniform(program, "double_sided", params.double_sided);
-}
-
-// Draw a shape
-void set_instance_uniforms(const shade_scene& scene, ogl_program& program,
-    const frame3f& frame, const shade_shape& shape,
-    const shade_material& material, const shade_params& params) {
-  auto shape_xform     = frame_to_mat(frame);
-  auto shape_inv_xform = transpose(
-      frame_to_mat(inverse(frame, params.non_rigid_frames)));
-  set_uniform(program, "frame", shape_xform);
-  set_uniform(program, "frameit", shape_inv_xform);
-  set_uniform(program, "offset", 0.0f);
-  set_uniform(program, "faceted", params.faceted || !has_normals(shape));
-  //  if (instance.highlighted) {
-  //    set_uniform(program, "highlight", vec4f{1, 1, 0, 1});
-  //  } else {
-  //    set_uniform(program, "highlight", vec4f{0, 0, 0, 0});
-  //  }
-
-  auto set_texture = [&scene](ogl_program& program, const char* name,
-                         const char* name_on, gltexture_handle texture,
-                         int unit) {
-    if (texture == glinvalid_handle) {
-      auto otexture = ogl_texture{};
-      set_uniform(program, name, name_on, otexture, unit);
-    } else {
-      set_uniform(program, name, name_on, scene.textures[texture], unit);
-    }
-  };
-
-  set_uniform(program, "unlit", material.unlit);
-  set_uniform(program, "emission", material.emission);
-  set_uniform(program, "diffuse", material.color);
-  set_uniform(program, "specular",
-      vec3f{material.metallic, material.metallic, material.metallic});
-  set_uniform(program, "roughness", material.roughness);
-  set_uniform(program, "opacity", material.opacity);
-  set_uniform(program, "double_sided", params.double_sided);
-  set_texture(
-      program, "emission_tex", "emission_tex_on", material.emission_tex, 0);
-  set_texture(program, "diffuse_tex", "diffuse_tex_on", material.color_tex, 1);
-  set_texture(
-      program, "specular_tex", "specular_tex_on", material.metallic_tex, 2);
-  set_texture(
-      program, "roughness_tex", "roughness_tex_on", material.roughness_tex, 3);
-  set_texture(
-      program, "opacity_tex", "opacity_tex_on", material.opacity_tex, 4);
-  set_texture(
-      program, "normalmap_tex", "normalmap_tex_on", material.normal_tex, 5);
-
-  assert_ogl_error();
-
-  switch (shape.elements) {
-    case ogl_element_type::points: set_uniform(program, "element", 1); break;
-    case ogl_element_type::line_strip:
-    case ogl_element_type::lines: set_uniform(program, "element", 2); break;
-    case ogl_element_type::triangle_strip:
-    case ogl_element_type::triangle_fan:
-    case ogl_element_type::triangles: set_uniform(program, "element", 3); break;
-  }
-  assert_ogl_error();
 }
 
 // Draw a shape
@@ -663,30 +469,6 @@ void set_lighting_uniforms(ogl_program& program, const shade_scene& scene,
   assert_ogl_error();
 }
 
-static void draw_instances(
-    shade_scene& scene, const shade_view& view, const shade_params& params) {
-  // set program
-  auto& program = scene.instance_program;
-  bind_program(program);
-
-  // set scene uniforms
-  set_view_uniforms(program, view);
-  set_params_uniforms(program, params);
-
-  // set lighting uniforms
-  set_lighting_uniforms(program, scene, view, params);
-
-  set_ogl_wireframe(params.wireframe);
-  for (auto& instance : scene.instances) {
-    if (instance.hidden) continue;
-    set_instance_uniforms(scene, program, instance.frame,
-        scene.shapes.at(instance.shape), scene.materials.at(instance.material),
-        params);
-    draw_shape(scene.shapes.at(instance.shape));
-  }
-  unbind_program();
-}
-
 static void draw_instances(shade_scene& glscene, const scene_data& scene,
     const shade_view& view, const shade_params& params) {
   // set program
@@ -711,24 +493,6 @@ static void draw_instances(shade_scene& glscene, const scene_data& scene,
   unbind_program();
 }
 
-static shade_view make_scene_view(const shade_camera& camera,
-    const vec4i& viewport, const shade_params& params) {
-  auto camera_aspect = (float)viewport.z / (float)viewport.w;
-  auto camera_yfov =
-      camera_aspect >= 0
-          ? (2 * atan(camera.film / (camera_aspect * 2 * camera.lens)))
-          : (2 * atan(camera.film / (2 * camera.lens)));
-  auto view_matrix       = frame_to_mat(inverse(camera.frame));
-  auto projection_matrix = perspective_mat(
-      camera_yfov, camera_aspect, params.near, params.far);
-
-  auto view              = shade_view{};
-  view.camera_frame      = camera.frame;
-  view.view_matrix       = view_matrix;
-  view.projection_matrix = projection_matrix;
-  return view;
-}
-
 static shade_view make_scene_view(const camera_data& camera,
     const vec4i& viewport, const shade_params& params) {
   auto camera_aspect = (float)viewport.z / (float)viewport.w;
@@ -745,17 +509,6 @@ static shade_view make_scene_view(const camera_data& camera,
   view.view_matrix       = view_matrix;
   view.projection_matrix = projection_matrix;
   return view;
-}
-
-void draw_scene(
-    shade_scene& scene, const vec4i& viewport, const shade_params& params) {
-  clear_ogl_framebuffer(params.background);
-  set_ogl_viewport(viewport);
-
-  auto& camera = scene.cameras.at(params.camera);
-  auto  view   = make_scene_view(camera, viewport, params);
-  draw_instances(scene, view, params);
-  draw_environments(scene, view, params);
 }
 
 void draw_scene(shade_scene& glscene, const scene_data& scene, const vec4i& viewport,

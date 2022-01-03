@@ -218,7 +218,6 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
       scene.cameras.at(params.camera) = camera;
-      set_camera(glscene.cameras[params.camera], camera);
     }
 
     if (input.modifier_ctrl && input.modifier_shift &&

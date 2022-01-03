@@ -65,55 +65,11 @@ using glenvironment_handle         = int;
 using glscene_handle               = int;
 inline const auto glinvalid_handle = -1;
 
-// Opengl caemra
-struct shade_camera {
-  frame3f frame    = identity3x4f;
-  float   lens     = 0.050;
-  float   aspect   = 1.000;
-  float   film     = 0.036;
-  float   near     = 0.001;
-  float   far      = 10000;
-  float   aperture = 0;
-  float   focus    = 0;
-};
-
 // Opengl texture
 struct shade_texture : ogl_texture {};
 
-// Opengl material
-struct shade_material {
-  // material
-  vec3f            emission      = {0, 0, 0};
-  vec3f            color         = {0, 0, 0};
-  float            metallic      = 0;
-  float            roughness     = 0;
-  float            specular      = 0;
-  float            opacity       = 1;
-  gltexture_handle emission_tex  = glinvalid_handle;
-  gltexture_handle color_tex     = glinvalid_handle;
-  gltexture_handle metallic_tex  = glinvalid_handle;
-  gltexture_handle roughness_tex = glinvalid_handle;
-  gltexture_handle specular_tex  = glinvalid_handle;
-  gltexture_handle opacity_tex   = glinvalid_handle;
-  gltexture_handle normal_tex    = glinvalid_handle;
-  bool             unlit         = false;
-};
-
 // Opengl shape
 struct shade_shape : ogl_shape {};
-
-// Shading type
-enum struct shade_shading_type { constant = 0, shaded };
-
-// Opengl instance
-struct shade_instance {
-  // instance properties
-  frame3f           frame       = identity3x4f;
-  glshape_handle    shape       = glinvalid_handle;
-  glmaterial_handle material    = glinvalid_handle;
-  bool              hidden      = false;
-  bool              highlighted = false;
-};
 
 // Opengl environment
 struct shade_environment {
@@ -135,10 +91,7 @@ struct shade_environment {
 // Opengl scene
 struct shade_scene {
   // scene objects
-  vector<shade_camera>      cameras      = {};
-  vector<shade_instance>    instances    = {};
   vector<shade_shape>       shapes       = {};
-  vector<shade_material>    materials    = {};
   vector<shade_texture>     textures     = {};
   vector<shade_environment> environments = {};
 
@@ -216,29 +169,6 @@ glshape_handle       add_shape(shade_scene& scene);
 glinstance_handle    add_instance(shade_scene& scene);
 glenvironment_handle add_environment(shade_scene& scene);
 
-// camera properties
-void set_camera(shade_camera& glcamera, const camera_data& camera,
-    float near = 0.001, float far = 10000);
-void set_frame(shade_camera& camera, const frame3f& frame);
-void set_lens(shade_camera& camera, float lens, float aspect, float film);
-void set_nearfar(shade_camera& camera, float near, float far);
-
-// material properties
-void set_emission(shade_material& material, const vec3f& emission,
-    gltexture_handle emission_tex = glinvalid_handle);
-void set_color(shade_material& material, const vec3f& color,
-    gltexture_handle color_tex = glinvalid_handle);
-void set_metallic(shade_material& material, float metallic,
-    gltexture_handle metallic_tex = glinvalid_handle);
-void set_roughness(shade_material& material, float roughness,
-    gltexture_handle roughness_tex = glinvalid_handle);
-void set_specular(shade_material& material, float specular,
-    gltexture_handle specular_tex = glinvalid_handle);
-void set_opacity(shade_material& material, float opacity,
-    gltexture_handle opacity_tex = glinvalid_handle);
-void set_normalmap(shade_material& material, gltexture_handle normal_tex);
-void set_unlit(shade_material& material, bool unlit);
-
 // shape properties
 void set_points(shade_shape& shape, const vector<int>& points);
 void set_lines(shade_shape& shape, const vector<vec2i>& lines);
@@ -263,39 +193,17 @@ const ogl_arraybuffer& get_texcoords(const shade_shape& shape);
 const ogl_arraybuffer& get_colors(const shade_shape& shape);
 const ogl_arraybuffer& get_tangents(const shade_shape& shape);
 
-// instance properties
-void set_frame(shade_instance& instance, const frame3f& frame);
-void set_shape(shade_instance& instance, glshape_handle shape);
-void set_material(shade_instance& instance, glmaterial_handle material);
-void set_hidden(shade_instance& instance, bool hidden);
-void set_highlighted(shade_instance& instance, bool highlighted);
 
-// environment properties
-void set_frame(shade_environment& environment, const frame3f& frame);
-void set_emission(shade_environment& environment, const vec3f& emission,
-    gltexture_handle emission_tex = glinvalid_handle);
-
-// shortcuts
-// glcamera_handle add_camera(shade_scene& scene, const frame3f& frame, float
-// lens,
-//     float aspect, float film = 0.036, float near = 0.001, float far = 10000);
-// glmaterial_handle add_material(shade_scene& scene, const vec3f& emission,
-//     const vec3f& color, float specular, float metallic, float roughness,
-//     gltexture_handle emission_tex  = glinvalid_handle,
-//     gltexture_handle color_tex     = glinvalid_handle,
-//     gltexture_handle specular_tex  = glinvalid_handle,
-//     gltexture_handle metallic_tex  = glinvalid_handle,
-//     gltexture_handle roughness_tex = glinvalid_handle,
-//     gltexture_handle normalmap_tex = glinvalid_handle);
-void set_material(shade_material& glmaterial, const material_data& material);
+// set shape object
 void set_shape(
     shade_shape& glshape, const shape_data& shape, bool edges = false);
 
-void set_instance(shade_instance& glinstance, const instance_data& instance,
-    bool hidden = false, bool highlighted = false);
-
+// environment 
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,
     const vec3f& emission, gltexture_handle emission_tex = glinvalid_handle);
+void set_frame(shade_environment& environment, const frame3f& frame);
+void set_emission(shade_environment& environment, const vec3f& emission,
+    gltexture_handle emission_tex = glinvalid_handle);
 
 // draw scene
 void draw_scene(
