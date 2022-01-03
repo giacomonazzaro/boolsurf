@@ -167,21 +167,27 @@ void update_boolsurf_input(bool_state& state, App& app) {
 
   auto& mesh = app.mesh;
   app.shapes.push_back({});
-  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-    auto spline = app.splinesurf.get_spline_view(i);
-    if (spline.input.control_points.size() <= 1) continue;
+  auto spline = app.selected_spline();
+  if (spline.input.control_points.size() <= 1) return;
+
+  auto selected_spline_id = app.editing.selection.spline_id;
+  auto selected_point_id  = app.editing.selection.control_point_id;
+  if (selected_spline_id >= app.shapes.size()) app.shapes.push_back({});
+  if (app.shapes[selected_spline_id].size() == 0) app.shapes[selected_spline_id].push_back({});
+  auto& boundary = app.shapes[selected_spline_id][0];
+
+  for (int i : curves_adjacent_to_point(spline.input, selected_point_id)) {
+    if (i == -1) continue;
     // Add new 1-polygon shape to state
     // if (test_polygon.empty()) continue;
+    if (i >= boundary.size()) boundary.push_back({});
+    auto& curve = boundary[i];
 
-    auto& shape    = app.shapes.emplace_back();
-    auto& boundary = shape.emplace_back();
-
-    //      polygon.points   = test_polygon;
-    //    for (auto& anchor : spline.input.control_points) {
-    //      boundary.push_back(
-    //          {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-    //    }
-    boundary = recompute_polygon_segments(mesh, spline.input.control_points);
+    auto& polygon = spline.input.control_points;
+    auto  start   = polygon[i];
+    auto  end     = polygon[(i + 1) % polygon.size()];
+    curve      = make_curve_segments(mesh, start, end);
+    // boundary = recompute_polygon_segments(mesh, spline.input.control_points);
   }
 }
 
@@ -286,7 +292,6 @@ inline void process_mouse(
   {
     auto timer     = scope_timer("update boolsurf");
     app.bool_state = {};
-    app.shapes     = {};
     update_boolsurf_input(app.bool_state, app);
     compute_cells(app.mesh, app.bool_state, app.shapes);
     // compute_shapes(app.bool_state);

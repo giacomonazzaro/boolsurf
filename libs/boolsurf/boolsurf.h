@@ -173,6 +173,8 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
+vector<mesh_segment> make_curve_segments(
+    const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
 vector<vector<mesh_segment>> recompute_polygon_segments(
     const bool_mesh& mesh, mesh_polygon& polygon);
 

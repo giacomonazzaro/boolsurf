@@ -199,7 +199,7 @@ inline pair<int, float> get_edge_lerp_from_uv(const vec2f& uv) {
 
 inline vec3f get_color(int i) {
   auto colors = vector<vec3f>{
-      {0.5, 0.5, 0.5},
+//      {0.5, 0.5, 0.5},
       {190 / 255.0, 45 / 255.0, 52 / 255.0},
       {0.063, 0.426, 0.127},
       {0.026, 0.087, 0.539},
