@@ -374,8 +374,8 @@ inline int add_vertex(bool_mesh& mesh, mesh_hashgrid& hashgrid,
   return vertex;
 }
 
-static mesh_hashgrid compute_hashgrid(
-    bool_mesh& mesh, const vector<shape>& shapes) {
+static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
+    const vector<vector<vector<vector<mesh_segment>>>>& shapes) {
   // }, hash_map<int, int>& control_points) {
   _PROFILE();
   // La hashgrid associa ad ogni faccia una lista di polilinee.
@@ -386,12 +386,12 @@ static mesh_hashgrid compute_hashgrid(
 
   for (auto shape_id = 0; shape_id < shapes.size(); shape_id++) {
     //    auto& polygons = shapes[shape_id].polygons;
-    for (auto polygon_id = 0; polygon_id < shapes[shape_id].edges.size();
+    for (auto polygon_id = 0; polygon_id < shapes[shape_id].size();
          polygon_id++) {
       //      auto& polygon = polygons[polygon_id];
-      if (shapes[shape_id].edges[polygon_id].empty()) continue;
-      if (shapes[shape_id].edges[polygon_id][0].empty()) continue;
-      auto& boundary = shapes[shape_id].edges[polygon_id];
+      if (shapes[shape_id][polygon_id].empty()) continue;
+      if (shapes[shape_id][polygon_id][0].empty()) continue;
+      auto& boundary = shapes[shape_id][polygon_id];
       // La polilinea della prima faccia del poligono viene processata alla fine
       // (perché si trova tra il primo e l'ultimo edge)
       int  first_face   = boundary[0][0].face;
@@ -1398,17 +1398,13 @@ void compute_border_tags(bool_mesh& mesh, bool_state& state) {
   }
 }
 
-void slice_mesh(bool_mesh& mesh, bool_state& state) {
+void slice_mesh(bool_mesh& mesh, bool_state& state,
+    const vector<vector<vector<vector<mesh_segment>>>>& edges) {
   _PROFILE();
-  auto& shapes = state.bool_shapes;
-
-  // Calcoliamo i vertici nuovi della mesh
-  // auto vertices             = add_vertices(mesh, polygons);
-  // state.num_original_points = (int)state.points.size();
 
   // Calcoliamo hashgrid e intersezioni tra poligoni,
   // aggiungendo ulteriori vertici nuovi alla mesh
-  auto hashgrid = compute_hashgrid(mesh, shapes);
+  auto hashgrid = compute_hashgrid(mesh, edges);
   add_polygon_intersection_points(state, hashgrid, mesh);
 
   // Triangolazione e aggiornamento dell'adiacenza
@@ -1438,12 +1434,15 @@ void compute_cell_labels(bool_state& state) {
   }
 }
 
-bool compute_cells(bool_mesh& mesh, bool_state& state) {
-  // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
+bool compute_cells(bool_mesh& mesh, bool_state& state,
+    const vector<vector<vector<vector<mesh_segment>>>>& shapes) {
   _PROFILE();
   global_state() = &state;
   global_mesh()  = &mesh;
-  slice_mesh(mesh, state);
+  // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
+  slice_mesh(mesh, state, shapes);
+
+  state.bool_shapes.resize(shapes.size());
 
   assert(!global_state()->failed);
   if (global_state()->failed) return false;

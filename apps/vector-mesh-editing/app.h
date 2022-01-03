@@ -37,7 +37,8 @@ struct App {
   Editing    editing    = {};
   Splinesurf splinesurf = {};
 
-  vector<ogl_shape>   spline_shapes  = {};
+  vector<vector<vector<vector<mesh_segment>>>> shapes = {};
+
   vector<Shape_Entry> new_shapes     = {};
   int                 num_new_shapes = 0;
   // vector<instance_data> new_instances;
@@ -161,27 +162,26 @@ inline void add_new_shapes(App& app) {
   app.num_new_shapes = 0;
 }
 
-void update_boolsurf_input(bool_state& state, const App& app) {
+void update_boolsurf_input(bool_state& state, App& app) {
   auto timer = scope_timer("update boolsurf input");
 
   auto& mesh = app.mesh;
-    
-  auto sssplines = vector<vector<mesh_polygon>>{};
+  app.shapes.push_back({});
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.splinesurf.get_spline_view(i);
-    if (spline.input.control_points.size() < 2) continue;
+    if (spline.input.control_points.size() <= 1) continue;
     // Add new 1-polygon shape to state
     // if (test_polygon.empty()) continue;
 
-    auto& bool_shape = state.bool_shapes.emplace_back();
-    auto& sspline    = sssplines.emplace_back();
-    auto& boundary = sspline.emplace_back();
+    auto& shape    = app.shapes.emplace_back();
+    auto& boundary = shape.emplace_back();
+
     //      polygon.points   = test_polygon;
-    for (auto& anchor : spline.input.control_points) {
-      boundary.push_back(
-          {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-    }
-    bool_shape.edges = {recompute_polygon_segments(mesh, boundary)};
+    //    for (auto& anchor : spline.input.control_points) {
+    //      boundary.push_back(
+    //          {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+    //    }
+    boundary = recompute_polygon_segments(mesh, spline.input.control_points);
   }
 }
 
@@ -286,8 +286,9 @@ inline void process_mouse(
   {
     auto timer     = scope_timer("update boolsurf");
     app.bool_state = {};
+    app.shapes     = {};
     update_boolsurf_input(app.bool_state, app);
-    compute_cells(app.mesh, app.bool_state);
+    compute_cells(app.mesh, app.bool_state, app.shapes);
     // compute_shapes(app.bool_state);
     update_cell_graphics(app, app.bool_state, updated_shapes);
     reset_mesh(app.mesh);

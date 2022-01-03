@@ -160,37 +160,37 @@ bool_state state_from_screenspace_test(
   auto state         = bool_state{};
   auto mesh_original = mesh;
 
-  while (!stop) {
-    for (auto trial = 0; trial < 20; trial++) {
-      state    = {};
-      auto cam = scene_camera{};
-      auto eye = sample_sphere(rand2f(rng)) * 2.5;
-
-      auto position = vec3f{0, 0, 0};
-      cam.frame     = lookat_frame(eye, position, {0, 1, 0});
-      cam.focus     = length(eye - position);
-
-      auto center = intersect_mesh(mesh, cam, vec2f{0.5, 0.5});
-      test.camera = make_camera(mesh, seed);
-
-      if (center.face == -1) continue;
-
-      add_polygons(state, mesh, test.camera, test, center, drawing_size, false);
-      test.camera = cam;
-
-      try {
-        stop = compute_cells(mesh, state);
-        compute_shapes(state);
-      } catch (const std::exception&) {
-        stop = true;
-      }
-
-      mesh = mesh_original;
-      if (stop) break;
-    }
-
-    drawing_size -= 0.001f;
-  }
+//  while (!stop) {
+//    for (auto trial = 0; trial < 20; trial++) {
+//      state    = {};
+//      auto cam = scene_camera{};
+//      auto eye = sample_sphere(rand2f(rng)) * 2.5;
+//
+//      auto position = vec3f{0, 0, 0};
+//      cam.frame     = lookat_frame(eye, position, {0, 1, 0});
+//      cam.focus     = length(eye - position);
+//
+//      auto center = intersect_mesh(mesh, cam, vec2f{0.5, 0.5});
+//      test.camera = make_camera(mesh, seed);
+//
+//      if (center.face == -1) continue;
+//
+//      add_polygons(state, mesh, test.camera, test, center, drawing_size, false);
+//      test.camera = cam;
+//
+//      try {
+//        stop = compute_cells(mesh, state);
+//        compute_shapes(state);
+//      } catch (const std::exception&) {
+//        stop = true;
+//      }
+//
+//      mesh = mesh_original;
+//      if (stop) break;
+//    }
+//
+//    drawing_size -= 0.001f;
+//  }
   return state;
 }
 

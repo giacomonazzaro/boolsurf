@@ -102,7 +102,7 @@ struct shape_boundary_intersection {
 };
 
 struct bool_state {
-  vector<shape> bool_shapes = {{}};
+  vector<shape> bool_shapes = {};
 
   vector<shape_boundary_intersection> intersections    = {};
   hash_map<int, vec2i>                isecs_generators = {};
@@ -147,11 +147,13 @@ void reset_mesh(bool_mesh& mesh);
 
 void update_polygon(bool_state& state, const bool_mesh& mesh, int polygon_id);
 
-void              slice_mesh(bool_mesh& mesh, bool_state& state);
+void              slice_mesh(bool_mesh& mesh, bool_state& state,
+                 const vector<vector<vector<vector<mesh_segment>>>>& shapes);
 vector<mesh_cell> make_cell_graph(bool_mesh& mesh);
 void              compute_cell_labels(bool_state& state);
 
-bool       compute_cells(bool_mesh& mesh, bool_state& state);
+bool       compute_cells(bool_mesh& mesh, bool_state& state,
+          const vector<vector<vector<vector<mesh_segment>>>>& shapes);
 void       compute_shapes(bool_state& state);
 void       compute_shape_borders(const bool_mesh& mesh, bool_state& state);
 bool_state compute_border_polygons(const bool_state& state);
