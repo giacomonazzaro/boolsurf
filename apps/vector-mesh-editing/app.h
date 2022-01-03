@@ -178,7 +178,7 @@ void update_boolsurf_input(bool_state& state, const App& app) {
       polygon.points.push_back(
           {anchor.point, {anchor.handles[0], anchor.handles[1]}});
     }
-    recompute_polygon_segments(mesh, polygon);
+    bool_shape.edges = {recompute_polygon_segments(mesh, polygon)};
   }
 }
 

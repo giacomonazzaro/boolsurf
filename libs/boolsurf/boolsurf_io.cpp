@@ -421,19 +421,18 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
 
       auto& bool_shape = state.bool_shapes[s];
       for (int i = 0; i < bool_shape.polygons.size(); i++) {
-        auto& polygon   = bool_shape.polygons[i];
         auto  positions = vector<vec3f>();
 //        positions.reserve(polygon.length + 1);
 
-        for (auto& edge : polygon.edges) {
+        for (auto& edge : bool_shape.edges[i]) {
           for (auto& segment : edge) {
             positions.push_back(
                 eval_position(mesh, {segment.face, segment.start}));
           }
         }
 
-        if (polygon.edges.size() && polygon.edges.back().size()) {
-          auto& segment = polygon.edges.back().back();
+        if (bool_shape.edges[i].size() && bool_shape.edges[i].back().size()) {
+          auto& segment = bool_shape.edges[i].back().back();
           positions.push_back(eval_position(mesh, {segment.face, segment.end}));
         }
 
@@ -443,7 +442,7 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
         instance.material = (int)scene.materials.size();
         auto& material    = scene.materials.emplace_back();
         material.color    = get_color(s);
-        material.type     = scene_material_type::matte;
+        material.type     = material_type::matte;
         instance.shape    = (int)scene.shapes.size();
 
         auto shape = create_polygon_shape(positions, line_width);

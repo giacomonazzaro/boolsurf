@@ -62,14 +62,15 @@ struct anchor_point {
 };
 
 struct mesh_polygon {
-  vector<anchor_point>         points = {};
-  vector<vector<mesh_segment>> edges  = {};
+  vector<anchor_point> points = {};
 
   bool is_contained_in_single_face = false;
 };
 
 struct shape {
   vector<mesh_polygon> polygons = {};
+
+  vector<vector<vector<mesh_segment>>> edges = {};
 
   vector<int> generators = {};
   bool        is_root    = true;
@@ -182,7 +183,7 @@ geodesic_path compute_geodesic_path(
 mesh_point eval_geodesic_path(
     const bool_mesh& mesh, const geodesic_path& path, float t);
 
-void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon);
+vector<vector<mesh_segment>> recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {

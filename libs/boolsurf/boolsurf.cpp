@@ -269,9 +269,9 @@ vector<mesh_segment> make_curve_segments(
   return curve;
 }
 
-void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
+vector<vector<mesh_segment>> recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
   auto faces = hash_set<int>();
-
+  auto result = vector<vector<mesh_segment>>{};
   for (int i = 0; i < polygon.points.size(); i++) {
     auto& start = polygon.points[i];
     faces.insert(polygon.points[i].point.face);
@@ -279,11 +279,12 @@ void recompute_polygon_segments(const bool_mesh& mesh, mesh_polygon& polygon) {
     faces.insert(polygon.points[i].handles[1].face);
     auto end = polygon.points[(i + 1) % polygon.points.size()];
 
-    auto& curve = polygon.edges.emplace_back();
+    auto& curve = result.emplace_back();
     curve       = make_curve_segments(mesh, start, end);
   }
 
   polygon.is_contained_in_single_face = (faces.size() == 1);
+  return result;
 }
 
 struct hashgrid_polyline {
@@ -392,19 +393,20 @@ static mesh_hashgrid compute_hashgrid(
     auto& polygons = shapes[shape_id].polygons;
     for (auto polygon_id = 0; polygon_id < polygons.size(); polygon_id++) {
       auto& polygon = polygons[polygon_id];
-      if (polygon.edges.empty()) continue;
-      if (polygon.edges[0].empty()) continue;
+      if (shapes[shape_id].edges[polygon_id].empty()) continue;
+      if (shapes[shape_id].edges[polygon_id][0].empty()) continue;
+      auto& boundary = shapes[shape_id].edges[polygon_id];
       // La polilinea della prima faccia del poligono viene processata alla fine
       // (perché si trova tra il primo e l'ultimo edge)
-      int  first_face   = polygon.edges[0][0].face;
+      int  first_face   = boundary[0][0].face;
       int  first_vertex = -1;
       auto indices      = vec2i{-1, -1};  // edge_id, segment_id
 
       int last_face   = -1;
       int last_vertex = -1;
 
-      for (auto e = 0; e < polygon.edges.size(); e++) {
-        auto& edge = polygon.edges[e];
+      for (auto e = 0; e < boundary.size(); e++) {
+        auto& edge = boundary[e];
 
         for (auto s = 0; s < edge.size(); s++) {
           auto& segment = edge[s];
@@ -418,7 +420,7 @@ static mesh_hashgrid compute_hashgrid(
           auto& entry = hashgrid[segment.face];
           auto  ids   = vec2i{e, s};
           ids.y       = (s + 1) % edge.size();
-          ids.x       = ids.y > s ? e : (e + 1) % polygon.edges.size();
+          ids.x       = ids.y > s ? e : (e + 1) % boundary.size();
 
           // Se la faccia del segmento che stiamo processando è diversa
           // dall'ultima salvata allora creiamo una nuova polilinea, altrimenti
@@ -451,7 +453,7 @@ static mesh_hashgrid compute_hashgrid(
 
         //        if (last_vertex != -1)
         //          control_points[last_vertex] =
-        //              polygon.points[(e + 1) % polygon.edges.size()];
+        //              polygon.points[(e + 1) % boundary.size()];
       }
 
       if (indices == vec2i{-1, -1}) {
@@ -462,8 +464,8 @@ static mesh_hashgrid compute_hashgrid(
         polyline.polygon   = shape_id;
         polyline.is_closed = true;
 
-        for (auto e = 0; e < polygon.edges.size(); e++) {
-          auto& edge = polygon.edges[e];
+        for (auto e = 0; e < boundary.size(); e++) {
+          auto& edge = boundary[e];
           for (int s = 0; s < edge.size(); s++) {
             auto& segment = edge[s];
 
@@ -474,7 +476,7 @@ static mesh_hashgrid compute_hashgrid(
 
           //          if (last_vertex != -1)
           //            control_points[last_vertex] =
-          //                polygon.points[(e + 1) % polygon.edges.size()];
+          //                polygon.points[(e + 1) % boundary.size()];
         }
       };
 
@@ -482,13 +484,13 @@ static mesh_hashgrid compute_hashgrid(
       // polilinea non è stato inserito nell'hashgrid
       auto vertex = -1;
       for (auto e = 0; e <= indices.x; e++) {
-        auto end_idx = (e < indices.x) ? polygon.edges[e].size() : indices.y;
+        auto end_idx = (e < indices.x) ? boundary[e].size() : indices.y;
         for (auto s = 0; s < end_idx; s++) {
           auto ids = vec2i{e, s};
-          ids.y    = (s + 1) % polygon.edges[e].size();
+          ids.y    = (s + 1) % boundary[e].size();
           ids.x    = ids.y > s ? e : e + 1;
 
-          auto& segment     = polygon.edges[e][s];
+          auto& segment     = boundary[e][s];
           auto& entry       = hashgrid[segment.face];
           auto  polyline_id = (int)entry.size() - 1;
 
@@ -502,7 +504,7 @@ static mesh_hashgrid compute_hashgrid(
 
         //        if (e > 0 && last_vertex != -1)
         //          control_points[last_vertex] =
-        //              polygon.points[(e + 1) % polygon.edges.size()];
+        //              polygon.points[(e + 1) % boundary.size()];
       }
     }
   }
