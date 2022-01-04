@@ -192,12 +192,37 @@ void update_boolsurf_input(bool_state& state, App& app) {
   }
 }
 
+inline shape_data make_mesh_patch(const vector<vec3f>& positions,
+    const vector<vec3i>& triangles, const vector<int>& faces) {
+  auto t          = scope_timer("make_mesh_patch");
+  auto vertex_map = vector<int>(positions.size(), -1);
+  auto shape      = shape_data{};
+  shape.triangles.resize(faces.size());
+  for (int i = 0; i < faces.size(); i++) {
+    auto tr = triangles[faces[i]];
+
+    for (auto& v : tr) {
+      if (vertex_map[v] == -1) {
+        auto id       = (int)shape.positions.size();
+        vertex_map[v] = id;
+        shape.positions.push_back(positions[v]);
+        v = id;
+      } else {
+        v = vertex_map[v];
+      }
+    }
+    shape.triangles[i] = tr;
+  }
+  return shape;
+}
+
 inline void update_cell_graphics(
     App& app, const bool_state& state, hash_set<int>& updated_shapes) {
   static auto cell_to_shape = hash_map<int, int>{};
   auto&       mesh          = app.mesh;
 
-  auto timer = scope_timer("update graphics");
+  auto timer      = scope_timer("update graphics");
+  auto vertex_map = hash_map<int, int>{};
   for (int i = 0; i < state.cells.size(); i++) {
     auto& cell         = state.cells[i];
     auto  material_id  = app.scene.materials.size();
@@ -212,13 +237,18 @@ inline void update_cell_graphics(
     material.type      = scene_material_type::glossy;
     material.roughness = 0.5;
 
-    auto shape = shape_data{};
-    // TODO(giacomo): Too many copies of positions.
-    shape.positions = mesh.positions;
-    shape.triangles.resize(cell.faces.size());
-    for (int i = 0; i < cell.faces.size(); i++) {
-      shape.triangles[i] = mesh.triangles[cell.faces[i]];
-    }
+    // auto shape = shape_data{};
+    // // TODO(giacomo): Too many copies of positions.
+    // shape.positions = mesh.positions;
+    // shape.triangles.resize(cell.faces.size());
+    // for (int i = 0; i < cell.faces.size(); i++) {
+    //   shape.triangles[i] = mesh.triangles[cell.faces[i]];
+    //   for (auto& v : shape.triangles[i]) {
+    //     if (auto it = vertex_map.find(v); it == vertex_map.end()) {
+    //     }
+    //   }
+    // }
+    auto shape = make_mesh_patch(mesh.positions, mesh.triangles, cell.faces);
 
     auto shape_id = -1;
     if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
@@ -294,8 +324,11 @@ inline void process_mouse(
     auto timer     = scope_timer("update boolsurf");
     app.bool_state = {};
     update_boolsurf_input(app.bool_state, app);
-    compute_cells(app.mesh, app.bool_state, app.shapes);
-    // compute_shapes(app.bool_state);
+    {
+      auto t = scope_timer("compute_cells");
+      compute_cells(app.mesh, app.bool_state, app.shapes);
+      // compute_shapes(app.bool_state);
+    }
     update_cell_graphics(app, app.bool_state, updated_shapes);
     reset_mesh(app.mesh);
   }
