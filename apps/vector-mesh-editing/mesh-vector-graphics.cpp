@@ -118,9 +118,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     const app_callback& widgets_callback  = {},
     const app_callback& uiupdate_callback = {},
     const app_callback& update_callback   = {}) {
-  // glscene
-  // auto  glscene = glscene_state{};
-  auto  glscene = shade_scene{};
+  auto& glscene = app.glscene;
   auto& scene   = app.scene;
 
   // draw params

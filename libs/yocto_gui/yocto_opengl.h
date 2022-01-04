@@ -194,6 +194,15 @@ struct ogl_arraybuffer {
   ~ogl_arraybuffer();
 };
 
+// TODO(giacomo): Put in .cpp
+inline void copy(ogl_arraybuffer& out, const ogl_arraybuffer& in) {
+  out.capacity     = in.capacity;
+  out.num_elements = in.num_elements;
+  out.element_size = in.element_size;
+  out.dynamic      = in.dynamic;
+  out.buffer_id    = in.buffer_id;
+}
+
 // set buffer
 void set_arraybuffer(ogl_arraybuffer& buffer, size_t size, int esize,
     const float* data, bool dynamic = false);
@@ -433,6 +442,8 @@ struct ogl_shape {
 };
 
 // set vertex buffer
+void set_vertex_buffer(
+    ogl_shape& shape, const ogl_arraybuffer& buffer, int location);
 void set_vertex_buffer(
     ogl_shape& shape, const vector<float>& values, int location);
 void set_vertex_buffer(

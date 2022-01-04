@@ -427,7 +427,6 @@ void set_arraybuffer(ogl_arraybuffer& buffer, size_t size, int esize,
     glBindBuffer(target, buffer.buffer_id);
     glBufferData(target, size * sizeof(float), data,
         dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-    buffer.capacity = size;
   } else {
     // we have enough space
     assert(buffer.buffer_id);
@@ -436,6 +435,7 @@ void set_arraybuffer(ogl_arraybuffer& buffer, size_t size, int esize,
   }
 
   buffer.element_size = esize;
+  buffer.capacity     = size;
   buffer.num_elements = size / esize;
   buffer.dynamic      = dynamic;
   assert_ogl_error();
@@ -931,6 +931,22 @@ void set_vertex_buffer_impl(
   glBindVertexArray(shape.shape_id);
   auto& buffer = shape.vertex_buffers[location];
   assert_ogl_error();
+  glBindBuffer(GL_ARRAY_BUFFER, buffer.buffer_id);
+  glEnableVertexAttribArray(location);
+  glVertexAttribPointer(
+      location, buffer.element_size, GL_FLOAT, false, 0, nullptr);
+  assert_ogl_error();
+}
+
+void set_vertex_buffer(
+    ogl_shape& shape, const ogl_arraybuffer& buffer, int location) {
+  if (!shape.shape_id) glGenVertexArrays(1, &shape.shape_id);
+  glBindVertexArray(shape.shape_id);
+  assert_ogl_error();
+  while (shape.vertex_buffers.size() <= location) {
+    shape.vertex_buffers.emplace_back();
+  }
+  copy(shape.vertex_buffers[location], buffer);
   glBindBuffer(GL_ARRAY_BUFFER, buffer.buffer_id);
   glEnableVertexAttribArray(location);
   glVertexAttribPointer(
