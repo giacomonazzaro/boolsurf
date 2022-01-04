@@ -56,6 +56,10 @@ inline vector<T> operator+(const vector<T>& a, const vector<T>& b) {
   c += b;
   return c;
 }
+template <typename T>
+inline void operator+=(hash_set<T>& a, const T& b) {
+  a.insert(b);
+}
 
 template <typename T>
 inline void insert(vector<T>& vec, size_t i, const T& x) {
@@ -199,7 +203,7 @@ inline pair<int, float> get_edge_lerp_from_uv(const vec2f& uv) {
 
 inline vec3f get_color(int i) {
   auto colors = vector<vec3f>{
-//      {0.5, 0.5, 0.5},
+      //      {0.5, 0.5, 0.5},
       {190 / 255.0, 45 / 255.0, 52 / 255.0},
       {0.063, 0.426, 0.127},
       {0.026, 0.087, 0.539},
@@ -340,8 +344,8 @@ void print(
 void draw_triangulation(
     ogl_texture* texture, int face, vec2i size = {2048, 2048});
 
-//template <class K, class V, class F>
-//inline bool maybe_add(const hash_map<K, V>& map, const K& k, F&& f) {
+// template <class K, class V, class F>
+// inline bool maybe_add(const hash_map<K, V>& map, const K& k, F&& f) {
 //  auto it = map.find(i);
 //  if (it == map.end()) {
 //    key      = f();

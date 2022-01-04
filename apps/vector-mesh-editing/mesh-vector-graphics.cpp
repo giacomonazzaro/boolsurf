@@ -105,7 +105,7 @@ void run_glview(const glview_params& params) {
 #else
 
 void update_glscene(shade_scene& glscene, const scene_data& scene,
-    const vector<int>& updated_shapes, const vector<int>& updated_textures) {
+    const hash_set<int>& updated_shapes) {
   for (auto shape_id : updated_shapes) {
     set_shape(glscene.shapes[shape_id], scene.shapes[shape_id]);
   }
@@ -133,8 +133,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   }
 
   // gpu updates
-  auto updated_shapes   = vector<int>{};
-  auto updated_textures = vector<int>{};
+  auto updated_shapes = hash_set<int>{};
 
   // scene
   auto& new_shapes = app.new_shapes;
@@ -186,20 +185,18 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     // draw_scene_editor(scene, selection, {});
     if (widgets_callback) {
       widgets_callback(input, app);
-      if (!updated_shapes.empty() || !updated_textures.empty()) {
-        update_glscene(glscene, scene, updated_shapes, updated_textures);
+      if (!updated_shapes.empty()) {
+        update_glscene(glscene, scene, updated_shapes);
         updated_shapes.clear();
-        updated_textures.clear();
       }
     }
   };
   callbacks.update_cb = [&](const glinput_state& input) {
     if (update_callback) {
       update_callback(input, app);
-      if (!updated_shapes.empty() || !updated_textures.empty()) {
-        update_glscene(glscene, scene, updated_shapes, updated_textures);
+      if (!updated_shapes.empty()) {
+        update_glscene(glscene, scene, updated_shapes);
         updated_shapes.clear();
-        updated_textures.clear();
       }
     }
   };
@@ -207,10 +204,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     // handle mouse and keyboard for navigation
     if (uiupdate_callback) {
       uiupdate_callback(input, app);
-      if (!updated_shapes.empty() || !updated_textures.empty()) {
-        update_glscene(glscene, scene, updated_shapes, updated_textures);
+      if (!updated_shapes.empty()) {
+        update_glscene(glscene, scene, updated_shapes);
         updated_shapes.clear();
-        updated_textures.clear();
       }
     }
     auto camera = scene.cameras.at(params.camera);
@@ -236,10 +232,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 
     update_splines(app, scene, updated_shapes);
 
-    if (!updated_shapes.empty() || !updated_textures.empty()) {
-      update_glscene(glscene, scene, updated_shapes, updated_textures);
+    if (!updated_shapes.empty()) {
+      update_glscene(glscene, scene, updated_shapes);
       updated_shapes.clear();
-      updated_textures.clear();
     }
 
     new_shapes.clear();

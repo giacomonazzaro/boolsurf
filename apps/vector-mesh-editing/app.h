@@ -193,7 +193,7 @@ void update_boolsurf_input(bool_state& state, App& app) {
 }
 
 inline void update_cell_graphics(
-    App& app, const bool_state& state, vector<int>& updated_shapes) {
+    App& app, const bool_state& state, hash_set<int>& updated_shapes) {
   static auto cell_to_shape = hash_map<int, int>{};
   auto&       mesh          = app.mesh;
 
@@ -275,7 +275,7 @@ inline void set_selected_point(
 }
 
 inline void process_mouse(
-    App& app, vector<int>& updated_shapes, const glinput_state& input) {
+    App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
@@ -371,7 +371,7 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
 }
 
 inline void process_click(
-    App& app, vector<int>& updated_shapes, const glinput_state& input) {
+    App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (input.mouse_right_click) {
     auto click_timer = scope_timer("click-timer");
@@ -544,7 +544,7 @@ void update_output(Spline_Output& output, const Spline_Input& input,
 
 void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
     const Spline_Output& output, scene_data& scene,
-    vector<int>& updated_shapes) {
+    hash_set<int>& updated_shapes) {
   auto& mesh = scene.shapes[0];
   for (auto curve_id : cache.curves_to_update) {
     cache.curves[curve_id].positions.resize(output.segments[curve_id].size());
@@ -605,7 +605,7 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
 }
 
 inline void update_splines(
-    App& app, scene_data& scene, vector<int>& updated_shapes) {
+    App& app, scene_data& scene, hash_set<int>& updated_shapes) {
   // Update bezier outputs of edited curves.
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
@@ -701,7 +701,7 @@ static bool uiupdate_image_params(
 
 inline void update(
     App& app, Render& render, bvh_data& bvh, const glinput_state& input) {
-  static auto updated_shapes = vector<int>{};
+  static auto updated_shapes = hash_set<int>{};
 
   auto& scene         = app.scene;
   auto& params        = *render.params_ptr;
