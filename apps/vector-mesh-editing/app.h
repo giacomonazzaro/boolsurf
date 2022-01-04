@@ -203,6 +203,15 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
   // PROFILE();
   auto shape = shape_data{};
   shape.triangles.resize(faces.size());
+
+  if (faces.size() > triangles.size() / 2) {
+    shape.positions = positions;
+    for (int i = 0; i < faces.size(); i++) {
+      shape.triangles[i] = triangles[faces[i]];
+    }
+    return shape;
+  }
+
   for (int i = 0; i < faces.size(); i++) {
     auto tr = triangles[faces[i]];
 
@@ -219,17 +228,17 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
     shape.triangles[i] = tr;
   }
 
-  if (faces.size() < triangles.size() / 2) {
-    // sparse cleanup of vertex_map
-    for (auto& face : faces) {
-      for (auto& v : triangles[face]) {
-        vertex_map[v] = -1;
-      }
-    }
-  } else {
-    // full cleanup of vertex_map
-    fill(vertex_map.begin(), vertex_map.end(), -1);
-  }
+  // if (faces.size() < triangles.size() / 2) {
+  //   // sparse cleanup of vertex_map
+  //   for (auto& face : faces) {
+  //     for (auto& v : triangles[face]) {
+  //       vertex_map[v] = -1;
+  //     }
+  //   }
+  // } else {
+  //   // full cleanup of vertex_map
+  //   fill(vertex_map.begin(), vertex_map.end(), -1);
+  // }
   return shape;
 }
 
@@ -240,9 +249,12 @@ inline void update_cell_graphics(
 
   PROFILE();
   auto vertex_map = vector<int>(mesh.positions.size(), -1);
+
+  auto shape_ids    = vector<int>{};
+  auto material_ids = vector<int>{};
   for (int i = 0; i < state.cells.size(); i++) {
     auto& cell         = state.cells[i];
-    auto  material_id  = app.scene.materials.size();
+    auto  material_id  = (int)app.scene.materials.size();
     auto& material     = app.scene.materials.emplace_back();
     material.type      = scene_material_type::glossy;
     material.roughness = 0.4;
@@ -250,24 +262,31 @@ inline void update_cell_graphics(
       material.color = get_cell_color(state, i, false);
     else
       material.color = vec3f{0.8, 0.8, 0.8};
-
-    material.type      = scene_material_type::glossy;
-    material.roughness = 0.5;
-
-    // TODO(giacomo): Parallelize.
-    auto shape = make_mesh_patch(
-        mesh.positions, mesh.triangles, cell.faces, vertex_map);
+    material_ids.push_back(material_id);
 
     auto shape_id = -1;
     if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
-      shape_id         = add_shape(app, shape, {}, material_id);
+      // shape_id         = add_shape(app, shape, {}, material_id);
+      shape_id         = add_shape(app, {}, {}, material_id);
       cell_to_shape[i] = shape_id;
     } else {
       shape_id = it->second;
-      set_shape(app, shape_id, shape, {}, material_id);
+      // set_shape(app, shape_id, shape, {}, material_id);
+      // set_shape(app, shape_id, {}, {}, material_id);
     }
     updated_shapes += shape_id;
+    shape_ids.push_back(shape_id);
   }
+
+  // TODO(giacomo): Parallelize.
+  auto f = [&](size_t i) {
+    auto vertex_map = vector<int>(mesh.positions.size(), -1);
+    auto shape      = make_mesh_patch(
+        mesh.positions, mesh.triangles, state.cells[i].faces, vertex_map);
+    set_shape(app, shape_ids[i], shape, {}, material_ids[i]);
+  };
+  // parallel_for(shape_ids.size(), f);
+  serial_for(shape_ids.size(), f);
 
   for (auto& [cell_id, shape_id] : cell_to_shape) {
     if (cell_id >= state.cells.size()) {

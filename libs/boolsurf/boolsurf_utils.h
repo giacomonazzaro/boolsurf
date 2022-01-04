@@ -397,6 +397,11 @@ inline T sum(const vector<T>& vec) {
   return result;
 }
 
+template <typename F>
+inline void serial_for(size_t size, F&& f) {
+  for (int i = 0; i < size; i++) f(i);
+}
+
 // template <>
 // struct std::hash<vector<int>> {
 //   size_t operator()(const vector<int>& V) const {
