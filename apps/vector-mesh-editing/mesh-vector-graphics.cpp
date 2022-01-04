@@ -106,6 +106,7 @@ void run_glview(const glview_params& params) {
 
 void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
+  PROFILE();
   for (auto shape_id : updated_shapes) {
     set_shape(glscene.shapes[shape_id], scene.shapes[shape_id]);
   }

@@ -19,6 +19,11 @@
 
 using namespace yocto;  // TODO(giacomo): Remove this.
 
+// #define _PROFILE_SCOPE(name) ;
+#define PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
+// #define PROFILE() ;
+#define PROFILE() PROFILE_SCOPE(__FUNCTION__)
+
 struct Shape_Entry {
   int        id       = -1;
   shape_data shape    = {};
@@ -164,7 +169,7 @@ inline void add_new_shapes(App& app) {
 }
 
 void update_boolsurf_input(bool_state& state, App& app) {
-  auto timer = scope_timer("update boolsurf input");
+  PROFILE();
 
   auto& mesh   = app.mesh;
   auto  spline = app.selected_spline();
@@ -193,10 +198,10 @@ void update_boolsurf_input(bool_state& state, App& app) {
 }
 
 inline shape_data make_mesh_patch(const vector<vec3f>& positions,
-    const vector<vec3i>& triangles, const vector<int>& faces) {
-  auto t          = scope_timer("make_mesh_patch");
-  auto vertex_map = vector<int>(positions.size(), -1);
-  auto shape      = shape_data{};
+    const vector<vec3i>& triangles, const vector<int>& faces,
+    vector<int>& vertex_map) {
+  // PROFILE();
+  auto shape = shape_data{};
   shape.triangles.resize(faces.size());
   for (int i = 0; i < faces.size(); i++) {
     auto tr = triangles[faces[i]];
@@ -213,6 +218,18 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
     }
     shape.triangles[i] = tr;
   }
+
+  if (faces.size() < triangles.size() / 2) {
+    // sparse cleanup of vertex_map
+    for (auto& face : faces) {
+      for (auto& v : triangles[face]) {
+        vertex_map[v] = -1;
+      }
+    }
+  } else {
+    // full cleanup of vertex_map
+    fill(vertex_map.begin(), vertex_map.end(), -1);
+  }
   return shape;
 }
 
@@ -221,8 +238,8 @@ inline void update_cell_graphics(
   static auto cell_to_shape = hash_map<int, int>{};
   auto&       mesh          = app.mesh;
 
-  auto timer      = scope_timer("update graphics");
-  auto vertex_map = hash_map<int, int>{};
+  PROFILE();
+  auto vertex_map = vector<int>(mesh.positions.size(), -1);
   for (int i = 0; i < state.cells.size(); i++) {
     auto& cell         = state.cells[i];
     auto  material_id  = app.scene.materials.size();
@@ -237,18 +254,9 @@ inline void update_cell_graphics(
     material.type      = scene_material_type::glossy;
     material.roughness = 0.5;
 
-    // auto shape = shape_data{};
-    // // TODO(giacomo): Too many copies of positions.
-    // shape.positions = mesh.positions;
-    // shape.triangles.resize(cell.faces.size());
-    // for (int i = 0; i < cell.faces.size(); i++) {
-    //   shape.triangles[i] = mesh.triangles[cell.faces[i]];
-    //   for (auto& v : shape.triangles[i]) {
-    //     if (auto it = vertex_map.find(v); it == vertex_map.end()) {
-    //     }
-    //   }
-    // }
-    auto shape = make_mesh_patch(mesh.positions, mesh.triangles, cell.faces);
+    // TODO(giacomo): Parallelize.
+    auto shape = make_mesh_patch(
+        mesh.positions, mesh.triangles, cell.faces, vertex_map);
 
     auto shape_id = -1;
     if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
@@ -321,11 +329,11 @@ inline void process_mouse(
   }
 
   {
-    auto timer     = scope_timer("update boolsurf");
+    PROFILE_SCOPE("boolsurf");
     app.bool_state = {};
     update_boolsurf_input(app.bool_state, app);
     {
-      auto t = scope_timer("compute_cells");
+      PROFILE_SCOPE("compute_cells");
       compute_cells(app.mesh, app.bool_state, app.shapes);
       // compute_shapes(app.bool_state);
     }
