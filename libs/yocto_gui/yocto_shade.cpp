@@ -263,6 +263,8 @@ void set_shape(shade_shape& glshape, const shape_data& shape, bool edges) {
     set_triangles(glshape, shape.triangles);
   } else if (shape.quads.size() != 0) {
     set_quads(glshape, shape.quads);
+  } else {
+    set_elementbuffer(glshape.index_buffer, 0, 0, nullptr);
   }
   set_positions(glshape, shape.positions);
   set_normals(glshape, shape.normals);

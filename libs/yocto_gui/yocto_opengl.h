@@ -250,8 +250,8 @@ struct ogl_elementbuffer {
 };
 
 // set buffer
-void set_elementbuffer(ogl_elementbuffer& buffer, size_t size, const int* data,
-    bool dynamic = false);
+void set_elementbuffer(ogl_elementbuffer& buffer, size_t size, int esize,
+    const int* data, bool dynamic = false);
 
 // check if buffer is initialized
 bool is_initialized(const ogl_elementbuffer& buffer);
