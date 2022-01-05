@@ -141,16 +141,21 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
   return {};
 }
 
-inline void set_shape(App& app, int id, const shape_data& shape,
+inline void set_shape(App& app, int id, shape_data&& shape,
     const frame3f& frame = identity3x4f, int material = 1) {
-  app.new_shapes.push_back({id, (shape), frame, material});
+  auto& item    = app.new_shapes.emplace_back();
+  item.id       = id;
+  item.frame    = frame;
+  item.material = material;
+  swap(item.shape, shape);
+  // app.new_shapes.push_back({id, (shape), frame, material});
   // app.new_shapes.push_back({id, std::move(shape), frame, material});
 }
 
-inline int add_shape(App& app, const shape_data& shape = {},
+inline int add_shape(App& app, shape_data&& shape,
     const frame3f& frame = identity3x4f, int material = 1) {
   auto id = (int)app.scene.shapes.size() + app.num_new_shapes;
-  set_shape(app, id, shape, frame, material);
+  set_shape(app, id, std::move(shape), frame, material);
   app.num_new_shapes += 1;
   return id;
 }
@@ -289,7 +294,7 @@ inline void update_cell_graphics(
   serial_for(shape_ids.size(), f);
 
   for (int i = 0; i < shape_ids.size(); i++) {
-    set_shape(app, shape_ids[i], cell_shapes[i], {}, material_ids[i]);
+    set_shape(app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
   }
 
   for (auto& [cell_id, shape_id] : cell_to_shape) {
