@@ -246,7 +246,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 }
 
 void widgets_callback(const glinput_state& input, App& app) {
-  auto time = app.time;
+//  auto time = app.time;
   // if (input.widgets_active) {
   // printf("time: %f, function: %s\n", time, __FUNCTION__);
   // }

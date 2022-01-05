@@ -58,7 +58,7 @@ inline void from_json(const json& js, bool_operation& op) {
   js.at("type").get_to(op.type);
 }
 
-inline void to_json(json& js, const scene_camera& camera) {
+inline void to_json(json& js, const camera_data& camera) {
   js["frame"]        = camera.frame;
   js["orthographic"] = camera.orthographic;
   js["lens"]         = camera.lens;
@@ -68,7 +68,7 @@ inline void to_json(json& js, const scene_camera& camera) {
   js["aperture"]     = camera.aperture;
 }
 
-inline void from_json(const json& js, scene_camera& camera) {
+inline void from_json(const json& js, camera_data& camera) {
   js.at("frame").get_to(camera.frame);
   js.at("orthographic").get_to(camera.orthographic);
   js.at("lens").get_to(camera.lens);
@@ -90,7 +90,7 @@ struct bool_test {
 
   vector<bool_operation> operations  = {};
   vector<vec3f>          cell_colors = {};
-  scene_camera           camera      = {};
+  camera_data           camera      = {};
   bool                   has_camera  = false;
   bool                   screenspace = false;
 };
@@ -105,7 +105,7 @@ bool_state state_from_screenspace_test(
     bool_mesh& mesh, bool_test& test, float drawing_size, bool use_projection);
 
 void add_polygons(bool_state& state, const bool_mesh& mesh,
-    const scene_camera& camera, const bool_test& test, const mesh_point& center,
+    const camera_data& camera, const bool_test& test, const mesh_point& center,
     float svg_size, bool screenspace, bool straigh_up = true);
 
 void export_model(
@@ -166,11 +166,11 @@ inline void save_tree_png(const vector<vector<int>>& _graph, string filename) {
 void save_tree_png(const bool_state& state, string filename,
     const string& extra, bool color_shapes);
 
-scene_shape create_polygon_shape(
+shape_data create_polygon_shape(
     const vector<vec3f>& positions, float thickness);
 
-scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
-    const scene_camera& camera, bool color_shapes, bool color_hashgrid,
+scene_data make_scene(const bool_mesh& mesh, const bool_state& state,
+    const camera_data& camera, bool color_shapes, bool color_hashgrid,
     bool save_edges, bool save_polygons, float line_width,
     const vector<vec3f>& cell_colors = {});
 
@@ -187,7 +187,7 @@ void init_from_svg(bool_state& state, const bool_mesh& mesh,
     int svg_subdivs);
 
 inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
-    const vector<vector<vec2f>>& polygons, const scene_camera& camera,
+    const vector<vector<vec2f>>& polygons, const camera_data& camera,
     float drawing_size) {
 //  auto rng    = make_rng(0);
 //  auto ss     = vec2f{0.5, 0.5};
@@ -238,7 +238,7 @@ inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
 }
 
 inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
-    const shape_bvh& bvh, const scene_camera& camera, float drawing_size,
+    const shape_bvh& bvh, const camera_data& camera, float drawing_size,
     bool use_projection) {
   auto state    = bool_state{};
 //  auto polygons = test.polygons_screenspace;
@@ -281,7 +281,7 @@ inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
   return state;
 }
 
-inline scene_camera make_camera(const bool_mesh& mesh, int seed = 0) {
+inline camera_data make_camera(const bool_mesh& mesh, int seed = 0) {
   auto bbox_size = size(mesh.bbox);
   auto z         = zero3f;
   if (bbox_size.x <= bbox_size.y && bbox_size.x <= bbox_size.z) {
@@ -309,7 +309,7 @@ inline scene_camera make_camera(const bool_mesh& mesh, int seed = 0) {
   auto up = -cross(x, z);
   assert(length(up) > 0);
   // if (up == z) up = {1, 0, 0};
-  auto camera = scene_camera{};
+  auto camera = camera_data{};
   if (seed == 0) {
     camera.frame = lookat_frame(3 * z + 2 * x, zero3f, up);
   } else {

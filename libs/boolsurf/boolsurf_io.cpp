@@ -93,7 +93,7 @@ bool load_test(bool_test& test, const string& filename) {
     }
 
     if (js.find("camera") != js.end()) {
-      test.camera     = js["camera"].get<scene_camera>();
+      test.camera     = js["camera"].get<camera_data>();
       test.has_camera = true;
     }
 
@@ -109,175 +109,175 @@ bool load_test(bool_test& test, const string& filename) {
 
 bool_state state_from_test(const bool_mesh& mesh, const bool_test& test,
     float drawing_size, bool use_projection) {
-  auto state   = bool_state{};
-//  auto state_points = test.points;
-//  state.bool_shapes.clear();
-//  // state.polygons.clear();
-//
-//  if (test.screenspace) {
-//    auto camera = make_camera(mesh);
-//    return make_test_state(
-//        test, mesh, mesh.bvh, camera, drawing_size, use_projection);
-//  }
-//
-//  if (test.shapes.empty()) {
-//    for (auto& test_polygon : test.polygons) {
-//      // Add new 1-polygon shape to state
-//      // if (test_polygon.empty()) continue;
-//
-//      auto& bool_shape = state.bool_shapes.emplace_back();
-//      auto& polygon    = bool_shape.polygons.emplace_back();
-////      polygon.points   = test_polygon;
-//        for(auto& id : test_polygon) {
-//            auto point = state_points[id];
-//            polygon.points.push_back({point, {point, point}});
-//        }
-//      recompute_polygon_segments(mesh, polygon);
-//    }
-//  } else {
-//    for (auto& test_shape : test.shapes) {
-//      auto& bool_shape = state.bool_shapes.emplace_back();
-//      for (auto& polygon_id : test_shape) {
-//        auto& polygon  = bool_shape.polygons.emplace_back();
-////        polygon.points = test.polygons[polygon_id];
-//          for(auto& id : test.polygons[polygon_id]) {
-//              auto point = state_points[id];
-//              polygon.points.push_back({point, {point, point}});
-//          }
-//        recompute_polygon_segments(mesh, polygon);
-//      }
-//    }
-//  }
+  auto state = bool_state{};
+  //  auto state_points = test.points;
+  //  state.bool_shapes.clear();
+  //  // state.polygons.clear();
+  //
+  //  if (test.screenspace) {
+  //    auto camera = make_camera(mesh);
+  //    return make_test_state(
+  //        test, mesh, mesh.bvh, camera, drawing_size, use_projection);
+  //  }
+  //
+  //  if (test.shapes.empty()) {
+  //    for (auto& test_polygon : test.polygons) {
+  //      // Add new 1-polygon shape to state
+  //      // if (test_polygon.empty()) continue;
+  //
+  //      auto& bool_shape = state.bool_shapes.emplace_back();
+  //      auto& polygon    = bool_shape.polygons.emplace_back();
+  ////      polygon.points   = test_polygon;
+  //        for(auto& id : test_polygon) {
+  //            auto point = state_points[id];
+  //            polygon.points.push_back({point, {point, point}});
+  //        }
+  //      recompute_polygon_segments(mesh, polygon);
+  //    }
+  //  } else {
+  //    for (auto& test_shape : test.shapes) {
+  //      auto& bool_shape = state.bool_shapes.emplace_back();
+  //      for (auto& polygon_id : test_shape) {
+  //        auto& polygon  = bool_shape.polygons.emplace_back();
+  ////        polygon.points = test.polygons[polygon_id];
+  //          for(auto& id : test.polygons[polygon_id]) {
+  //              auto point = state_points[id];
+  //              polygon.points.push_back({point, {point, point}});
+  //          }
+  //        recompute_polygon_segments(mesh, polygon);
+  //      }
+  //    }
+  //  }
 
   return state;
 }
 
 bool_state state_from_screenspace_test(
     bool_mesh& mesh, bool_test& test, float drawing_size, bool use_projection) {
-  int  seed          = 0;
-  auto stop          = false;
-  auto rng           = make_rng(seed);
-  auto state         = bool_state{};
-  auto mesh_original = mesh;
+  //  int  seed          = 0;
+  //  auto stop          = false;
+  //  auto rng           = make_rng(seed);
+  auto state = bool_state{};
+  //  auto mesh_original = mesh;
 
-//  while (!stop) {
-//    for (auto trial = 0; trial < 20; trial++) {
-//      state    = {};
-//      auto cam = scene_camera{};
-//      auto eye = sample_sphere(rand2f(rng)) * 2.5;
-//
-//      auto position = vec3f{0, 0, 0};
-//      cam.frame     = lookat_frame(eye, position, {0, 1, 0});
-//      cam.focus     = length(eye - position);
-//
-//      auto center = intersect_mesh(mesh, cam, vec2f{0.5, 0.5});
-//      test.camera = make_camera(mesh, seed);
-//
-//      if (center.face == -1) continue;
-//
-//      add_polygons(state, mesh, test.camera, test, center, drawing_size, false);
-//      test.camera = cam;
-//
-//      try {
-//        stop = compute_cells(mesh, state);
-//        compute_shapes(state);
-//      } catch (const std::exception&) {
-//        stop = true;
-//      }
-//
-//      mesh = mesh_original;
-//      if (stop) break;
-//    }
-//
-//    drawing_size -= 0.001f;
-//  }
+  //  while (!stop) {
+  //    for (auto trial = 0; trial < 20; trial++) {
+  //      state    = {};
+  //      auto cam = camera_data{};
+  //      auto eye = sample_sphere(rand2f(rng)) * 2.5;
+  //
+  //      auto position = vec3f{0, 0, 0};
+  //      cam.frame     = lookat_frame(eye, position, {0, 1, 0});
+  //      cam.focus     = length(eye - position);
+  //
+  //      auto center = intersect_mesh(mesh, cam, vec2f{0.5, 0.5});
+  //      test.camera = make_camera(mesh, seed);
+  //
+  //      if (center.face == -1) continue;
+  //
+  //      add_polygons(state, mesh, test.camera, test, center, drawing_size,
+  //      false); test.camera = cam;
+  //
+  //      try {
+  //        stop = compute_cells(mesh, state);
+  //        compute_shapes(state);
+  //      } catch (const std::exception&) {
+  //        stop = true;
+  //      }
+  //
+  //      mesh = mesh_original;
+  //      if (stop) break;
+  //    }
+  //
+  //    drawing_size -= 0.001f;
+  //  }
   return state;
 }
 
 void add_polygons(bool_state& state, const bool_mesh& mesh,
-    const scene_camera& camera, const bool_test& test, const mesh_point& center,
+    const camera_data& camera, const bool_test& test, const mesh_point& center,
     float svg_size, bool screenspace, bool straight_up) {
-//  auto polygons = test.polygons_screenspace;
-//
-//  auto make_straight_up = [&](vec2f& uv) {
-//    if (!straight_up) return;
-//    uv         = -uv;
-//    auto frame = mat3f{};
-//
-//    auto p0  = eval_position(mesh, {center.face, {0, 0}});
-//    auto p1  = eval_position(mesh, {center.face, {1, 0}});
-//    frame.x  = normalize(p1 - p0);
-//    frame.z  = eval_normal(mesh, center.face);
-//    frame.y  = normalize(cross(frame.z, frame.x));
-//    auto up  = normalize(vec3f{0, 1, -0.35});
-//    auto v   = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
-//    auto rot = mat2f{{v.x, v.y}, {-v.y, v.x}};
-//    uv       = rot * uv;
-//  };
-//
-//  for (auto& polygon : polygons) {
-//    for (auto& uv : polygon) {
-//      uv *= svg_size;
-//      uv.x = -uv.x;
-//    }
-//  }
-//
-//  auto get_projected_point = [&](vec2f uv) {
-//    uv.x /= camera.film;                    // input.window_size.x;
-//    uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
-//    uv.x = -uv.x;
-//    uv += vec2f{0.5, 0.5};
-//    auto cam      = scene_camera{};
-//    auto position = eval_position(mesh, center);
-//    auto normal   = eval_normal(mesh, center);
-//    auto eye      = position + normal * 0.2;
-//    cam.frame     = lookat_frame(eye, position, {0, 1, 0});
-//    cam.focus     = length(eye - position);
-//    return intersect_mesh(mesh, cam, uv);
-//  };
-//
-//  auto get_mapped_point = [&](vec2f uv) {
-//    make_straight_up(uv);
-//    uv /= camera.film;
-//    auto path     = straightest_path(mesh, center, uv);
-//    path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
-//    path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
-//    return path.end;
-//  };
-//
-//  for (auto& test_shape : test.shapes) {
-//    auto bool_shape = shape{};
-//    for (auto id = 0; id < test_shape.size(); id++) {
-//      auto  bool_polygon = mesh_polygon{};
-//      auto& test_polygon = polygons[test_shape[id]];
-//
-//      for (auto uv : test_polygon) {
-//        auto point = screenspace ? get_projected_point(uv)
-//                                 : get_mapped_point(uv);
-//        if (point.face == -1) continue;
-//
-//        // Add point to state.
-//          bool_polygon.points.push_back({point, {point, point}});
-////        state.points.push_back(point);
-//      }
-//
-//      if (bool_polygon.points.size() <= 2) {
-//        assert(0);
-//        bool_polygon.points.clear();
-//        continue;
-//      }
-//
-//      bool_shape.polygons.push_back(bool_polygon);
-//      recompute_polygon_segments(mesh, bool_polygon);
-//    }
-//    if (bool_shape.polygons.size()) state.bool_shapes.push_back(bool_shape);
-//  }
+  //  auto polygons = test.polygons_screenspace;
+  //
+  //  auto make_straight_up = [&](vec2f& uv) {
+  //    if (!straight_up) return;
+  //    uv         = -uv;
+  //    auto frame = mat3f{};
+  //
+  //    auto p0  = eval_position(mesh, {center.face, {0, 0}});
+  //    auto p1  = eval_position(mesh, {center.face, {1, 0}});
+  //    frame.x  = normalize(p1 - p0);
+  //    frame.z  = eval_normal(mesh, center.face);
+  //    frame.y  = normalize(cross(frame.z, frame.x));
+  //    auto up  = normalize(vec3f{0, 1, -0.35});
+  //    auto v   = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
+  //    auto rot = mat2f{{v.x, v.y}, {-v.y, v.x}};
+  //    uv       = rot * uv;
+  //  };
+  //
+  //  for (auto& polygon : polygons) {
+  //    for (auto& uv : polygon) {
+  //      uv *= svg_size;
+  //      uv.x = -uv.x;
+  //    }
+  //  }
+  //
+  //  auto get_projected_point = [&](vec2f uv) {
+  //    uv.x /= camera.film;                    // input.window_size.x;
+  //    uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
+  //    uv.x = -uv.x;
+  //    uv += vec2f{0.5, 0.5};
+  //    auto cam      = camera_data{};
+  //    auto position = eval_position(mesh, center);
+  //    auto normal   = eval_normal(mesh, center);
+  //    auto eye      = position + normal * 0.2;
+  //    cam.frame     = lookat_frame(eye, position, {0, 1, 0});
+  //    cam.focus     = length(eye - position);
+  //    return intersect_mesh(mesh, cam, uv);
+  //  };
+  //
+  //  auto get_mapped_point = [&](vec2f uv) {
+  //    make_straight_up(uv);
+  //    uv /= camera.film;
+  //    auto path     = straightest_path(mesh, center, uv);
+  //    path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
+  //    path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
+  //    return path.end;
+  //  };
+  //
+  //  for (auto& test_shape : test.shapes) {
+  //    auto bool_shape = shape{};
+  //    for (auto id = 0; id < test_shape.size(); id++) {
+  //      auto  bool_polygon = mesh_polygon{};
+  //      auto& test_polygon = polygons[test_shape[id]];
+  //
+  //      for (auto uv : test_polygon) {
+  //        auto point = screenspace ? get_projected_point(uv)
+  //                                 : get_mapped_point(uv);
+  //        if (point.face == -1) continue;
+  //
+  //        // Add point to state.
+  //          bool_polygon.points.push_back({point, {point, point}});
+  ////        state.points.push_back(point);
+  //      }
+  //
+  //      if (bool_polygon.points.size() <= 2) {
+  //        assert(0);
+  //        bool_polygon.points.clear();
+  //        continue;
+  //      }
+  //
+  //      bool_shape.polygons.push_back(bool_polygon);
+  //      recompute_polygon_segments(mesh, bool_polygon);
+  //    }
+  //    if (bool_shape.polygons.size()) state.bool_shapes.push_back(bool_shape);
+  //  }
 }
 
-scene_shape create_polygon_shape(
+shape_data create_polygon_shape(
     const vector<vec3f>& positions, float thickness) {
   //  auto positions = eval_positions(triangles, positions, path);
-  auto shape = scene_shape{};
+  auto shape = shape_data{};
   for (auto idx = 0; idx < positions.size(); idx++) {
     auto sphere = make_sphere(8, thickness);
     for (auto& p : sphere.positions) p += positions[idx];
@@ -300,32 +300,32 @@ scene_shape create_polygon_shape(
   return shape;
 }
 
-scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
-    const scene_camera& camera, bool color_shapes, bool color_hashgrid,
+scene_data make_scene(const bool_mesh& mesh, const bool_state& state,
+    const camera_data& camera, bool color_shapes, bool color_hashgrid,
     bool save_edges, bool save_polygons, float line_width,
     const vector<vec3f>& cell_colors) {
-  auto scene = scene_model{};
+  auto scene = scene_data{};
   scene.cameras.push_back(camera);
 
   if (color_hashgrid) {
     auto& hashgrid_instance     = scene.instances.emplace_back();
     hashgrid_instance.material  = (int)scene.materials.size();
     auto& hashgrid_material     = scene.materials.emplace_back();
-    hashgrid_material.type      = scene_material_type::glossy;
+    hashgrid_material.type      = material_type::glossy;
     hashgrid_material.roughness = 0.5;
     hashgrid_material.color     = vec3f{0.4f, 0.4f, 0.4f};
     hashgrid_instance.shape     = (int)scene.shapes.size();
-    auto hashgrid_shape         = scene_shape{};
+    auto hashgrid_shape         = shape_data{};
     hashgrid_shape.positions    = mesh.positions;
 
     auto& mesh_instance     = scene.instances.emplace_back();
     mesh_instance.material  = (int)scene.materials.size();
     auto& mesh_material     = scene.materials.emplace_back();
-    mesh_material.type      = scene_material_type::glossy;
+    mesh_material.type      = material_type::glossy;
     mesh_material.roughness = 0.5;
     mesh_material.color     = vec3f{1.0f, 1.0f, 1.0f};
     mesh_instance.shape     = (int)scene.shapes.size() + 1;
-    auto mesh_shape         = scene_shape{};
+    auto mesh_shape         = shape_data{};
     mesh_shape.positions    = mesh.positions;
 
     // TODO(giacomo): Too many copies of positions.
@@ -360,10 +360,10 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
           material.color = vec3f{1.0f, 1.0f, 1.0f};
       }
 
-      material.type      = scene_material_type::glossy;
+      material.type      = material_type::glossy;
       material.roughness = 0.5;
       instance.shape     = (int)scene.shapes.size();
-      auto shape         = scene_shape{};
+      auto shape         = shape_data{};
 
       // TODO(giacomo): Too many copies of positions.
       shape.positions = mesh.positions;
@@ -381,7 +381,7 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
     instance.material  = (int)scene.materials.size();
     auto& material     = scene.materials.emplace_back();
     material.color     = {0.25, 0.25, 0.25};
-    material.type      = scene_material_type::glossy;
+    material.type      = material_type::glossy;
     material.roughness = 0.5;
     auto& edges        = scene.shapes.emplace_back();
     for (auto& tr : mesh.triangles) {
@@ -405,7 +405,7 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
 
     auto& material     = scene.materials.emplace_back();
     material.color     = {0.5, 0.5, 0.5};
-    material.type      = scene_material_type::glossy;
+    material.type      = material_type::glossy;
     material.roughness = 0.5;
 
     instance.shape = (int)scene.shapes.size();
@@ -416,39 +416,41 @@ scene_model make_scene(const bool_mesh& mesh, const bool_state& state,
   }
 
   if (save_polygons) {
-//    for (int s = 0; s < state.bool_shapes.size(); s++) {
-//      if (state.bool_shapes[s].polygons.empty()) continue;
-//
-//      auto& bool_shape = state.bool_shapes[s];
-//      for (int i = 0; i < bool_shape.polygons.size(); i++) {
-//        auto  positions = vector<vec3f>();
-////        positions.reserve(polygon.length + 1);
-//
-//        for (auto& edge : bool_shape.edges[i]) {
-//          for (auto& segment : edge) {
-//            positions.push_back(
-//                eval_position(mesh, {segment.face, segment.start}));
-//          }
-//        }
-//
-//        if (bool_shape.edges[i].size() && bool_shape.edges[i].back().size()) {
-//          auto& segment = bool_shape.edges[i].back().back();
-//          positions.push_back(eval_position(mesh, {segment.face, segment.end}));
-//        }
-//
-//        if (positions.empty()) continue;
-//
-//        auto& instance    = scene.instances.emplace_back();
-//        instance.material = (int)scene.materials.size();
-//        auto& material    = scene.materials.emplace_back();
-//        material.color    = get_color(s);
-//        material.type     = material_type::matte;
-//        instance.shape    = (int)scene.shapes.size();
-//
-//        auto shape = create_polygon_shape(positions, line_width);
-//        scene.shapes.push_back(shape);
-//      }
-//    }
+    //    for (int s = 0; s < state.bool_shapes.size(); s++) {
+    //      if (state.bool_shapes[s].polygons.empty()) continue;
+    //
+    //      auto& bool_shape = state.bool_shapes[s];
+    //      for (int i = 0; i < bool_shape.polygons.size(); i++) {
+    //        auto  positions = vector<vec3f>();
+    ////        positions.reserve(polygon.length + 1);
+    //
+    //        for (auto& edge : bool_shape.edges[i]) {
+    //          for (auto& segment : edge) {
+    //            positions.push_back(
+    //                eval_position(mesh, {segment.face, segment.start}));
+    //          }
+    //        }
+    //
+    //        if (bool_shape.edges[i].size() &&
+    //        bool_shape.edges[i].back().size()) {
+    //          auto& segment = bool_shape.edges[i].back().back();
+    //          positions.push_back(eval_position(mesh, {segment.face,
+    //          segment.end}));
+    //        }
+    //
+    //        if (positions.empty()) continue;
+    //
+    //        auto& instance    = scene.instances.emplace_back();
+    //        instance.material = (int)scene.materials.size();
+    //        auto& material    = scene.materials.emplace_back();
+    //        material.color    = get_color(s);
+    //        material.type     = material_type::matte;
+    //        instance.shape    = (int)scene.shapes.size();
+    //
+    //        auto shape = create_polygon_shape(positions, line_width);
+    //        scene.shapes.push_back(shape);
+    //      }
+    //    }
   }
 
   return scene;
@@ -479,7 +481,8 @@ void export_model(
   }
 
   model.shapes.push_back(obj);
-  save_obj(filename, model, error);
+  auto success = save_obj(filename, model, error);
+  assert(success);
 }
 
 #include <yocto/yocto_color.h>
@@ -602,49 +605,49 @@ vector<Svg_Shape> load_svg(const string& filename) {
 void init_from_svg(bool_state& state, const bool_mesh& mesh,
     const mesh_point& center, const vector<Svg_Shape>& svg, float svg_size,
     int svg_subdivs) {
-//  auto p0  = eval_position(mesh, {center.face, {0, 0}});
-//  auto p1  = eval_position(mesh, {center.face, {1, 0}});
-//  auto rot = mat2f{};
-//  {
-//    auto frame = mat3f{};
-//    frame.x    = normalize(p1 - p0);
-//    frame.z    = eval_normal(mesh, center.face);
-//    frame.y    = normalize(cross(frame.z, frame.x));
-//
-//    auto up = vec3f{0, 1, 0};
-//    auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
-//    rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
-//  }
-//
-//  for (auto& shape : svg) {
-//    for (auto& path : shape.paths) {
-//      auto& polygon = state.polygons.emplace_back();
-//
-//      auto control_points = vector<mesh_point>{};
-//      // polygon.center = center;
-//      // polygon.frame  = mat2f{rot, vec2f{-rot.y, rot.x}};
-//      // polygon.color  = shape.color;
-//      for (auto& segment : path) {
-//        // polygon.curves.push_back({});
-//        for (int i = 0; i < 3; i++) {
-//          // vec2f uv = clamp(segment[i], 0.0f, 1.0f);
-//          vec2f uv = segment[i];
-//          uv -= vec2f{0.5, 0.5};
-//          uv = rot * uv;
-//          uv *= svg_size;
-//          auto line = straightest_path(mesh, center, uv);
-//          control_points += line.end;
-//        }
-//      }
-//      auto bezier = compute_bezier_path(mesh.dual_solver, mesh.triangles,
-//          mesh.positions, mesh.adjacencies, control_points, svg_subdivs);
-//
-//      for (int i = 0; i < bezier.size() - 1; i++) {
-//        if (i > 0 && bezier[i] == bezier[i - 1]) continue;
-//        auto point = bezier[i];
-//        polygon += {point, {point, point}};
-////        state.points += bezier[i];
-//      }
-//    }
-//  }
+  //  auto p0  = eval_position(mesh, {center.face, {0, 0}});
+  //  auto p1  = eval_position(mesh, {center.face, {1, 0}});
+  //  auto rot = mat2f{};
+  //  {
+  //    auto frame = mat3f{};
+  //    frame.x    = normalize(p1 - p0);
+  //    frame.z    = eval_normal(mesh, center.face);
+  //    frame.y    = normalize(cross(frame.z, frame.x));
+  //
+  //    auto up = vec3f{0, 1, 0};
+  //    auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
+  //    rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
+  //  }
+  //
+  //  for (auto& shape : svg) {
+  //    for (auto& path : shape.paths) {
+  //      auto& polygon = state.polygons.emplace_back();
+  //
+  //      auto control_points = vector<mesh_point>{};
+  //      // polygon.center = center;
+  //      // polygon.frame  = mat2f{rot, vec2f{-rot.y, rot.x}};
+  //      // polygon.color  = shape.color;
+  //      for (auto& segment : path) {
+  //        // polygon.curves.push_back({});
+  //        for (int i = 0; i < 3; i++) {
+  //          // vec2f uv = clamp(segment[i], 0.0f, 1.0f);
+  //          vec2f uv = segment[i];
+  //          uv -= vec2f{0.5, 0.5};
+  //          uv = rot * uv;
+  //          uv *= svg_size;
+  //          auto line = straightest_path(mesh, center, uv);
+  //          control_points += line.end;
+  //        }
+  //      }
+  //      auto bezier = compute_bezier_path(mesh.dual_solver, mesh.triangles,
+  //          mesh.positions, mesh.adjacencies, control_points, svg_subdivs);
+  //
+  //      for (int i = 0; i < bezier.size() - 1; i++) {
+  //        if (i > 0 && bezier[i] == bezier[i - 1]) continue;
+  //        auto point = bezier[i];
+  //        polygon += {point, {point, point}};
+  ////        state.points += bezier[i];
+  //      }
+  //    }
+  //  }
 }

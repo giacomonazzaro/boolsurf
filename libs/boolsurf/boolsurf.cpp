@@ -1684,7 +1684,7 @@ void compute_bool_operations(
 }
 
 mesh_point intersect_mesh(const bool_mesh& mesh, const shape_bvh& bvh,
-    const scene_camera& camera, const vec2f& uv) {
+    const camera_data& camera, const vec2f& uv) {
   auto ray = camera_ray(
       camera.frame, camera.lens, camera.aspect, camera.film, uv);
   auto isec = intersect_triangles_bvh(bvh, mesh.triangles, mesh.positions, ray);

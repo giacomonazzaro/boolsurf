@@ -77,7 +77,7 @@ void add_mesh_edges(scene_data& scene, const shape_data& mesh) {
   instance.material  = (int)scene.materials.size();
   auto& material     = scene.materials.emplace_back();
   material.color     = {0, 0, 0};
-  material.type      = scene_material_type::glossy;
+  material.type      = material_type::glossy;
   material.roughness = 0.5;
   auto& edges        = scene.shapes.emplace_back();
   for (auto& tr : mesh.triangles) {
@@ -261,10 +261,9 @@ inline void update_cell_shapes(
   auto shape_ids    = vector<int>(num_cells);
   auto material_ids = vector<int>(num_cells);
   for (int i = 0; i < num_cells; i++) {
-    auto& cell         = state.cells[i];
     auto  material_id  = (int)app.scene.materials.size();
     auto& material     = app.scene.materials.emplace_back();
-    material.type      = scene_material_type::glossy;
+    material.type      = material_type::glossy;
     material.roughness = 0.4;
     if (state.labels.size())
       material.color = get_cell_color(state, i, false);
@@ -403,7 +402,6 @@ inline bool intersect_mesh_point(const bool_mesh& mesh, const ray3f& ray,
 }
 
 inline bool update_selection(App& app, const vec2f& mouse_uv) {
-  auto& selection = app.editing.selection;
   auto& camera    = app.scene.cameras[0];
   auto  radius    = 2 * app.line_thickness;
   auto  ray       = camera_ray(
@@ -752,7 +750,7 @@ inline void draw_widgets(App& app, const glinput_state& input) {
   }
 }
 
-static bool uiupdate_image_params(
+bool uiupdate_image_params(
     const glinput_state& input, glimage_params& glparams) {
   // handle mouse
   if (input.mouse_left && input.modifier_alt && !input.widgets_active) {

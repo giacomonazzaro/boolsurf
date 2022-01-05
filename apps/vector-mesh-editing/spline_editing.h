@@ -29,9 +29,9 @@ struct Spline_Input {
   inline int num_curves() const {
     if (control_points.size() <= 1) return 0;
     if (is_closed)
-      return control_points.size();
+      return (int)control_points.size();
     else
-      return control_points.size() - 1;
+      return (int)control_points.size() - 1;
   }
 };
 
@@ -40,7 +40,7 @@ inline vec2i curves_adjacent_to_point(const Spline_Input& input, int point_id) {
   auto prev   = point_id - 1;
   if (prev < 0) {
     if (input.is_closed)
-      prev = input.control_points.size() - 1;
+      prev = (int)input.control_points.size() - 1;
     else
       prev = -1;
   }
