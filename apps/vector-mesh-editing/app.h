@@ -162,10 +162,10 @@ inline int add_shape(App& app, shape_data&& shape,
 
 inline void add_new_shapes(App& app) {
   auto& scene = app.scene;
-  for (auto& [id, shape, frame, material] : app.new_shapes) {
+  for (auto&& [id, shape, frame, material] : app.new_shapes) {
     scene.shapes.resize(max((int)scene.shapes.size(), id + 1));
     scene.instances.resize(max((int)scene.instances.size(), id + 1));
-    scene.shapes[id]    = shape;
+    scene.shapes[id]    = std::move(shape);
     scene.instances[id] = {frame, id, material, true};
   }
 
@@ -203,12 +203,12 @@ void update_boolsurf_input(bool_state& state, App& app) {
 }
 
 inline shape_data make_mesh_patch(const vector<vec3f>& positions,
-    const vector<vec3i>& triangles, const vector<int>& faces,
-    vector<int>& vertex_map) {
+    const vector<vec3i>& triangles, const vector<int>& faces) {
   // PROFILE();
   auto shape = shape_data{};
   shape.triangles.resize(faces.size());
 
+  // Raw copy if cell is too big. We waste some memory.
   if (faces.size() > triangles.size() / 2) {
     shape.positions = positions;
     for (int i = 0; i < faces.size(); i++) {
@@ -217,6 +217,8 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
     return shape;
   }
 
+  // Sparse copy if cell is small.
+  auto vertex_map = vector<int>(positions.size(), -1);
   for (int i = 0; i < faces.size(); i++) {
     auto tr = triangles[faces[i]];
 
@@ -247,17 +249,18 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
   return shape;
 }
 
-inline void update_cell_graphics(
+inline void update_cell_shapes(
     App& app, const bool_state& state, hash_set<int>& updated_shapes) {
-  static auto cell_to_shape = hash_map<int, int>{};
-  auto&       mesh          = app.mesh;
+  static auto cell_to_shape_id = hash_map<int, int>{};
+  auto&       mesh             = app.mesh;
 
   PROFILE();
   auto vertex_map = vector<int>(mesh.positions.size(), -1);
 
-  auto shape_ids    = vector<int>{};
-  auto material_ids = vector<int>{};
-  for (int i = 0; i < state.cells.size(); i++) {
+  auto num_cells    = state.cells.size();
+  auto shape_ids    = vector<int>(num_cells);
+  auto material_ids = vector<int>(num_cells);
+  for (int i = 0; i < num_cells; i++) {
     auto& cell         = state.cells[i];
     auto  material_id  = (int)app.scene.materials.size();
     auto& material     = app.scene.materials.emplace_back();
@@ -267,38 +270,35 @@ inline void update_cell_graphics(
       material.color = get_cell_color(state, i, false);
     else
       material.color = vec3f{0.8, 0.8, 0.8};
-    material_ids.push_back(material_id);
+    material_ids[i] = material_id;
 
     auto shape_id = -1;
-    if (auto it = cell_to_shape.find(i); it == cell_to_shape.end()) {
-      // shape_id         = add_shape(app, shape, {}, material_id);
-      shape_id         = add_shape(app, {}, {}, material_id);
-      cell_to_shape[i] = shape_id;
+    if (auto it = cell_to_shape_id.find(i); it == cell_to_shape_id.end()) {
+      shape_id            = add_shape(app, {}, {}, material_id);
+      cell_to_shape_id[i] = shape_id;
     } else {
       shape_id = it->second;
-      // set_shape(app, shape_id, shape, {}, material_id);
-      // set_shape(app, shape_id, {}, {}, material_id);
     }
     updated_shapes += shape_id;
-    shape_ids.push_back(shape_id);
+    shape_ids[i] = shape_id;
   }
 
   // TODO(giacomo): Parallelize.
-  auto cell_shapes = vector<shape_data>(shape_ids.size());
+  auto cell_shapes = vector<shape_data>(num_cells);
   auto f           = [&](size_t i) {
-    auto vertex_map = vector<int>(mesh.positions.size(), -1);
-    cell_shapes[i]  = make_mesh_patch(
-        mesh.positions, mesh.triangles, state.cells[i].faces, vertex_map);
+    cell_shapes[i] = make_mesh_patch(
+        mesh.positions, mesh.triangles, state.cells[i].faces);
   };
-  // parallel_for(shape_ids.size(), f);
-  serial_for(shape_ids.size(), f);
+  // parallel_for(num_cells, f);
+  serial_for(num_cells, f);
 
-  for (int i = 0; i < shape_ids.size(); i++) {
-    set_shape(app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
+  for (int i = 0; i < num_cells; i++) {
+    set_shape(
+        app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
   }
 
-  for (auto& [cell_id, shape_id] : cell_to_shape) {
-    if (cell_id >= state.cells.size()) {
+  for (auto& [cell_id, shape_id] : cell_to_shape_id) {
+    if (cell_id >= num_cells) {
       set_shape(app, shape_id, {});
       updated_shapes += shape_id;
     }
@@ -365,7 +365,7 @@ inline void process_mouse(
       compute_cells(app.mesh, app.bool_state, app.shapes);
       // compute_shapes(app.bool_state);
     }
-    update_cell_graphics(app, app.bool_state, updated_shapes);
+    update_cell_shapes(app, app.bool_state, updated_shapes);
     reset_mesh(app.mesh);
   }
 
