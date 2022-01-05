@@ -279,14 +279,18 @@ inline void update_cell_graphics(
   }
 
   // TODO(giacomo): Parallelize.
-  auto f = [&](size_t i) {
+  auto cell_shapes = vector<shape_data>(shape_ids.size());
+  auto f           = [&](size_t i) {
     auto vertex_map = vector<int>(mesh.positions.size(), -1);
-    auto shape      = make_mesh_patch(
+    cell_shapes[i]  = make_mesh_patch(
         mesh.positions, mesh.triangles, state.cells[i].faces, vertex_map);
-    set_shape(app, shape_ids[i], shape, {}, material_ids[i]);
   };
   // parallel_for(shape_ids.size(), f);
   serial_for(shape_ids.size(), f);
+
+  for (int i = 0; i < shape_ids.size(); i++) {
+    set_shape(app, shape_ids[i], cell_shapes[i], {}, material_ids[i]);
+  }
 
   for (auto& [cell_id, shape_id] : cell_to_shape) {
     if (cell_id >= state.cells.size()) {
