@@ -302,7 +302,11 @@ inline int intersect_segments(const App& app, const vec2f& mouse_uv,
 inline void update_cell_shapes(App& app, const bool_state& state,
     const vector<bool>& bsh_output, hash_set<int>& updated_shapes) {
   static auto cell_to_shape_id = hash_map<int, int>{};
-  auto&       mesh             = app.mesh;
+  for (auto& [cell_id, shape_id] : cell_to_shape_id) {
+    app.scene.instances[shape_id].visible = false;
+  }
+
+  auto& mesh = app.mesh;
 
   PROFILE();
   auto vertex_map = vector<int>(mesh.positions.size(), -1);
@@ -316,7 +320,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     material.type      = material_type::glossy;
     material.roughness = 0.4;
     if (state.labels.size())
-      material.color = get_color(i);  // get_cell_color(state, i, false);
+      material.color = get_cell_color(state, i, false);
     else
       material.color = vec3f{0.8, 0.8, 0.8};
     material_ids[i] = material_id;
@@ -332,6 +336,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     } else {
       shape_id = it->second;
     }
+    app.scene.instances[shape_id].visible = true;
     updated_shapes += shape_id;
     shape_ids[i] = shape_id;
   }
@@ -358,12 +363,12 @@ inline void update_cell_shapes(App& app, const bool_state& state,
         app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
   }
 
-  for (auto& [cell_id, shape_id] : cell_to_shape_id) {
-    if (cell_id >= num_cells) {
-      set_shape(app, shape_id, {});
-      updated_shapes += shape_id;
-    }
-  }
+  // for (auto& [cell_id, shape_id] : cell_to_shape_id) {
+  //   if (cell_id >= num_cells) {
+  //     set_shape(app, shape_id, {});
+  //     updated_shapes += shape_id;
+  //   }
+  // }
 
   app.scene.instances[0].visible = false;
 }
@@ -377,7 +382,10 @@ inline void update_boolsurf(App& app, const glinput_state& input) {
     compute_cells(app.mesh, app.bool_state, app.shapes);
     // compute_shapes(app.bool_state);
   }
+
+#if 0
   app.bsh_input = make_bsh_input(app.bool_state, app.mesh, app.shapes);
+  // BSH stuff
   if (app.patch_id < app.bsh_input.patches.size())
     app.bsh_input.patches[app.patch_id].num_samples = 1;
   auto bsh_output = run_bsh(app.bsh_input);
@@ -404,8 +412,10 @@ inline void update_boolsurf(App& app, const glinput_state& input) {
   set_shape(
       app, patch_sample_id, make_sphere(8, app.line_thickness * 15, 1), frame);
   app.updated_shapes += patch_sample_id;
+#endif
 
-  update_cell_shapes(app, app.bool_state, bsh_output, app.updated_shapes);
+  update_cell_shapes(
+      app, app.bool_state, {} /*bsh_output*/, app.updated_shapes);
   reset_mesh(app.mesh);
 }
 
@@ -675,7 +685,7 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
   auto& mesh = app.mesh;
 
   // Update spline rendering
-#if 1
+#if 0
   for (auto curve_id : cache.curves_to_update) {
     auto& curve = cache.curves[curve_id];
     curve.positions.resize(output.segments[curve_id].size() + 1);
