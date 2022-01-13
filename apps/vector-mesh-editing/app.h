@@ -15,12 +15,11 @@
 
 #include "render.h"
 #include "spline_editing.h"
-#include "utils.h"
 
 using namespace yocto;  // TODO(giacomo): Remove this.
 
-// #define _PROFILE_SCOPE(name) ;
-#define PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
+#define PROFILE_SCOPE(name) ;
+// #define PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
 // #define PROFILE() ;
 #define PROFILE() PROFILE_SCOPE(__FUNCTION__)
 
@@ -40,11 +39,15 @@ struct App {
   shape_bvh   bvh        = {};
   float       time       = 0;
 
+  BSH_graph bsh_input = {};
+  int       patch_id  = 0;
+
   Editing    editing    = {};
   Splinesurf splinesurf = {};
 
   vector<vector<vector<vector<mesh_segment>>>> shapes = {};
 
+  hash_set<int>       updated_shapes = {};
   vector<Shape_Entry> new_shapes     = {};
   int                 num_new_shapes = 0;
   // vector<instance_data> new_instances;
@@ -107,8 +110,8 @@ void init_app(App& app, const Params& params) {
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
   init_mesh(app.mesh);
 
-  app.bool_state   = state_from_test(app.mesh, test, 0.0, false);
-  app.mesh.normals = compute_normals(app.mesh);
+  app.bool_state = state_from_test(app.mesh, test, 0.0, false);
+  app.mesh.normals.clear();
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
@@ -202,25 +205,15 @@ void update_boolsurf_input(bool_state& state, App& app) {
   }
 }
 
-inline shape_data make_mesh_patch(const vector<vec3f>& positions,
-    const vector<vec3i>& triangles, const vector<int>& faces) {
+inline shape_data make_mesh_patch(
+    const vector<vec3f>& positions, vector<vec3i>&& triangles) {
   // PROFILE();
   auto shape = shape_data{};
-  shape.triangles.resize(faces.size());
-
-  // Raw copy if cell is too big. We waste some memory.
-  if (faces.size() > triangles.size() / 2) {
-    shape.positions = positions;
-    for (int i = 0; i < faces.size(); i++) {
-      shape.triangles[i] = triangles[faces[i]];
-    }
-    return shape;
-  }
 
   // Sparse copy if cell is small.
   auto vertex_map = vector<int>(positions.size(), -1);
-  for (int i = 0; i < faces.size(); i++) {
-    auto tr = triangles[faces[i]];
+  for (int i = 0; i < triangles.size(); i++) {
+    auto& tr = triangles[i];
 
     for (auto& v : tr) {
       if (vertex_map[v] == -1) {
@@ -232,8 +225,9 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
         v = vertex_map[v];
       }
     }
-    shape.triangles[i] = tr;
   }
+
+  shape.triangles = std::move(triangles);
 
   // if (faces.size() < triangles.size() / 2) {
   //   // sparse cleanup of vertex_map
@@ -247,63 +241,6 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
   //   fill(vertex_map.begin(), vertex_map.end(), -1);
   // }
   return shape;
-}
-
-inline void update_cell_shapes(
-    App& app, const bool_state& state, hash_set<int>& updated_shapes) {
-  static auto cell_to_shape_id = hash_map<int, int>{};
-  auto&       mesh             = app.mesh;
-
-  PROFILE();
-  auto vertex_map = vector<int>(mesh.positions.size(), -1);
-
-  auto num_cells    = state.cells.size();
-  auto shape_ids    = vector<int>(num_cells);
-  auto material_ids = vector<int>(num_cells);
-  for (int i = 0; i < num_cells; i++) {
-    auto  material_id  = (int)app.scene.materials.size();
-    auto& material     = app.scene.materials.emplace_back();
-    material.type      = material_type::glossy;
-    material.roughness = 0.4;
-    if (state.labels.size())
-      material.color = get_cell_color(state, i, false);
-    else
-      material.color = vec3f{0.8, 0.8, 0.8};
-    material_ids[i] = material_id;
-
-    auto shape_id = -1;
-    if (auto it = cell_to_shape_id.find(i); it == cell_to_shape_id.end()) {
-      shape_id            = add_shape(app, {}, {}, material_id);
-      cell_to_shape_id[i] = shape_id;
-    } else {
-      shape_id = it->second;
-    }
-    updated_shapes += shape_id;
-    shape_ids[i] = shape_id;
-  }
-
-  // TODO(giacomo): Parallelize.
-  auto cell_shapes = vector<shape_data>(num_cells);
-  auto f           = [&](size_t i) {
-    cell_shapes[i] = make_mesh_patch(
-        mesh.positions, mesh.triangles, state.cells[i].faces);
-  };
-  // parallel_for(num_cells, f);
-  serial_for(num_cells, f);
-
-  for (int i = 0; i < num_cells; i++) {
-    set_shape(
-        app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
-  }
-
-  for (auto& [cell_id, shape_id] : cell_to_shape_id) {
-    if (cell_id >= num_cells) {
-      set_shape(app, shape_id, {});
-      updated_shapes += shape_id;
-    }
-  }
-
-  app.scene.instances[0].visible = false;
 }
 
 inline void toggle_handle_visibility(App& app, bool visible) {
@@ -339,6 +276,139 @@ inline void set_selected_point(
   toggle_handle_visibility(app, true);
 }
 
+inline int intersect_segments(const App& app, const vec2f& mouse_uv,
+    const vector<int>& segment_to_patch, vec3f& out_pos) {
+  auto& camera = app.scene.cameras[0];
+  auto  radius = 5 * app.line_thickness;
+  auto  ray    = camera_ray(
+      camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
+  auto& mesh = app.mesh;
+  auto  uv   = vec2f{};
+  float dist;
+  for (int i = 0; i < mesh.polygon_borders.size(); i++) {
+    auto t0   = mesh.triangles[mesh.polygon_borders[i].face_in];
+    auto t1   = mesh.triangles[mesh.polygon_borders[i].face_out];
+    auto edge = common_edge(t0, t1);
+    auto pos  = (mesh.positions[edge.x] + mesh.positions[edge.y]) / 2;
+    auto hit  = intersect_sphere(ray, pos, radius, uv, dist);
+    if (hit) {
+      return segment_to_patch[i];
+      out_pos = pos;
+    }
+  }
+  return -1;
+}
+
+inline void update_cell_shapes(App& app, const bool_state& state,
+    const vector<bool>& bsh_output, hash_set<int>& updated_shapes) {
+  static auto cell_to_shape_id = hash_map<int, int>{};
+  auto&       mesh             = app.mesh;
+
+  PROFILE();
+  auto vertex_map = vector<int>(mesh.positions.size(), -1);
+
+  auto num_cells    = (int)state.cells.size();
+  auto shape_ids    = vector<int>(num_cells);
+  auto material_ids = vector<int>(num_cells);
+  for (int i = 0; i < num_cells; i++) {
+    auto  material_id  = (int)app.scene.materials.size();
+    auto& material     = app.scene.materials.emplace_back();
+    material.type      = material_type::glossy;
+    material.roughness = 0.4;
+    if (state.labels.size())
+      material.color = get_color(i);  // get_cell_color(state, i, false);
+    else
+      material.color = vec3f{0.8, 0.8, 0.8};
+    material_ids[i] = material_id;
+
+    if (bsh_output.size()) {
+      material.color = bsh_output[i] ? vec3f{1, 0, 0} : vec3f{1, 1, 1};
+    }
+
+    auto shape_id = -1;
+    if (auto it = cell_to_shape_id.find(i); it == cell_to_shape_id.end()) {
+      shape_id            = add_shape(app, {}, {}, material_id);
+      cell_to_shape_id[i] = shape_id;
+    } else {
+      shape_id = it->second;
+    }
+    updated_shapes += shape_id;
+    shape_ids[i] = shape_id;
+  }
+
+  // TODO(giacomo): Parallelize.
+  auto cell_shapes    = vector<shape_data>(num_cells);
+  auto cell_triangles = make_cell_triangles(
+      mesh.face_tags, mesh.triangles, num_cells);
+  auto f = [&](size_t i) {
+    auto& shape = cell_shapes[i];
+    // Raw copy if cell is too big. We waste some memory.
+    if (cell_triangles[i].size() > mesh.triangles.size() / 2) {
+      shape.positions = mesh.positions;
+      shape.triangles = std::move(cell_triangles[i]);
+      return;
+    }
+    shape = make_mesh_patch(mesh.positions, std::move(cell_triangles[i]));
+  };
+  // parallel_for(num_cells, f);
+  serial_for(num_cells, f);
+
+  for (int i = 0; i < num_cells; i++) {
+    set_shape(
+        app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
+  }
+
+  for (auto& [cell_id, shape_id] : cell_to_shape_id) {
+    if (cell_id >= num_cells) {
+      set_shape(app, shape_id, {});
+      updated_shapes += shape_id;
+    }
+  }
+
+  app.scene.instances[0].visible = false;
+}
+
+inline void update_boolsurf(App& app, const glinput_state& input) {
+  PROFILE_SCOPE("boolsurf");
+  app.bool_state = {};
+  update_boolsurf_input(app.bool_state, app);
+  {
+    PROFILE_SCOPE("compute_cells");
+    compute_cells(app.mesh, app.bool_state, app.shapes);
+    // compute_shapes(app.bool_state);
+  }
+  app.bsh_input = make_bsh_input(app.bool_state, app.mesh, app.shapes);
+  if (app.patch_id < app.bsh_input.patches.size())
+    app.bsh_input.patches[app.patch_id].num_samples = 1;
+  auto bsh_output = run_bsh(app.bsh_input);
+
+  vec3f pos;
+  // auto  mouse_uv     = vec2f{input.mouse_pos.x /
+  // float(input.window_size.x),
+  //     input.mouse_pos.y / float(input.window_size.y)};
+  for (int i = 0; i < app.mesh.polygon_borders.size(); i++) {
+    if (app.bsh_input.segment_to_patch[i] == app.patch_id) {
+      auto face  = app.mesh.polygon_borders[i].face_in;
+      auto point = mesh_point{face, {0.3, 0.3}};
+      pos        = eval_position(app.mesh, point);
+    }
+  }
+  // intersect_segments(
+  //     app, mouse_uv, app.bool_state.bsh_input.segment_to_patch, pos);
+  static int patch_sample_id = -1;
+  if (patch_sample_id == -1) patch_sample_id = add_shape(app, {});
+  auto frame = frame3f{};
+  if (app.patch_id != -1) {
+    frame.o = pos;
+  }
+  set_shape(
+      app, patch_sample_id, make_sphere(8, app.line_thickness * 15, 1), frame);
+  app.updated_shapes += patch_sample_id;
+
+  update_cell_shapes(app, app.bool_state, bsh_output, app.updated_shapes);
+  reset_mesh(app.mesh);
+}
+
 inline void process_mouse(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
@@ -355,18 +425,7 @@ inline void process_mouse(
     return;
   }
 
-  {
-    PROFILE_SCOPE("boolsurf");
-    app.bool_state = {};
-    update_boolsurf_input(app.bool_state, app);
-    {
-      PROFILE_SCOPE("compute_cells");
-      compute_cells(app.mesh, app.bool_state, app.shapes);
-      // compute_shapes(app.bool_state);
-    }
-    update_cell_shapes(app, app.bool_state, updated_shapes);
-    reset_mesh(app.mesh);
-  }
+  update_boolsurf(app, input);
 
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
@@ -402,9 +461,9 @@ inline bool intersect_mesh_point(const bool_mesh& mesh, const ray3f& ray,
 }
 
 inline bool update_selection(App& app, const vec2f& mouse_uv) {
-  auto& camera    = app.scene.cameras[0];
-  auto  radius    = 2 * app.line_thickness;
-  auto  ray       = camera_ray(
+  auto& camera = app.scene.cameras[0];
+  auto  radius = 5 * app.line_thickness;
+  auto  ray    = camera_ray(
       camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
 
   for (int spline_id = 0; spline_id < app.splinesurf.spline_input.size();
@@ -599,7 +658,8 @@ void update_output(Spline_Output& output, const Spline_Input& input,
     if (output.segments.size() <= curve_id)
       output.segments.resize(curve_id + 1);
     auto control_polygon = input.control_polygon(curve_id);
-    if (control_polygon[0] == control_polygon[3]) {
+    if (control_polygon[0] == control_polygon[1] &&
+        control_polygon[2] == control_polygon[3]) {
       output.segments[curve_id] = make_segments(
           mesh, control_polygon[0], control_polygon[3]);
     } else {
@@ -612,14 +672,19 @@ void update_output(Spline_Output& output, const Spline_Input& input,
 void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
     const Spline_Output& output, scene_data& scene,
     hash_set<int>& updated_shapes) {
-  auto& mesh = scene.shapes[0];
+  auto& mesh = app.mesh;
+
+  // Update spline rendering
+#if 1
   for (auto curve_id : cache.curves_to_update) {
-    cache.curves[curve_id].positions.resize(output.segments[curve_id].size());
+    auto& curve = cache.curves[curve_id];
+    curve.positions.resize(output.segments[curve_id].size() + 1);
     for (int i = 0; i < output.segments[curve_id].size(); i++) {
-      auto& segment                       = output.segments[curve_id][i];
-      cache.curves[curve_id].positions[i] = eval_position(
-          mesh.triangles, mesh.positions, {segment.face, segment.start});
+      auto& segment      = output.segments[curve_id][i];
+      curve.positions[i] = eval_position(mesh, {segment.face, segment.start});
     }
+    auto& segment          = output.segments[curve_id].back();
+    curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
   }
 
   for (auto curve_id : cache.curves_to_update) {
@@ -630,6 +695,7 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
     shape.normals = compute_normals(shape);
     updated_shapes += cache.curves[curve_id].shape_id;
   }
+#endif
 
   for (auto point_id : cache.points_to_update) {
     auto& anchor = cache.points[point_id];

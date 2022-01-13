@@ -5,9 +5,10 @@
 #include <yocto/yocto_sceneio.h>
 #include <yocto_gui/yocto_shade.h>
 //
+#include <boolsurf/bsh.h>
+
 #include "app.h"
 #include "render.h"
-#include "utils.h"
 
 #if YOCTO_OPENGL == 1
 #include <yocto_gui/yocto_glview.h>
@@ -106,7 +107,7 @@ void run_glview(const glview_params& params) {
 
 void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
-  PROFILE();
+  // PROFILE();
   for (auto shape_id : updated_shapes) {
     set_shape(glscene.shapes[shape_id], scene.shapes[shape_id]);
   }
@@ -134,7 +135,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   }
 
   // gpu updates
-  auto updated_shapes = hash_set<int>{};
+  auto& updated_shapes = app.updated_shapes;
 
   // scene
   auto& new_shapes = app.new_shapes;
@@ -158,6 +159,11 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_glcombobox("name", selected, names);
     draw_glcheckbox("flag", app.flag);
+
+    if (draw_glslider(
+            "patch-id", app.patch_id, 0, (int)app.bsh_input.patches.size())) {
+      update_boolsurf(app, input);
+    }
 
     if (draw_glbutton("close spline")) {
       auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
@@ -246,7 +252,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
 }
 
 void widgets_callback(const glinput_state& input, App& app) {
-//  auto time = app.time;
+  //  auto time = app.time;
   // if (input.widgets_active) {
   // printf("time: %f, function: %s\n", time, __FUNCTION__);
   // }
@@ -308,4 +314,9 @@ void run(const vector<string>& args) {
 }
 
 // Main
-int main(int argc, const char* argv[]) { run(make_cli_args(argc, argv)); }
+int main(int argc, const char* argv[]) {
+  // auto labels = vector<bool>{};
+  // load_bsh_result(labels, argv[1]);
+  // return 0;
+  run(make_cli_args(argc, argv));
+}

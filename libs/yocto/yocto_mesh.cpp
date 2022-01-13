@@ -593,8 +593,8 @@ static vector<pair<vec2d, vec2d>> unfold_funnel_portals_double(
   return make_funnel_portals_double(triangles, coords, strip, end);
 }
 
-vec2i get_edge(const vector<vec3i>& triangles, const vector<vec3f>& positions,
-    const vector<vec3i>& adjacencies, int f0, int f1) {
+vec2i get_edge(const vector<vec3i>& triangles, const vector<vec3i>& adjacencies,
+    int f0, int f1) {
   auto k = find_in_vec(adjacencies[f0], f1);
   if (k == -1) return {-1, -1};
   auto tr = triangles[f0];

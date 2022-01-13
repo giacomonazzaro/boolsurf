@@ -112,9 +112,9 @@ void init_mesh(bool_mesh& mesh) {
   mesh.normals.clear();
   mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
 
-  mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
-  mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
-  mesh.polygon_borders = vector<vec3i>();
+  mesh.is_edge_on_boundary = vector<bool>(3 * mesh.triangles.size(), false);
+  mesh.face_tags           = vector<int>(mesh.triangles.size(), -1);
+  mesh.polygon_borders.clear();
 
   mesh.old_adjacencies = mesh.adjacencies;
   mesh.num_triangles   = (int)mesh.triangles.size();
@@ -134,9 +134,7 @@ void init_mesh(bool_mesh& mesh) {
   mesh.dual_solver = make_dual_geodesic_solver(
       mesh.triangles, mesh.positions, mesh.adjacencies);
 
-  mesh.graph = make_geodesic_solver(
-      mesh.triangles, mesh.adjacencies, mesh.positions);
-
+  // @MUTLITHREAD_DANGER
   mesh.triangles.reserve(mesh.triangles.size() * 2);
   mesh.adjacencies.reserve(mesh.adjacencies.size() * 2);
 }
@@ -147,8 +145,8 @@ void reset_mesh(bool_mesh& mesh) {
   mesh.triangulated_faces.clear();
   mesh.polygon_borders.clear();
 
-  // mesh.borders.tags    = vector<bool>(3 * mesh.triangles.size(), false);
-  // mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
+  // mesh.is_edge_on_boundary    = vector<bool>(3 * mesh.triangles.size(),
+  // false); mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
 
   // mesh.dual_solver.graph.resize(mesh.num_triangles);
   // mesh.triangulated_faces.clear();
@@ -269,12 +267,12 @@ vector<mesh_segment> make_curve_segments(
   return curve;
 }
 
-vector<vector<mesh_segment>> recompute_polygon_segments(
-    const bool_mesh& mesh, mesh_polygon& polygon) {
+vector<vector<mesh_segment>> make_boundary_segments(
+    const bool_mesh& mesh, const vector<anchor_point>& boundary) {
   auto result = vector<vector<mesh_segment>>{};
-  for (int i = 0; i < polygon.size(); i++) {
-    auto& start = polygon[i];
-    auto  end   = polygon[(i + 1) % polygon.size()];
+  for (int i = 0; i < boundary.size(); i++) {
+    auto& start = boundary[i];
+    auto  end   = boundary[(i + 1) % boundary.size()];
 
     auto& curve = result.emplace_back();
     curve       = make_curve_segments(mesh, start, end);
@@ -283,11 +281,12 @@ vector<vector<mesh_segment>> recompute_polygon_segments(
 }
 
 struct hashgrid_polyline {
-  int           polygon  = -1;
-  vector<vec2f> points   = {};
-  vector<int>   vertices = {};
-  vector<int>   side_ids = {};
-  vector<float> t        = {};
+  int           shape_id    = -1;
+  int           boundary_id = 0;
+  vector<vec2f> points      = {};
+  vector<int>   vertices    = {};
+  vector<int>   curve_ids   = {};
+  vector<float> t           = {};
 
   bool is_closed = false;
 };
@@ -320,16 +319,15 @@ using mesh_hashgrid = hash_map<int, vector<hashgrid_polyline>>;
 // struct mesh_hashgrid : hash_map<int, vector<hashgrid_polyline>> {};
 
 inline int add_vertex(bool_mesh& mesh, mesh_hashgrid& hashgrid,
-    const mesh_point& point, const mesh_shape_point& shape_location,
+    const mesh_point& point, int polyline_id, int curve_id, float t,
     int vertex = -1) {
   float eps = 0.00001;
 
   auto update_polyline = [&](int v) {
-    auto [shape_id, side_id, t] = shape_location;
-    if (shape_id < 0) return;
-    auto& polyline = hashgrid[point.face][shape_id];
+    if (polyline_id == -1) return;  // @DONT_ADD_TO_POLYLINE. -1 is a signal
+    auto& polyline = hashgrid[point.face][polyline_id];
     polyline.vertices.push_back(v);
-    polyline.side_ids.push_back(side_id);
+    polyline.curve_ids.push_back(curve_id);
     polyline.t.push_back(t);
     polyline.points.push_back(point.uv);
   };
@@ -386,12 +384,12 @@ static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
 
   for (auto shape_id = 0; shape_id < shapes.size(); shape_id++) {
     //    auto& polygons = shapes[shape_id].polygons;
-    for (auto polygon_id = 0; polygon_id < shapes[shape_id].size();
-         polygon_id++) {
-      //      auto& polygon = polygons[polygon_id];
-      if (shapes[shape_id][polygon_id].empty()) continue;
-      if (shapes[shape_id][polygon_id][0].empty()) continue;
-      auto& boundary = shapes[shape_id][polygon_id];
+    for (auto boundary_id = 0; boundary_id < shapes[shape_id].size();
+         boundary_id++) {
+      //      auto& polygon = polygons[boundary_id];
+      if (shapes[shape_id][boundary_id].empty()) continue;
+      if (shapes[shape_id][boundary_id][0].empty()) continue;
+      auto& boundary = shapes[shape_id][boundary_id];
       // La polilinea della prima faccia del poligono viene processata alla fine
       // (perché si trova tra il primo e l'ultimo edge)
       int  first_face   = boundary[0][0].face;
@@ -401,39 +399,37 @@ static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
       int last_face   = -1;
       int last_vertex = -1;
 
-      for (auto e = 0; e < boundary.size(); e++) {
-        auto& edge = boundary[e];
+      for (auto curve_id = 0; curve_id < boundary.size(); curve_id++) {
+        auto& curve = boundary[curve_id];
 
-        for (auto s = 0; s < edge.size(); s++) {
-          auto& segment = edge[s];
+        for (auto segment_id = 0; segment_id < curve.size(); segment_id++) {
+          auto& segment = curve[segment_id];
 
           // Iniziamo a riempire l'hashgrid a partire da quando troviamo una
           // faccia diversa da quella iniziale del poligono (il primo tratto
           // verrà aggiunto a posteriori per evitare inconsistenza)
           if (segment.face == first_face && indices == vec2i{-1, -1}) continue;
-          if (indices == vec2i{-1, -1}) indices = {e, s};
+          if (indices == vec2i{-1, -1}) indices = {curve_id, segment_id};
 
           auto& entry = hashgrid[segment.face];
-          auto  ids   = vec2i{e, s};
-          ids.y       = (s + 1) % edge.size();
-          ids.x       = ids.y > s ? e : (e + 1) % boundary.size();
 
           // Se la faccia del segmento che stiamo processando è diversa
           // dall'ultima salvata allora creiamo una nuova polilinea, altrimenti
           // accodiamo le nuove informazioni.
           if (segment.face != last_face) {
-            auto  polyline_id = (int)entry.size();
-            auto& polyline    = entry.emplace_back();
-            // polyline.polygon  = polygon_id;
-            polyline.polygon = shape_id;
+            auto  polyline_id    = (int)entry.size();
+            auto& polyline       = entry.emplace_back();
+            polyline.shape_id    = shape_id;
+            polyline.boundary_id = boundary_id;
 
             last_vertex = add_vertex(mesh, hashgrid,
-                {segment.face, segment.start},
-                {polyline_id, e, segment.t_start}, last_vertex);
+                {segment.face, segment.start}, polyline_id, curve_id,
+                segment.t_start, last_vertex);
             if (first_vertex == -1) first_vertex = last_vertex;
 
             last_vertex = add_vertex(mesh, hashgrid,
-                {segment.face, segment.end}, {polyline_id, e, segment.t_end});
+                {segment.face, segment.end}, polyline_id, curve_id,
+                segment.t_end);
 
           } else {
             auto  polyline_id = (int)entry.size() - 1;
@@ -441,66 +437,52 @@ static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
             assert(segment.end != polyline.points.back());
 
             last_vertex = add_vertex(mesh, hashgrid,
-                {segment.face, segment.end}, {polyline_id, e, segment.t_end});
+                {segment.face, segment.end}, polyline_id, curve_id,
+                segment.t_end);
           }
 
           last_face = segment.face;
         }
-
-        //        if (last_vertex != -1)
-        //          control_points[last_vertex] =
-        //              polygon.points[(e + 1) % boundary.size()];
       }
 
       if (indices == vec2i{-1, -1}) {
-        auto& entry       = hashgrid[first_face];
-        auto  polyline_id = (int)entry.size();
-        auto& polyline    = entry.emplace_back();
-        // polyline.polygon   = polygon_id;
-        polyline.polygon   = shape_id;
-        polyline.is_closed = true;
+        auto& entry          = hashgrid[first_face];
+        auto  polyline_id    = (int)entry.size();
+        auto& polyline       = entry.emplace_back();
+        polyline.shape_id    = shape_id;
+        polyline.boundary_id = boundary_id;
+        polyline.is_closed   = true;
 
-        for (auto e = 0; e < boundary.size(); e++) {
-          auto& edge = boundary[e];
-          for (int s = 0; s < edge.size(); s++) {
-            auto& segment = edge[s];
+        for (auto curve_id = 0; curve_id < boundary.size(); curve_id++) {
+          auto& curve = boundary[curve_id];
+          for (int segment_id = 0; segment_id < curve.size(); segment_id++) {
+            auto& segment = curve[segment_id];
 
             last_vertex = add_vertex(mesh, hashgrid,
-                {segment.face, segment.start},
-                {polyline_id, e, segment.t_start});
+                {segment.face, segment.start}, polyline_id, curve_id,
+                segment.t_start);
           }
-
-          //          if (last_vertex != -1)
-          //            control_points[last_vertex] =
-          //                polygon.points[(e + 1) % boundary.size()];
         }
       };
 
       // Ripetiamo parte del ciclo (fino a indices) perché il primo tratto di
       // polilinea non è stato inserito nell'hashgrid
       auto vertex = -1;
-      for (auto e = 0; e <= indices.x; e++) {
-        auto end_idx = (e < indices.x) ? boundary[e].size() : indices.y;
+      for (auto curve_id = 0; curve_id <= indices.x; curve_id++) {
+        auto end_idx = (curve_id < indices.x) ? boundary[curve_id].size()
+                                              : indices.y;
         for (auto s = 0; s < end_idx; s++) {
-          auto ids = vec2i{e, s};
-          ids.y    = (s + 1) % boundary[e].size();
-          ids.x    = ids.y > s ? e : e + 1;
-
-          auto& segment     = boundary[e][s];
+          auto& segment     = boundary[curve_id][s];
           auto& entry       = hashgrid[segment.face];
           auto  polyline_id = (int)entry.size() - 1;
 
-          if (e == indices.x && s == indices.y - 1) vertex = first_vertex;
+          if (curve_id == indices.x && s == indices.y - 1)
+            vertex = first_vertex;
 
-          // auto& polyline    = entry.back();
           assert(segment.face == last_face);
           last_vertex = add_vertex(mesh, hashgrid, {segment.face, segment.end},
-              {polyline_id, e, segment.t_end}, vertex);
+              polyline_id, curve_id, segment.t_end, vertex);
         }
-
-        //        if (e > 0 && last_vertex != -1)
-        //          control_points[last_vertex] =
-        //              polygon.points[(e + 1) % boundary.size()];
       }
     }
   }
@@ -524,12 +506,13 @@ static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
 void save_tree_png(const bool_state& state, string filename,
     const string& extra, bool color_shapes);
 
-static vector<mesh_cell> make_mesh_cells(vector<int>& cell_tags,
-    const vector<vec3i>& adjacencies, const vector<bool>& border_tags) {
-  auto result = vector<mesh_cell>{};
+static vector<bool_cell> make_mesh_cells(vector<int>& cell_tags,
+    const vector<vec3i>& adjacencies, const vector<bool>& is_edge_on_boundary) {
+  auto result = vector<bool_cell>{};
   cell_tags   = vector<int>(adjacencies.size(), -1);
 
   // consume task stack
+  // Iniziamo dall'ultimo nodo che sicuramente corrisponde a un triangolo
   auto starts = vector<int>{(int)adjacencies.size() - 1};
 
   while (starts.size()) {
@@ -540,15 +523,9 @@ static vector<mesh_cell> make_mesh_cells(vector<int>& cell_tags,
     // pop element from task stack
     auto first_face = start;
 
-    // static int c = 0;
-    // // save_tree_png(*global_state(),
-    // // "data/tests/flood_fill_" + to_string(c) + ".png", "", false);
-    // c += 1;
-
-    auto  cell_id = (int)result.size();
-    auto& cell    = result.emplace_back();
-    cell.faces.reserve(adjacencies.size());
-    auto face_stack = vector<int>{first_face};
+    auto  cell_id    = (int)result.size();
+    auto& cell       = result.emplace_back();
+    auto  face_stack = vector<int>{first_face};
 
     while (!face_stack.empty()) {
       auto face = face_stack.back();
@@ -557,53 +534,49 @@ static vector<mesh_cell> make_mesh_cells(vector<int>& cell_tags,
       if (cell_tags[face] >= 0) continue;
       cell_tags[face] = cell_id;
 
-      cell.faces.push_back(face);
-
       for (int k = 0; k < 3; k++) {
         auto neighbor = adjacencies[face][k];
         if (neighbor < 0) continue;
 
         auto neighbor_cell = cell_tags[neighbor];
         if (neighbor_cell >= 0) continue;
-        if (border_tags[3 * face + k]) {
+        if (is_edge_on_boundary[3 * face + k]) {
           starts.push_back(neighbor);
         } else {
           face_stack.push_back(neighbor);
         }
       }
-    }  // end of while
-    cell.faces.shrink_to_fit();
-  }  // end of while
+    }
+  }
 
   return result;
 }
 
-vector<mesh_cell> make_cell_graph(bool_mesh& mesh) {
+vector<bool_cell> make_cell_graph(bool_mesh& mesh) {
   _PROFILE();
-  // Iniziamo dall'ultima faccia che sicuramente non e' stata distrutta.
   auto cells = make_mesh_cells(
-      mesh.face_tags, mesh.adjacencies, mesh.borders.tags);
+      mesh.face_tags, mesh.adjacencies, mesh.is_edge_on_boundary);
 
   {
     _PROFILE_SCOPE("tag_cell_edges");
-    for (auto& [polygon_id, inner_face, outer_face] : mesh.polygon_borders) {
-      if (inner_face < 0 || outer_face < 0) continue;
-      auto a = mesh.face_tags[inner_face];
-      auto b = mesh.face_tags[outer_face];
-      cells[a].adjacency.insert({b, -polygon_id});
-      cells[b].adjacency.insert({a, +polygon_id});
+    for (auto& segment : mesh.polygon_borders) {
+      if (segment.face_in < 0 || segment.face_out < 0) continue;
+      auto a = mesh.face_tags[segment.face_in];
+      auto b = mesh.face_tags[segment.face_out];
+      cells[a].adjacency.insert({b, segment.shape_id, 0});
+      cells[b].adjacency.insert({a, segment.shape_id, 1});
     }
   }
 
   return cells;
 }
 
-static vector<int> find_roots(const vector<mesh_cell>& cells) {
+static vector<int> find_roots(const vector<bool_cell>& cells) {
   // Trova le celle non hanno archi entranti con segno di poligono positivo.
   auto adjacency = vector<int>(cells.size(), 0);
   for (auto& cell : cells) {
-    for (auto& [adj, p] : cell.adjacency) {
-      if (p > 0) adjacency[adj] += 1;
+    for (auto& [neighbor, shape_id, entering] : cell.adjacency) {
+      if (entering > 0) adjacency[neighbor] += 1;
     }
   }
 
@@ -614,8 +587,8 @@ static vector<int> find_roots(const vector<mesh_cell>& cells) {
   return result;
 }
 
-static vector<mesh_cell> compute_shape_macrograph(
-    const vector<mesh_cell>& cells, int shape_id) {
+static vector<bool_cell> compute_shape_macrograph(
+    const vector<bool_cell>& cells, int shape_id) {
   auto components      = vector<vector<int>>();
   auto shape_component = hash_map<int, int>();
   auto visited         = vector<bool>(cells.size(), false);
@@ -639,22 +612,23 @@ static vector<mesh_cell> compute_shape_macrograph(
       shape_component[cell_id] = component_id;
 
       auto& cell = cells[cell_id];
-      for (auto& [neighbor, shape] : cell.adjacency) {
-        if (yocto::abs(shape) == shape_id) continue;
+      for (auto& [neighbor, n_shape_id, entering] : cell.adjacency) {
+        if (n_shape_id == shape_id) continue;
         if (visited[neighbor]) continue;
         stack.push_back(neighbor);
       }
     }
   }
 
-  auto macrograph = vector<mesh_cell>((int)components.size());
+  auto macrograph = vector<bool_cell>((int)components.size());
   for (auto c = 0; c < (int)components.size(); c++) {
     for (auto id : components[c]) {
-      for (auto [neighbor, shape] : cells[id].adjacency) {
-        if (yocto::abs(shape) != shape_id) continue;
+      for (auto& [neighbor, n_shape_id, entering] : cells[id].adjacency) {
+        if (n_shape_id != shape_id) continue;
 
         auto neighbor_component = shape_component.at(neighbor);
-        macrograph[c].adjacency.insert({neighbor_component, shape});
+        macrograph[c].adjacency.insert(
+            {neighbor_component, n_shape_id});  // Now missing sign.
       }
     }
   }
@@ -662,7 +636,7 @@ static vector<mesh_cell> compute_shape_macrograph(
   return macrograph;
 }
 
-static void compute_cycles(const vector<mesh_cell>& cells, int node,
+static void compute_cycles(const vector<bool_cell>& cells, int node,
     vec2i parent, vector<int> visited, vector<vec2i> parents,
     vector<vector<vec2i>>& cycles) {
   // Se il nodo il considerazione è già stato completamente visitato allora
@@ -696,12 +670,12 @@ static void compute_cycles(const vector<mesh_cell>& cells, int node,
   parents[node] = parent;
   visited[node] = 1;
 
-  for (auto& [neighbor, polygon] : cells[node].adjacency) {
+  for (auto& [neighbor, shape_id, entering] : cells[node].adjacency) {
     // Se stiamo percorrendo lo stesso arco ma al contrario allora continuo,
     // altrimenti esploriamo il vicino
-    // if (polygon > 0) continue;
-    // if (neighbor == parent.x && polygon == -parent.y) continue;
-    compute_cycles(cells, neighbor, {node, polygon}, visited, parents, cycles);
+    // if (shape_id > 0) continue;
+    // if (neighbor == parent.x && shape_id == -parent.y) continue;
+    compute_cycles(cells, neighbor, {node, shape_id}, visited, parents, cycles);
   }
 
   // Settiamo il nodo attuale come completamente visitato
@@ -709,7 +683,7 @@ static void compute_cycles(const vector<mesh_cell>& cells, int node,
 }
 
 inline vector<vector<vec2i>> compute_graph_cycles(
-    const vector<mesh_cell>& cells) {
+    const vector<bool_cell>& cells) {
   // _PROFILE();
   auto visited        = vector<int>(cells.size(), 0);
   auto parents        = vector<vec2i>(cells.size(), {0, 0});
@@ -721,7 +695,7 @@ inline vector<vector<vec2i>> compute_graph_cycles(
 }
 
 hash_set<int> compute_invalid_shapes(
-    const vector<mesh_cell>& cells, int num_shapes) {
+    const vector<bool_cell>& cells, int num_shapes) {
   _PROFILE();
   auto invalid_shapes = hash_set<int>();
   for (auto s = 1; s < num_shapes; s++) {
@@ -735,7 +709,7 @@ hash_set<int> compute_invalid_shapes(
 }
 
 inline vector<vector<int>> compute_components(
-    const bool_state& state, const shape& bool_shape) {
+    const bool_state& state, const bool_shape& bool_shape) {
   // Calcoliamo le componenti tra le celle presenti in una bool_shape
   // (per calcolarne i bordi in maniera più semplice)
   auto cells   = vector<int>(bool_shape.cells.begin(), bool_shape.cells.end());
@@ -761,7 +735,7 @@ inline vector<vector<int>> compute_components(
       component.push_back(cell_idx);
 
       auto& cell = state.cells[cell_idx];
-      for (auto& [neighbor, shape] : cell.adjacency) {
+      for (auto& [neighbor, shape_id, entering] : cell.adjacency) {
         if (find_idx(cells, neighbor) == -1) continue;
         if (visited[neighbor]) continue;
         stack.push_back(neighbor);
@@ -774,7 +748,7 @@ inline vector<vector<int>> compute_components(
 static vector<vector<int>> propagate_cell_labels(bool_state& state) {
   _PROFILE();
   // Inizializziamo le label delle celle a 0.
-  auto  num_shapes     = (int)state.bool_shapes.size();
+  auto  num_shapes     = (int)state.shapes.size();
   auto& cells          = state.cells;
   auto& labels         = state.labels;
   auto& invalid_shapes = state.invalid_shapes;
@@ -788,10 +762,9 @@ static vector<vector<int>> propagate_cell_labels(bool_state& state) {
   for (auto cell_id : new_start) {
     auto& cell      = cells[cell_id];
     labels[cell_id] = vector<int>(num_shapes, 0);
-    for (auto& [neighbor_id, shape_id] : cell.adjacency) {
-      if (shape_id > 0) continue;
-      auto ushape_id             = yocto::abs(shape_id);
-      labels[cell_id][ushape_id] = 1;
+    for (auto& [neighbor_id, shape_id, entering] : cell.adjacency) {
+      if (entering > 0) continue;
+      labels[cell_id][shape_id] = 1;
     }
   }
 
@@ -809,12 +782,10 @@ static vector<vector<int>> propagate_cell_labels(bool_state& state) {
     // c += 1;
 
     auto& cell = cells[cell_id];
-    for (auto& [neighbor_id, shape_id] : cell.adjacency) {
-      auto ushape_id = yocto::abs(shape_id);
-
+    for (auto& [neighbor_id, shape_id, entering] : cell.adjacency) {
       auto& neighbor_labels = labels[neighbor_id];
       auto  updated_labels  = labels[cell_id];
-      updated_labels[ushape_id] += yocto::sign(shape_id);
+      updated_labels[shape_id] += entering ? 1 : -1;  // yocto::sign(shape_id);
 
       auto updated = false;
       for (int s = 0; s < neighbor_labels.size(); s++) {
@@ -872,29 +843,26 @@ static void add_polygon_intersection_points(bool_state& state,
             continue;
           }
 
-          auto uv     = lerp(start1, end1, l.y);
-          auto point  = mesh_point{face, uv};
-          auto vertex = add_vertex(
-              mesh, hashgrid, point, {-1, -1, -1});  // don't add to polyline
-          // state.control_points[vertex] = (int)state.points.size();
-          state.isecs_generators[vertex] = {poly.polygon, poly.polygon};
-          {
-            auto t0 = lerp(poly.t[s0], poly.t[s0 + 1], l.x);
-            auto t1 = lerp(poly.t[s1], poly.t[s1 + 1], l.y);
-            assert(t0 != 0 && t0 != 1 && int(t0 * 64) - t0 * 4 != 0);
-            assert(t1 != 0 && t1 != 1 && int(t1 * 64) - t0 * 4 != 0);
-            state.intersections.push_back(
-                {{{poly.polygon, poly.side_ids[s0], t0},
-                    {poly.polygon, poly.side_ids[s1], t1}}});
-          }
-          // state.points.push_back(point);
-          // printf("self-intersection: polygon %d, vertex %d\n", poly.polygon,
-          //     vertex);
+          auto uv    = lerp(start1, end1, l.y);
+          auto point = mesh_point{face, uv};
+          // Don't add vertex to polyline. See @DONT_ADD_TO_POLYLINE.
+          auto vertex = add_vertex(mesh, hashgrid, point, -1, -1, -1);
+
+          auto t0 = lerp(poly.t[s0], poly.t[s0 + 1], l.x);
+          auto t1 = lerp(poly.t[s1], poly.t[s1 + 1], l.y);
+          add_intersection(state.intersections, poly.shape_id, poly.boundary_id,
+              poly.curve_ids[s0], t0, poly.shape_id, poly.boundary_id,
+              poly.curve_ids[s1], t1);
 
           insert(poly.points, s0 + 1, uv);
           insert(poly.vertices, s0 + 1, vertex);
+          insert(poly.t, s0 + 1, t0);
+          insert(poly.curve_ids, s0 + 1, poly.curve_ids[s0]);
+
           insert(poly.points, s1 + 2, uv);
           insert(poly.vertices, s1 + 2, vertex);
+          insert(poly.t, s1 + 2, t1);
+          insert(poly.curve_ids, s1 + 2, poly.curve_ids[s1]);
           num_added += 1;
           s1 += 2;
         }
@@ -919,27 +887,30 @@ static void add_polygon_intersection_points(bool_state& state,
               continue;
             }
 
-            auto uv     = lerp(start1, end1, l.y);
-            auto point  = mesh_point{face, uv};
-            auto vertex = add_vertex(mesh, hashgrid, point, {-1, -1, -1});
-            //            state.control_points[vertex]   =
-            //            (int)state.points.size();
-            state.isecs_generators[vertex] = {poly0.polygon, poly1.polygon};
+            auto uv    = lerp(start1, end1, l.y);
+            auto point = mesh_point{face, uv};
+            // Don't add vertex to polyline. See @DONT_ADD_TO_POLYLINE.
+            auto vertex = add_vertex(mesh, hashgrid, point, -1, -1, -1);
 
-            {
-              auto t0 = lerp(poly0.t[s0], poly0.t[s0 + 1], l.x);
-              auto t1 = lerp(poly1.t[s1], poly1.t[s1 + 1], l.y);
-              assert(t0 != 0 && t0 != 1 && int(t0 * 64) - t0 * 4 != 0);
-              assert(t1 != 0 && t1 != 1 && int(t1 * 64) - t0 * 4 != 0);
-              state.intersections.push_back(
-                  {{{poly0.polygon, poly0.side_ids[s0], t0},
-                      {poly1.polygon, poly1.side_ids[s1], t1}}});
-            }
+            // state.isecs_generators[vertex] = {poly0.shape_id,
+            // poly1.shape_id};
+
+            auto t0 = lerp(poly0.t[s0], poly0.t[s0 + 1], l.x);
+            auto t1 = lerp(poly1.t[s1], poly1.t[s1 + 1], l.y);
+            add_intersection(state.intersections, poly0.shape_id,
+                poly0.boundary_id, poly0.curve_ids[s0], t0, poly1.shape_id,
+                poly1.boundary_id, poly1.curve_ids[s1], t1);
 
             insert(poly0.points, s0 + 1, uv);
             insert(poly0.vertices, s0 + 1, vertex);
+            insert(poly0.t, s0 + 1, t0);
+            insert(poly0.curve_ids, s0 + 1, poly0.curve_ids[s0]);
+
             insert(poly1.points, s1 + 1, uv);
             insert(poly1.vertices, s1 + 1, vertex);
+            insert(poly1.t, s1 + 1, t1);
+            insert(poly1.curve_ids, s1 + 1, poly1.curve_ids[s1]);
+
             num_added += 1;
             s1 += 1;
           }
@@ -1223,7 +1194,7 @@ static void update_face_adjacencies(bool_mesh& mesh) {
 }
 
 inline bool check_tags(
-    const bool_mesh& mesh, const vector<vec3i>& border_tags) {
+    const bool_mesh& mesh, const vector<vec3i>& is_edge_on_boundary) {
   for (int i = 0; i < mesh.triangles.size(); i++) {
     if (mesh.triangulated_faces.find(i) != mesh.triangulated_faces.end()) {
       continue;
@@ -1239,8 +1210,8 @@ inline bool check_tags(
       auto kk = find_in_vec(mesh.adjacencies[neighbor], face);
       assert(kk != -1);
 
-      auto tags0 = border_tags[face];
-      auto tags1 = border_tags[neighbor];
+      auto tags0 = is_edge_on_boundary[face];
+      auto tags1 = is_edge_on_boundary[neighbor];
       auto tag0  = tags0[k];
       auto tag1  = tags1[kk];
       assert(tag0 == -tag1);
@@ -1323,13 +1294,21 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
       tr = {info.indices[tr.x], info.indices[tr.y], info.indices[tr.z]};
     }
 
-    vector<vec3i> polygon_faces;
-    auto          border_map = hash_map<vec2i, int>{};
-    for (auto& polyline : polylines) {
-      auto polygon_id = polyline.polygon;
-      for (auto i = 0; i < num_segments(polyline); i++) {
-        auto edge        = get_segment_vertices(polyline, i);
-        border_map[edge] = polygon_id;
+    auto polygon_faces = vector<bool_mesh::shape_segment>{};
+    struct Entry {
+      int   shape_id, boundary_id, curve_id;
+      float t;
+    };
+    auto border_map = hash_map<vec2i, Entry>{};
+    for (auto& p : polylines) {
+      for (auto i = 0; i < num_segments(p); i++) {
+        auto edge = get_segment_vertices(p, i);
+        assert(p.points.size() == p.points.size());
+        assert(p.vertices.size() == p.points.size());
+        assert(p.curve_ids.size() == p.points.size());
+        assert(p.t.size() == p.points.size());
+        border_map[edge] = Entry{
+            p.shape_id, p.boundary_id, p.curve_ids[i], p.t[i]};
       }
     }
 
@@ -1337,8 +1316,14 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
       for (int k = 0; k < 3; k++) {
         auto edge = get_mesh_edge_from_index(triangles[i], k);
         if (auto it = border_map.find(edge); it != border_map.end()) {
-          auto polygon = it->second;
-          polygon_faces.push_back({polygon, i, adjacency[i][k]});
+          auto& entry         = it->second;
+          auto& segment       = polygon_faces.emplace_back();
+          segment.shape_id    = entry.shape_id;
+          segment.boundary_id = entry.boundary_id;
+          segment.curve_id    = entry.curve_id;
+          segment.t           = entry.t;
+          segment.face_in     = i;
+          segment.face_out    = adjacency[i][k];
         }
       }
     }
@@ -1347,8 +1332,11 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
     add_debug_triangle(face, triangles);
 
     // TODO(giacomo): Pericoloso: se resize() innesca una riallocazione, il
-    // codice dopo l'unlock che sta eseguendo su un altro thread puo' fare
-    // casino.
+    // codice dopo l'unlock che sta eseguendo su un altro thread continua a
+    // scrivere su memoria vecchia e deallocata.
+    // In @MUTLITHREAD_DANGER preallochiamo piu' spazio per evitare questo.
+    // Soluzione: si mette tutto dentro il lock, anche il pezzetto dopo. Si
+    // abbassano un po' le performance (quanto? boh, poco).
     auto mesh_triangles_old_size = 0;
     {
       auto lock               = std::lock_guard{mesh_mutex};
@@ -1359,9 +1347,9 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
         triangulated_faces[i].id = mesh_triangles_old_size + i;
       }
       mesh.triangulated_faces[face] = triangulated_faces;
-      for (auto& pf : polygon_faces) {
-        if (pf.y >= 0) pf.y += mesh_triangles_old_size;
-        if (pf.z >= 0) pf.z += mesh_triangles_old_size;
+      for (auto& segment : polygon_faces) {
+        if (segment.face_in >= 0) segment.face_in += mesh_triangles_old_size;
+        if (segment.face_out >= 0) segment.face_out += mesh_triangles_old_size;
       }
       mesh.polygon_borders += polygon_faces;
     }
@@ -1384,18 +1372,19 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
 #endif
 }
 
-void compute_border_tags(bool_mesh& mesh, bool_state& state) {
+static vector<bool> make_edges_boundary_tags(const bool_mesh& mesh) {
   _PROFILE();
-  mesh.borders.tags = vector<bool>(3 * mesh.adjacencies.size(), false);
-  for (auto& [polygon_id, inner_face, outer_face] : mesh.polygon_borders) {
-    if (inner_face < 0 || outer_face < 0) continue;
-    auto k = find_in_vec(mesh.adjacencies[inner_face], outer_face);
+  auto result = vector<bool>(3 * mesh.adjacencies.size(), false);
+  for (auto& segment : mesh.polygon_borders) {
+    if (segment.face_in < 0 || segment.face_out < 0) continue;
+    auto k = find_in_vec(mesh.adjacencies[segment.face_in], segment.face_out);
     assert(k != -1);
-    mesh.borders.tags[3 * inner_face + k] = true;
-    auto kk = find_in_vec(mesh.adjacencies[outer_face], inner_face);
+    result[3 * segment.face_in + k] = true;
+    auto kk = find_in_vec(mesh.adjacencies[segment.face_out], segment.face_in);
     assert(kk != -1);
-    mesh.borders.tags[3 * outer_face + kk] = true;
+    result[3 * segment.face_out + kk] = true;
   }
+  return result;
 }
 
 void slice_mesh(bool_mesh& mesh, bool_state& state,
@@ -1411,8 +1400,8 @@ void slice_mesh(bool_mesh& mesh, bool_state& state,
   triangulate(mesh, hashgrid);
   update_face_adjacencies(mesh);
 
-  // Calcola i border_tags per le facce triangolata.
-  compute_border_tags(mesh, state);
+  // Tagga tutti i mesh edges che si trovano su un boundary.
+  mesh.is_edge_on_boundary = make_edges_boundary_tags(mesh);
 }
 
 void compute_cell_labels(bool_state& state) {
@@ -1420,7 +1409,7 @@ void compute_cell_labels(bool_state& state) {
 
   propagate_cell_labels(state);
 
-  auto offset = vector<int>((int)state.bool_shapes.size(), 0);
+  auto offset = vector<int>((int)state.shapes.size(), 0);
   for (auto& cell_label : state.labels) {
     for (auto l = 0; l < cell_label.size(); l++) {
       offset[l] = min(offset[l], cell_label[l]);
@@ -1434,38 +1423,264 @@ void compute_cell_labels(bool_state& state) {
   }
 }
 
+#include "boolsurf_io.h"
+#include "bsh.h"
+
+struct Curve_Patches {
+  struct Patch {
+    vector<pair<int, float>> points;
+  };
+  int                              num_nodes = 0;
+  std::unordered_map<vec3i, Patch> edges     = {};
+};
+
+Curve_Patches make_curve_patches(
+    const vector<vector<vector<vector<mesh_segment>>>>& shape_segments) {
+  auto  curve_patches = Curve_Patches{};
+  auto& num_nodes     = curve_patches.num_nodes;
+  auto& edges         = curve_patches.edges;
+  for (int shape_id = 0; shape_id < shape_segments.size(); shape_id++) {
+    auto& shape = shape_segments[shape_id];
+    for (int boundary_id = 0; boundary_id < shape.size(); boundary_id++) {
+      auto& boundary = shape[boundary_id];
+      auto  first    = num_nodes;
+      // auto  last     = num_nodes + (int)boundary.size() - 1;
+      for (int curve_id = 0; curve_id < boundary.size(); curve_id++) {
+        // auto& curve = boundary[curve_id];
+        // auto  node  = add_node(graph, shape_id, boundary_id, curve_id);
+        auto  node  = num_nodes++;
+        auto& patch = edges[{shape_id, boundary_id, curve_id}];
+        patch.points.push_back({node, 0.0f});
+        if (curve_id == (int)boundary.size() - 1)
+          patch.points.push_back({first, 1.0f});
+        else
+          patch.points.push_back({node + 1, 1.0f});
+      }
+    }
+  }
+  return curve_patches;
+}
+
+void add_intersections(Curve_Patches& curve_patches, const bool_state& state) {
+  for (auto& isec : state.intersections) {
+    auto node = curve_patches.num_nodes++;
+    for (int k = 0; k < 2; k++) {
+      auto  shape_id    = isec.shape_ids[k];
+      auto  boundary_id = isec.boundary_ids[k];
+      auto  curve_id    = isec.curve_ids[k];
+      auto  t           = isec.t[k];
+      auto  key         = vec3i{shape_id, boundary_id, curve_id};
+      auto& points      = curve_patches.edges[key].points;
+      points.push_back({node, t});
+    }
+  }
+
+  for (auto& [key, patch] : curve_patches.edges) {
+    auto& points = patch.points;
+    if (points.size() <= 2) continue;
+    std::sort(points.begin(), points.end(),
+        [](auto& a, auto& b) { return a.second < b.second; });
+  }
+}
+
+vector<vector<int>> make_node_graph(const Curve_Patches& curve_patches) {
+  auto nodes = vector<vector<int>>{};
+
+  auto add = [&](int a, int b) {
+    // auto id             = (int)patch_to_id.size();
+    // patch_to_id[{a, b}] = id;
+    if (a >= nodes.size()) nodes.resize(a + 1);
+    nodes[a] += b;
+  };
+
+  for (auto& [key, patch] : curve_patches.edges) {
+    for (int i = 0; i < patch.points.size() - 1; i++) {
+      add(patch.points[i].first, patch.points[i + 1].first);
+    }
+  }
+  return nodes;
+}
+
+unordered_map<vec2i, int> make_patch_to_id(const vector<vector<int>>& nodes) {
+  auto patch_to_id = unordered_map<vec2i, int>{};
+  for (int i = 0; i < nodes.size(); i++) {
+    for (int k = 0; k < nodes[i].size(); k++) {
+      auto neighbor = nodes[i][k];
+      if (neighbor < 0) continue;
+      auto id  = (int)patch_to_id.size();
+      auto key = vec2i{i, neighbor};
+      if (patch_to_id.count(key) == 0) patch_to_id[key] = id;
+    }
+  }
+  return patch_to_id;
+}
+
+vector<vector<int>> make_node_to_patches(const vector<vector<int>>& nodes,
+    const unordered_map<vec2i, int>& patch_to_id) {
+  auto node_to_patches = vector<vector<int>>(nodes.size());
+  for (int i = 0; i < nodes.size(); i++) {
+    for (auto& neighbor : nodes[i]) {
+      auto id = patch_to_id.at({i, neighbor});
+      node_to_patches[i] += id;
+      node_to_patches[neighbor] += id;
+    }
+  }
+  return node_to_patches;
+}
+
+void set_patch_adjacency(vector<BSH_patch>& patches,
+    const vector<vector<int>>& node_to_patches, int num_patches) {
+  patches.resize(num_patches);
+  for (int i = 0; i < node_to_patches.size(); i++) {
+    for (int k = 0; k < node_to_patches[i].size(); k++) {
+      for (int j = 0; j < node_to_patches[i].size(); j++) {
+        if (k == j) continue;
+        patches[node_to_patches[i][k]].adj_patches += node_to_patches[i][j];
+        patches[node_to_patches[i][j]].adj_patches += node_to_patches[i][k];
+      }
+    }
+  }
+
+  // remove duplicates
+  for (auto& patch : patches) {
+    auto& p  = patch.adj_patches;
+    auto  hs = hash_set<int>(p.begin(), p.end());
+    p        = vector<int>(hs.begin(), hs.end());
+  }
+}
+
+// auto patch_to_id = hash_map<vec2i, int>{};
+
+// auto patch_graph = hash_map<vec2i, vec2i>{};
+// for (auto& segment : mesh.polygon_borders) {
+//   auto  key  = vec3i{segment.shape_id, segment.boundary_id,
+//   segment.curve_id}; auto& side = edges.at(key); auto  t    = segment.t;
+//   auto  cell_in  = mesh.face_tags[segment.face_in];
+//   auto  cell_out = mesh.face_tags[segment.face_out];
+//   for (int i = 0; i < side.points.size() - 1; i++) {
+//     auto [isec_node, isec_t] = side.points[i + 1];
+//     auto patch_key           = vec2i{side.points[i].first, isec_node};
+//     if (isec_t >= t) {
+//       if (patch_graph.count(patch_key)) {
+//         auto& item = patch_graph.at(patch_key);
+//         assert(item.x == cell_in);
+//         assert(item.y == cell_out);
+//         continue;
+//       }
+//       patch_graph[patch_key] = {cell_in, cell_out};
+//     }
+//   }
+// }
+
+// for (auto& [key, value] : patch_graph) {
+//   printf("patch [%d, %d] adjacent to cells [%d, %d]\n", key.x, key.y,
+//   value.x,
+//       value.y);
+// }
+
+BSH_graph make_bsh_input(bool_state& state, bool_mesh& mesh,
+    const vector<vector<vector<vector<mesh_segment>>>>& shape_segments) {
+  auto curve_patches = make_curve_patches(shape_segments);
+  add_intersections(curve_patches, state);
+  auto nodes = make_node_graph(curve_patches);
+  // save_graph(nodes, "boolsurf/test");
+
+  auto& borders = mesh.polygon_borders;
+  // std::sort(borders.begin(), borders.end(), [](auto& a, auto& b) {
+  //   if (a.shape_id != b.shape_id) return a.shape_id < b.shape_id;
+  //   if (a.boundary_id != b.boundary_id) return a.boundary_id < b.boundary_id;
+  //   if (a.curve_id != b.curve_id) return a.curve_id < b.curve_id;
+  //   return a.t < b.t;
+  // });
+
+  // printf("\n\n");
+  // for (auto& border : borders) {
+  //   printf("[%d %d]\n", mesh.face_tags[border.face_in],
+  //       mesh.face_tags[border.face_out]);
+  // }
+
+  auto patch_to_id      = make_patch_to_id(nodes);
+  auto node_to_patches  = make_node_to_patches(nodes, patch_to_id);
+  auto patch_to_cells   = vector<vec2i>(patch_to_id.size(), {-1, -1});
+  auto segment_to_patch = vector<int>(borders.size());
+
+  auto set_patch_to_cell_adjacency = [&](vector<BSH_patch>& bsh_patches) {
+    for (int b = 0; b < borders.size(); b++) {
+      auto& border = borders[b];
+      auto  key = vec3i{border.shape_id, border.boundary_id, border.curve_id};
+      auto& points = curve_patches.edges.at(key).points;
+      for (int i = 1; i < points.size(); i++) {
+        if (border.t < points[i].second) {
+          auto k        = vec2i{points[i - 1].first, points[i].first};
+          auto id       = patch_to_id.at(k);
+          auto cell_in  = mesh.face_tags[border.face_in];
+          auto cell_out = mesh.face_tags[border.face_out];
+          if (bsh_patches[id].adj_cell_0 != -1) {
+            continue;
+            assert(bsh_patches[id].adj_cell_0 == cell_in);
+            assert(bsh_patches[id].adj_cell_1 == cell_out);
+          }
+          bsh_patches[id].shape_id   = border.shape_id;
+          bsh_patches[id].adj_cell_0 = cell_in;
+          bsh_patches[id].adj_cell_1 = cell_out;
+          segment_to_patch[b]        = id;
+        }
+      }
+    }
+  };
+
+  auto& bsh            = state.bsh_input;
+  bsh.segment_to_patch = segment_to_patch;
+  bsh.num_cells        = (int)state.cells.size();
+  set_patch_adjacency(bsh.patches, node_to_patches, (int)patch_to_id.size());
+  set_patch_to_cell_adjacency(bsh.patches);
+  return bsh;
+}
+
+vector<bool> run_bsh(const BSH_graph& bsh) {
+  if (bsh.patches.empty()) return {};
+
+  auto input_name  = "boolsurf/bsh-input.json"s;
+  auto output_name = "boolsurf/bsh-output.json"s;
+  auto bin_name =
+      "/Users/nazzaro/dev/Boundary_Sampled_Halfspaces/build/graph_cut"s;
+  save_bsh(bsh, input_name);
+  auto cmd = bin_name + " " + input_name + " " + output_name;
+  system(cmd.c_str());
+  auto output = vector<bool>();
+  load_bsh_result(output, output_name);
+  return output;
+}
+
 bool compute_cells(bool_mesh& mesh, bool_state& state,
-    const vector<vector<vector<vector<mesh_segment>>>>& shapes) {
+    const vector<vector<vector<vector<mesh_segment>>>>& shape_segments) {
   _PROFILE();
   global_state() = &state;
   global_mesh()  = &mesh;
   // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
-  slice_mesh(mesh, state, shapes);
+  slice_mesh(mesh, state, shape_segments);
 
-  state.bool_shapes.resize(shapes.size());
-
-  assert(!global_state()->failed);
-  if (global_state()->failed) return false;
+  state.shapes.resize(shape_segments.size());
 
   // Trova celle e loro adiacenza via flood-fill.
-  assert(!global_state()->failed);
   state.cells = make_cell_graph(mesh);
 
+  //  auto patches = make_patches(mesh, state);
+
   // Calcola i label delle celle con una visita sulla loro adiacenza.
-  assert(!global_state()->failed);
   compute_cell_labels(state);
-  assert(!global_state()->failed);
+
   return true;
 }
 
 void compute_shapes(bool_state& state) {
   // Calcoliamo le informazioni sulla shape, come le celle che ne fanno parte
-  auto& shapes  = state.bool_shapes;
+  auto& shapes  = state.shapes;
   auto& sorting = state.shapes_sorting;
-  sorting.resize(state.bool_shapes.size());
+  sorting.resize(state.shapes.size());
 
   // Assign a polygon and a color to each shape.
-  for (auto s = 0; s < state.bool_shapes.size(); s++) {
+  for (auto s = 0; s < state.shapes.size(); s++) {
     shapes[s].color = get_color(s);
     sorting[s]      = s;
   }
@@ -1496,7 +1711,7 @@ void compute_generator_polygons(
     const bool_state& state, int shape_idx, hash_set<int>& result) {
   // Calcoliamo ricorsivamente i poligoni iniziali coinvolti nelle operazioni
   // che hanno generato la shape corrente
-  auto& bool_shape = state.bool_shapes[shape_idx];
+  auto& bool_shape = state.shapes[shape_idx];
 
   // Se la shape non ha generatori allora corrisponde ad una shape di un
   // poligono
@@ -1513,108 +1728,114 @@ void compute_generator_polygons(
 }
 
 void compute_shape_borders(const bool_mesh& mesh, bool_state& state) {
-  // Calcoliamo tutti i bordi di una shape
-  for (auto s = 0; s < state.bool_shapes.size(); s++) {
-    auto& bool_shape = state.bool_shapes[s];
+  //   // Calcoliamo tutti i bordi di una shape
+  //   for (auto s = 0; s < state.shapes.size(); s++) {
+  //     auto& bool_shape = state.shapes[s];
 
-    // Calcoliamo il bordo solo per le shape root dell'albero csg
-    if (!bool_shape.is_root) continue;
+  //     // Calcoliamo il bordo solo per le shape root dell'albero csg
+  //     if (!bool_shape.is_root) continue;
 
-    // Calcoliamo i poligoni iniziali coinvolti nelle operazioni che hanno
-    // generato la root (ci serve successivamente per salvare nel bordo
-    // solamente i punti corretti)
-    auto generator_polygons = hash_set<int>();
-    compute_generator_polygons(state, s, generator_polygons);
+  //     // Calcoliamo i poligoni iniziali coinvolti nelle operazioni che hanno
+  //     // generato la root (ci serve successivamente per salvare nel bordo
+  //     // solamente i punti corretti)
+  //     auto generator_polygons = hash_set<int>();
+  //     compute_generator_polygons(state, s, generator_polygons);
 
-    auto components = compute_components(state, bool_shape);
+  //     auto components = compute_components(state, bool_shape);
 
-    for (auto& component : components) {
-      // Step 1: Calcoliamo gli edges che stanno sul bordo
-      auto edges = hash_set<vec2i>();
+  //     for (auto& component : components) {
+  //       // Step 1: Calcoliamo gli edges che stanno sul bordo
+  //       auto edges = hash_set<vec2i>();
 
-      for (auto c : component) {
-        auto& cell = state.cells[c];
-        // Per ogni cella che compone la shape calcolo il bordo a partire
-        // dalle facce che ne fanno parte
+  //       for (auto c : component) {
+  //         auto& cell = state.cells[c];
+  //         // Per ogni cella che compone la shape calcolo il bordo a partire
+  //         // dalle facce che ne fanno parte
 
-        for (auto face : cell.faces) {
-          // Se è una faccia interna allora non costituirà il bordo
-          for (auto k = 0; k < 3; k++) {
-            if (mesh.borders.tags[3 * face + k] == false) continue;
-          }
+  //         for (auto face : cell.faces) {
+  //           // Se è una faccia interna allora non costituirà il bordo
+  //           for (auto k = 0; k < 3; k++) {
+  //             if (mesh.is_edge_on_boundary[3 * face + k] == false) continue;
+  //           }
 
-          // Per ogni lato del triangolo considero solamente quelli che sono
-          // di bordo (tag != 0)
-          auto& tri = mesh.triangles[face];
-          for (auto k = 0; k < 3; k++) {
-            auto tag = mesh.borders.tags[3 * face + k];
-            if (tag == false) continue;
-            auto edge     = get_mesh_edge_from_index(tri, k);
-            auto rev_edge = vec2i{edge.y, edge.x};
+  //           // Per ogni lato del triangolo considero solamente quelli che
+  //           sono
+  //           // di bordo (tag != 0)
+  //           auto& tri = mesh.triangles[face];
+  //           for (auto k = 0; k < 3; k++) {
+  //             auto tag = mesh.is_edge_on_boundary[3 * face + k];
+  //             if (tag == false) continue;
+  //             auto edge     = get_mesh_edge_from_index(tri, k);
+  //             auto rev_edge = vec2i{edge.y, edge.x};
 
-            // Se 'edge' è già stato incontrato allora esso è un bordo tra due
-            // celle che fanno parte dela stessa shape, quindi lo elimino dal
-            // set.
-            auto it = edges.find(rev_edge);
-            if (it == edges.end())
-              edges.insert(edge);
-            else
-              edges.erase(it);
-          }
-        }
-      }
+  //             // Se 'edge' è già stato incontrato allora esso è un bordo tra
+  //             due
+  //             // celle che fanno parte dela stessa shape, quindi lo elimino
+  //             dal
+  //             // set.
+  //             auto it = edges.find(rev_edge);
+  //             if (it == edges.end())
+  //               edges.insert(edge);
+  //             else
+  //               edges.erase(it);
+  //           }
+  //         }
+  //       }
 
-      // Step 2: Riordiniamo i bordi
-      // Per ogni vertice salviamo il proprio successivo
-      auto next_vert = hash_map<int, int>();
-      for (auto& edge : edges) next_vert[edge.x] = edge.y;
+  //       // Step 2: Riordiniamo i bordi
+  //       // Per ogni vertice salviamo il proprio successivo
+  //       auto next_vert = hash_map<int, int>();
+  //       for (auto& edge : edges) next_vert[edge.x] = edge.y;
 
-      for (auto& [key, value] : next_vert) {
-        // Se il valore è -1 abbiamo già processato il punto
-        if (value == -1) continue;
+  //       for (auto& [key, value] : next_vert) {
+  //         // Se il valore è -1 abbiamo già processato il punto
+  //         if (value == -1) continue;
 
-        // Aggiungiamo un nuovo bordo
-        auto border_points = vector<int>();
+  //         // Aggiungiamo un nuovo bordo
+  //         auto border_points = vector<int>();
 
-        auto current = key;
+  //         auto current = key;
 
-        while (true) {
-          auto next = next_vert.at(current);
-          if (next == -1) break;
+  //         while (true) {
+  //           auto next = next_vert.at(current);
+  //           if (next == -1) break;
 
-          next_vert.at(current) = -1;
+  //           next_vert.at(current) = -1;
 
-          // Se il vertice corrente è un punto di controllo lo aggiungo al
-          // bordo
-          //          if (contains(state.control_points, current)) {
-          //            // Se è un punto di intersezione controlliamo che i
-          //            poligoni che
-          //            // lo hanno generato siano entrambi compresi nei
-          //            poligoni che
-          //            // hanno generato anche la shape.
-          //            if (contains(state.isecs_generators, current)) {
-          //              auto& isec_generators =
-          //              state.isecs_generators.at(current);
-          //
-          //              if (contains(generator_polygons, isec_generators.x)
-          //              &&
-          //                  contains(generator_polygons, isec_generators.y))
-          //                border_points.push_back(current);
-          //            } else
-          //              border_points.push_back(current);
-          //          }
+  //           // Se il vertice corrente è un punto di controllo lo aggiungo al
+  //           // bordo
+  //           //          if (contains(state.control_points, current)) {
+  //           //            // Se è un punto di intersezione controlliamo che i
+  //           //            poligoni che
+  //           //            // lo hanno generato siano entrambi compresi nei
+  //           //            poligoni che
+  //           //            // hanno generato anche la shape.
+  //           //            if (contains(state.isecs_generators, current)) {
+  //           //              auto& isec_generators =
+  //           //              state.isecs_generators.at(current);
+  //           //
+  //           //              if (contains(generator_polygons,
+  //           isec_generators.x)
+  //           //              &&
+  //           //                  contains(generator_polygons,
+  //           isec_generators.y))
+  //           //                border_points.push_back(current);
+  //           //            } else
+  //           //              border_points.push_back(current);
+  //           //          }
 
-          // Se un bordo è stato chiuso correttamente lo inseriamo tra i bordi
-          // della shape
-          if (next == key) {
-            bool_shape.border_points.push_back(border_points);
-            break;
-          } else
-            current = next;
-        }
-      }
-    }
-  }
+  //           // Se un bordo è stato chiuso correttamente lo inseriamo tra i
+  //           bordi
+  //           // della shape
+  //           if (next == key) {
+  //             bool_shape.border_points.push_back(border_points);
+  //             break;
+  //           } else
+  //             current = next;
+  //         }
+  //       }
+  //     }
+  //   }
 }
 
 bool_state compute_border_polygons(const bool_state& state) {
@@ -1636,8 +1857,8 @@ bool_state compute_border_polygons(const bool_state& state) {
 }
 
 void compute_bool_operation(bool_state& state, const bool_operation& op) {
-  auto& a = state.bool_shapes[op.shape_a];
-  auto& b = state.bool_shapes[op.shape_b];
+  auto& a = state.shapes[op.shape_a];
+  auto& b = state.shapes[op.shape_b];
 
   // Convertiamo il vettore di interi in bool per semplificare le operazioni
   auto aa = vector<bool>(state.cells.size(), false);
@@ -1663,10 +1884,10 @@ void compute_bool_operation(bool_state& state, const bool_operation& op) {
 
   // Creiamo una nuova shape risultato, settando come generatori le shape 'a'
   // e 'b' e riconvertendo il vettore di bool a interi
-  auto  shape_id = state.bool_shapes.size();
-  auto& c        = state.bool_shapes.emplace_back();
+  auto  shape_id = state.shapes.size();
+  auto& c        = state.shapes.emplace_back();
   c.generators   = {op.shape_a, op.shape_b};
-  c.color        = state.bool_shapes[op.shape_a].color;
+  c.color        = state.shapes[op.shape_a].color;
   auto sorting   = find_idx(state.shapes_sorting, op.shape_a);
 
   insert(state.shapes_sorting, sorting, (int)shape_id);
@@ -1692,10 +1913,10 @@ mesh_point intersect_mesh(const bool_mesh& mesh, const shape_bvh& bvh,
 }
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes) {
-  if (state.bool_shapes.empty() && state.labels.empty()) return {1, 1, 1};
+  if (state.shapes.empty() && state.labels.empty()) return {1, 1, 1};
   if (color_shapes) {
     for (int s = (int)state.shapes_sorting.size() - 1; s >= 0; s--) {
-      auto& bool_shape = state.bool_shapes[state.shapes_sorting[s]];
+      auto& bool_shape = state.shapes[state.shapes_sorting[s]];
       if (bool_shape.cells.count(cell_id) && bool_shape.is_root) {
         return bool_shape.color;
       }

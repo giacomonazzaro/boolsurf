@@ -306,6 +306,7 @@ scene_data make_scene(const bool_mesh& mesh, const bool_state& state,
     const vector<vec3f>& cell_colors) {
   auto scene = scene_data{};
   scene.cameras.push_back(camera);
+  auto cell_faces = make_cell_faces(mesh.face_tags, (int)state.cells.size());
 
   if (color_hashgrid) {
     auto& hashgrid_instance     = scene.instances.emplace_back();
@@ -367,7 +368,7 @@ scene_data make_scene(const bool_mesh& mesh, const bool_state& state,
 
       // TODO(giacomo): Too many copies of positions.
       shape.positions = mesh.positions;
-      for (auto face : cell.faces) {
+      for (auto face : cell_faces[i]) {
         shape.triangles.push_back(mesh.triangles[face]);
       }
 
@@ -399,7 +400,7 @@ scene_data make_scene(const bool_mesh& mesh, const bool_state& state,
     }
   }
 
-  if (!state.bool_shapes.size()) {
+  if (!state.shapes.size()) {
     auto& instance    = scene.instances.emplace_back();
     instance.material = (int)scene.materials.size();
 
@@ -464,7 +465,7 @@ void export_model(
   auto obj = obj_shape{};
   add_positions(obj, mesh.positions);
   add_normals(obj, mesh.normals);
-
+  auto cell_faces = make_cell_faces(mesh.face_tags, (int)state.cells.size());
   for (int c = 0; c < state.cells.size(); c++) {
     auto& cell       = state.cells[c];
     auto  cell_color = get_cell_color(state, c, false);
@@ -475,7 +476,7 @@ void export_model(
     model.materials.push_back(material);
 
     auto triangles = vector<vec3i>();
-    for (auto& face : cell.faces) triangles.push_back(mesh.triangles[face]);
+    for (auto& face : cell_faces[c]) triangles.push_back(mesh.triangles[face]);
     add_triangles(
         obj, triangles, c, !mesh.normals.empty(), !mesh.texcoords.empty());
   }
@@ -513,17 +514,56 @@ string tree_to_string(const bool_state& state, bool color_shapes) {
         i, i, label.c_str(), color.x, color.y, color.z);
     result += std::string(str);
 
-    for (auto [neighbor, polygon] : cell.adjacency) {
-      if (polygon < 0) continue;
+    for (auto [neighbor, shape_id, entering] : cell.adjacency) {
+      if (shape_id < 0) continue;
       int  c     = neighbor;
-      auto color = rgb_to_hsv(get_color(polygon));
+      auto color = rgb_to_hsv(get_color(shape_id));
       sprintf(str, "%d -> %d [ label=\"%d\" color=\"%f %f %f\"]\n", i, c,
-          polygon, color.x, color.y, color.z);
+          shape_id, color.x, color.y, color.z);
       result += std::string(str);
     }
   }
   result += "}\n";
   return result;
+}
+
+string graph_to_string(const vector<vector<int>>& nodes) {
+  string result = "digraph {\n";
+  result += "forcelabels=true\n";
+
+  for (int i = 0; i < nodes.size(); i++) {
+    char str[1024];
+    auto label = string{};
+    auto color = vec3f{1, 1, 1};
+    sprintf(str, "%d [label=\"%d\" style=filled fillcolor=\"%f %f %f\"]\n", i,
+        i, color.x, color.y, color.z);
+    result += std::string(str);
+
+    for (auto neighbor : nodes[i]) {
+      // if (polygon < 0) continue;
+      // int  c     = neighbor;
+      // auto color = rgb_to_hsv(get_color(polygon));
+      sprintf(str, "%d -> %d [ label=\"\" color=\"0 0 0\"]\n", i, neighbor);
+      result += std::string(str);
+    }
+  }
+  result += "}\n";
+  return result;
+}
+
+void save_graph(
+    const vector<vector<int>>& nodes, const string& filename, bool print) {
+  auto  graph_filename = filename + ".txt";
+  auto  image_filename = filename + ".png";
+  FILE* file           = fopen(graph_filename.c_str(), "w");
+  fprintf(file, "%s", graph_to_string(nodes).c_str());
+  fclose(file);
+
+  auto cmd = "dot -Tpng "s + graph_filename + " > " + image_filename;
+  if (print) printf("%s\n", cmd.c_str());
+  system(cmd.c_str());
+  // cmd = "rm "s + filename;
+  // system(cmd.c_str());
 }
 
 void save_tree_png(const bool_state& state, string filename,

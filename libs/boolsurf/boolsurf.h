@@ -7,6 +7,23 @@ using namespace std;
 
 const static int null_label = -999;
 
+namespace yocto {
+struct BSH_patch {
+  int         adj_cell_0  = -1;
+  int         adj_cell_1  = -1;
+  float       weight      = 1;
+  int         shape_id    = -1;
+  int         num_samples = 0;
+  vector<int> adj_patches = {};
+};
+
+struct BSH_graph {
+  int               num_cells        = 0;
+  vector<BSH_patch> patches          = {};
+  vector<int>       segment_to_patch = {};
+};
+}  // namespace yocto
+
 struct scope_timer {
   string  message    = "";
   int64_t start_time = -1;
@@ -18,30 +35,39 @@ struct scope_timer {
 // #define _PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
 #define _PROFILE() _PROFILE_SCOPE(__FUNCTION__)
 
-struct bool_borders {
-  vector<bool> tags = {};
-};
-
 struct facet {
-  std::array<vec2f, 3> corners = {};
-  int                  id      = -1;
+  std::array<vec2f, 3> corners = {};  // barycentric coordinated of vertices
+  int                  id      = -1;  // id in mesh.triangles
 };
 
 struct bool_mesh : shape_data {
-  vector<vec3i>        adjacencies     = {};
-  vector<vec3i>        old_adjacencies = {};
-  dual_geodesic_solver dual_solver     = {};
-  bool_borders         borders         = {};
+  // Precomputed
+  vector<vec3i>        adjacencies = {};
+  dual_geodesic_solver dual_solver = {};
 
-  shape_bvh                    bvh                = {};
-  bbox3f                       bbox               = {};
-  int                          num_triangles      = 0;
-  int                          num_positions      = 0;
+  // Boolsurf output
+  vector<bool> is_edge_on_boundary = {};
+
+  struct shape_segment {
+    int   shape_id;
+    int   boundary_id;
+    int   curve_id;
+    float t;
+    int   face_in;
+    int   face_out;
+  };
+  vector<shape_segment>        polygon_borders    = {};
+  vector<int>                  face_tags          = {};
   hash_map<int, vector<facet>> triangulated_faces = {};
-  geodesic_solver              graph              = {};
 
-  vector<vec3i> polygon_borders = {};
-  vector<int>   face_tags       = {};
+  // Backup
+  vector<vec3i> old_adjacencies = {};
+  int           num_triangles   = 0;
+  int           num_positions   = 0;
+
+  // Utility
+  shape_bvh bvh  = {};
+  bbox3f    bbox = {};
 };
 
 struct mesh_segment {
@@ -57,19 +83,72 @@ struct anchor_point {
   mesh_point handles[2] = {{}, {}};
 };
 
-using mesh_polygon = vector<anchor_point>;
-
-struct shape {
-  vector<vector<vector<mesh_segment>>> edges = {};
-
-  vector<int> generators = {};
-  bool        is_root    = true;
-
-  vec3f         color = {0, 0, 0};
-  hash_set<int> cells = {};
-
-  vector<vector<int>> border_points = {};
+struct bool_shape {
+  vector<int>   generators = {};
+  bool          is_root    = true;
+  vec3f         color      = {0, 0, 0};
+  hash_set<int> cells      = {};
 };
+
+struct bool_cell {
+  struct bool_cell_arc {
+    int  cell_id, shape_id;
+    bool entering;
+  };
+  hash_set<vec3i> adjacency = {};  // {cell_id, crossed_polygon_id, entering}
+};
+
+struct bool_shape_intersection {
+  vec2i shape_ids    = {-1, -1};
+  vec2i boundary_ids = {-1, -1};
+  vec2i curve_ids    = {-1, -1};
+  vec2f t            = {0.0f, 0.0f};
+};
+
+struct bool_state {
+  vector<bool_shape> shapes = {};
+
+  vector<bool_shape_intersection> intersections = {};
+
+  vector<bool_cell>   cells           = {};
+  vector<vector<int>> labels          = {};
+  vector<int>         shape_from_cell = {};
+  hash_set<int>       invalid_shapes  = {};
+  vector<int>         shapes_sorting  = {};
+
+  BSH_graph    bsh_input  = {};
+  vector<bool> bsh_output = {};
+};
+
+inline void add_intersection(vector<bool_shape_intersection>& intersections,
+    int shape_id0, int boundary_id0, int curve_id0, float t0, int shape_id1,
+    int boundary_id1, int curve_id1, float t1) {
+  auto& isec        = intersections.emplace_back();
+  isec.shape_ids    = {shape_id0, shape_id1};
+  isec.boundary_ids = {boundary_id0, boundary_id1};
+  isec.curve_ids    = {curve_id0, curve_id1};
+  isec.t            = {t0, t1};
+}
+
+inline vector<vector<int>> make_cell_faces(
+    const vector<int>& face_tags, int num_cells) {
+  auto cell_faces = vector<vector<int>>(num_cells);
+  for (int i = 0; i < face_tags.size(); i++) {
+    if (face_tags[i] == -1) continue;
+    cell_faces[face_tags[i]].push_back(i);
+  }
+  return cell_faces;
+}
+
+inline vector<vector<vec3i>> make_cell_triangles(const vector<int>& face_tags,
+    const vector<vec3i>& triangles, int num_cells) {
+  auto cell_triangles = vector<vector<vec3i>>(num_cells);
+  for (int i = 0; i < face_tags.size(); i++) {
+    if (face_tags[i] == -1) continue;
+    cell_triangles[face_tags[i]].push_back(triangles[i]);
+  }
+  return cell_triangles;
+}
 
 // Informazioni per la triangolazione di una faccia della mesh
 // Contiene: UV coords dei nodi locali di un triangolo.
@@ -84,35 +163,6 @@ struct triangulation_info {
   vector<int>                        indices = {};
   vector<vec2i>                      edges   = {};
   array<vector<pair<int, float>>, 3> edgemap = {};
-};
-
-struct mesh_cell {
-  vector<int>     faces     = {};
-  hash_set<vec2i> adjacency = {};  // {cell_id, crossed_polygon_id}
-};
-
-struct mesh_shape_point {
-  int   shape_id = -1;
-  int   curve_id = -1;
-  float t        = 0.0f;
-};
-
-struct shape_boundary_intersection {
-  mesh_shape_point locations[2];
-};
-
-struct bool_state {
-  vector<shape> bool_shapes = {};
-
-  vector<shape_boundary_intersection> intersections    = {};
-  hash_map<int, vec2i>                isecs_generators = {};
-
-  vector<mesh_cell>   cells           = {};
-  vector<int>         shape_from_cell = {};
-  vector<vector<int>> labels          = {};
-  hash_set<int>       invalid_shapes  = {};
-  vector<int>         shapes_sorting  = {};
-  bool                failed          = false;
 };
 
 inline bool_state*& global_state() {
@@ -149,11 +199,16 @@ void update_polygon(bool_state& state, const bool_mesh& mesh, int polygon_id);
 
 void              slice_mesh(bool_mesh& mesh, bool_state& state,
                  const vector<vector<vector<vector<mesh_segment>>>>& shapes);
-vector<mesh_cell> make_cell_graph(bool_mesh& mesh);
+vector<bool_cell> make_cell_graph(bool_mesh& mesh);
 void              compute_cell_labels(bool_state& state);
 
-bool       compute_cells(bool_mesh& mesh, bool_state& state,
-          const vector<vector<vector<vector<mesh_segment>>>>& shapes);
+bool compute_cells(bool_mesh& mesh, bool_state& state,
+    const vector<vector<vector<vector<mesh_segment>>>>& shapes);
+
+BSH_graph    make_bsh_input(bool_state& state, bool_mesh& mesh,
+       const vector<vector<vector<vector<mesh_segment>>>>& shape_segments);
+vector<bool> run_bsh(const BSH_graph& bsh);
+
 void       compute_shapes(bool_state& state);
 void       compute_shape_borders(const bool_mesh& mesh, bool_state& state);
 bool_state compute_border_polygons(const bool_state& state);
@@ -175,8 +230,8 @@ mesh_point eval_geodesic_path(
 
 vector<mesh_segment> make_curve_segments(
     const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
-vector<vector<mesh_segment>> recompute_polygon_segments(
-    const bool_mesh& mesh, mesh_polygon& polygon);
+vector<vector<mesh_segment>> make_boundary_segments(
+    const bool_mesh& mesh, const vector<anchor_point>& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {

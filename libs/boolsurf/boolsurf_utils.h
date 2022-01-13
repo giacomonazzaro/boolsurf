@@ -24,7 +24,7 @@ using namespace yocto;
 
 inline int mod3(int i) { return (i > 2) ? i - 3 : i; }
 
-#if 0
+#if 1
 #include "ext/robin_hood.h"
 template <typename Key, typename Value>
 using hash_map = robin_hood::unordered_flat_map<Key, Value>;
@@ -181,6 +181,18 @@ inline pair<int, float> get_edge_lerp_from_uv(const vec2f& uv) {
   return {-1, -1};
 }
 
+// template <int N>
+// struct hash<std::array<int, N>> {
+//  size_t operator()(const std::array<int, N>& v) const {
+//    static const auto hasher = std::hash<int>();
+//    auto              h      = (size_t)0;
+//    for (auto& vv : v) {
+//      h ^= hasher(vv) + 0x9e3779b9 + (h << 6) + (h >> 2);
+//    }
+//    return h;
+//  }
+//};
+
 // inline vec3f get_color(int i) {
 //   static auto colors = vector<vec3f>{
 //       {0.5, 0.5, 0.5},
@@ -203,6 +215,12 @@ inline pair<int, float> get_edge_lerp_from_uv(const vec2f& uv) {
 
 inline vec3f get_color(int i) {
   auto colors = vector<vec3f>{
+      {1, 0, 0},  // red
+      {0, 1, 0},  // green
+      {0, 0, 1},  // blue
+      {1, 1, 0},  // yellow
+      {1, 0, 1},  // purple
+      {0, 1, 1},  // cyan
       //      {0.5, 0.5, 0.5},
       {190 / 255.0, 45 / 255.0, 52 / 255.0},
       {0.063, 0.426, 0.127},

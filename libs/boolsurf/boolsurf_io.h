@@ -1,3 +1,4 @@
+#pragma once
 #include <yocto/yocto_cli.h>
 #include <yocto/yocto_sceneio.h>  // TODO(giacomo): Serve solo per funzioni inline temporanee
 #include <yocto/yocto_trace.h>
@@ -77,9 +78,8 @@ inline void from_json(const json& js, camera_data& camera) {
   js.at("focus").get_to(camera.focus);
   js.at("aperture").get_to(camera.aperture);
 }
-}  // namespace yocto
 
-bool load_json(const string& filename, json& js);
+}  // namespace yocto
 
 struct bool_test {
   string                model;
@@ -90,7 +90,7 @@ struct bool_test {
 
   vector<bool_operation> operations  = {};
   vector<vec3f>          cell_colors = {};
-  camera_data           camera      = {};
+  camera_data            camera      = {};
   bool                   has_camera  = false;
   bool                   screenspace = false;
 };
@@ -112,6 +112,8 @@ void export_model(
     const bool_state& state, const bool_mesh& mesh, const string& filename);
 
 string tree_to_string(const bool_state& state, bool color_shapes);
+void   save_graph(const vector<vector<int>>& nodes, const string& filename,
+      bool print = false);
 
 inline string tree_to_string(const vector<vector<int>>& graph) {
   string result = "digraph {\n";
@@ -189,94 +191,94 @@ void init_from_svg(bool_state& state, const bool_mesh& mesh,
 inline void map_polygons_onto_surface(bool_state& state, const bool_mesh& mesh,
     const vector<vector<vec2f>>& polygons, const camera_data& camera,
     float drawing_size) {
-//  auto rng    = make_rng(0);
-//  auto ss     = vec2f{0.5, 0.5};
-//  auto size   = 0.1f;
-//  auto center = intersect_mesh(mesh, camera, ss);
-//
-//
-//  // print("center", center);
-//  while (center.face == -1) {
-//    // || center.uv == zero2f || center.uv == vec2f{1, 0} ||
-//    //       center.uv == vec2f{0, 1}) {
-//    ss     = vec2f{0.5, 0.5} + (rand2f(rng) - vec2f{0.5, 0.5}) * size;
-//    center = intersect_mesh(mesh, camera, ss);
-//    size += 0.001;
-//  }
-//  assert(center.face != -1);
-//  center.uv = clamp(center.uv, 0.01, 0.99);
-//
-//  for (auto& polygon : polygons) {
-//    state.shapes.push_back({});
-//    auto polygon_id = (int)state.shapes.size() - 1;
-//
-//    for (auto uv : polygon) {
-//      uv.x /= camera.film;                    // input.window_size.x;
-//      uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
-//      uv *= drawing_size;
-//      uv.x = -uv.x;
-//
-//      auto path     = straightest_path(mesh, center, uv);
-//      path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
-//      path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
-//      // check_point(path.end);
-//      auto point = path.end;
-//
-//      // Add point to state.
-//      state.shapes[polygon_id].push_back({point, {point, point}});
-//
-//    }
-//
-//    if (state.polygons[polygon_id].size() <= 2) {
-//      assert(0);
-//      state.polygons[polygon_id].clear();
-//      continue;
-//    }
-//
-//    recompute_polygon_segments(mesh, state.polygons[polygon_id]);
-//  }
+  //  auto rng    = make_rng(0);
+  //  auto ss     = vec2f{0.5, 0.5};
+  //  auto size   = 0.1f;
+  //  auto center = intersect_mesh(mesh, camera, ss);
+  //
+  //
+  //  // print("center", center);
+  //  while (center.face == -1) {
+  //    // || center.uv == zero2f || center.uv == vec2f{1, 0} ||
+  //    //       center.uv == vec2f{0, 1}) {
+  //    ss     = vec2f{0.5, 0.5} + (rand2f(rng) - vec2f{0.5, 0.5}) * size;
+  //    center = intersect_mesh(mesh, camera, ss);
+  //    size += 0.001;
+  //  }
+  //  assert(center.face != -1);
+  //  center.uv = clamp(center.uv, 0.01, 0.99);
+  //
+  //  for (auto& polygon : polygons) {
+  //    state.shapes.push_back({});
+  //    auto polygon_id = (int)state.shapes.size() - 1;
+  //
+  //    for (auto uv : polygon) {
+  //      uv.x /= camera.film;                    // input.window_size.x;
+  //      uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
+  //      uv *= drawing_size;
+  //      uv.x = -uv.x;
+  //
+  //      auto path     = straightest_path(mesh, center, uv);
+  //      path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
+  //      path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
+  //      // check_point(path.end);
+  //      auto point = path.end;
+  //
+  //      // Add point to state.
+  //      state.shapes[polygon_id].push_back({point, {point, point}});
+  //
+  //    }
+  //
+  //    if (state.polygons[polygon_id].size() <= 2) {
+  //      assert(0);
+  //      state.polygons[polygon_id].clear();
+  //      continue;
+  //    }
+  //
+  //    recompute_polygon_segments(mesh, state.polygons[polygon_id]);
+  //  }
 }
 
 inline bool_state make_test_state(const bool_test& test, const bool_mesh& mesh,
     const shape_bvh& bvh, const camera_data& camera, float drawing_size,
     bool use_projection) {
-  auto state    = bool_state{};
-//  auto polygons = test.polygons_screenspace;
-//
-//  if (!use_projection) {
-//    map_polygons_onto_surface(state, mesh, polygons, camera, drawing_size);
-//  } else {
-//    // TODO(giacomo): Refactor into a function.
-//    for (auto& polygon : polygons) {
-//      state.polygons.push_back({});
-//      auto polygon_id = (int)state.polygons.size() - 1;
-//
-//      for (auto uv : polygon) {
-//        uv.x /= camera.film;                    // input.window_size.x;
-//        uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
-//        uv *= drawing_size;
-//        uv += vec2f{0.5, 0.5};
-//
-//        // auto path     = straightest_path(mesh, center, uv);
-//        // path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
-//        // path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
-//        // check_point(path.end);
-//        auto point = intersect_mesh(mesh, bvh, camera, uv);
-//        if (point.face == -1) continue;
-//
-//        // Add point to state.
-//        state.polygons[polygon_id].push_back({point, {point, point}});
-//      }
-//
-//      if (state.polygons[polygon_id].size() <= 2) {
-//        // assert(0);
-//        state.polygons[polygon_id].clear();
-//        continue;
-//      }
-//
-//      recompute_polygon_segments(mesh, state.polygons[polygon_id]);
-//    }
-//  }
+  auto state = bool_state{};
+  //  auto polygons = test.polygons_screenspace;
+  //
+  //  if (!use_projection) {
+  //    map_polygons_onto_surface(state, mesh, polygons, camera, drawing_size);
+  //  } else {
+  //    // TODO(giacomo): Refactor into a function.
+  //    for (auto& polygon : polygons) {
+  //      state.polygons.push_back({});
+  //      auto polygon_id = (int)state.polygons.size() - 1;
+  //
+  //      for (auto uv : polygon) {
+  //        uv.x /= camera.film;                    // input.window_size.x;
+  //        uv.y /= (camera.film / camera.aspect);  // input.window_size.y;
+  //        uv *= drawing_size;
+  //        uv += vec2f{0.5, 0.5};
+  //
+  //        // auto path     = straightest_path(mesh, center, uv);
+  //        // path.end.uv.x = clamp(path.end.uv.x, 0.0f, 1.0f);
+  //        // path.end.uv.y = clamp(path.end.uv.y, 0.0f, 1.0f);
+  //        // check_point(path.end);
+  //        auto point = intersect_mesh(mesh, bvh, camera, uv);
+  //        if (point.face == -1) continue;
+  //
+  //        // Add point to state.
+  //        state.polygons[polygon_id].push_back({point, {point, point}});
+  //      }
+  //
+  //      if (state.polygons[polygon_id].size() <= 2) {
+  //        // assert(0);
+  //        state.polygons[polygon_id].clear();
+  //        continue;
+  //      }
+  //
+  //      recompute_polygon_segments(mesh, state.polygons[polygon_id]);
+  //    }
+  //  }
 
   return state;
 }

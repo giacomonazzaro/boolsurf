@@ -428,8 +428,8 @@ unfold_triangle triangle_coordinates(const vector<vec3i>& triangles,
 
 // TODO(fabio): hide
 // generic utilities for paths
-vec2i get_edge(const vector<vec3i>& triangles, const vector<vec3f>& positions,
-    const vector<vec3i>& adjacencies, int f0, int f1);
+vec2i get_edge(const vector<vec3i>& triangles, const vector<vec3i>& adjacencies,
+    int f0, int f1);
 
 }  // namespace yocto
 

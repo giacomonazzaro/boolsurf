@@ -1968,8 +1968,8 @@ vector<vector<int>> ordered_boundaries(const vector<vec3i>& triangles,
     if (next_vert[i] == -1) continue;
 
     // add new empty boundary
-    boundaries.emplace_back();
-    auto current = i;
+    auto& boundary = boundaries.emplace_back();
+    auto  current  = i;
 
     while (true) {
       auto next = next_vert[current];
@@ -1977,7 +1977,7 @@ vector<vector<int>> ordered_boundaries(const vector<vec3i>& triangles,
         return {};
       }
       next_vert[current] = -1;
-      boundaries.back().push_back(current);
+      boundary.push_back(current);
 
       // close loop if necessary
       if (next == i)
