@@ -813,11 +813,12 @@ inline void insert_point(App& app, const glinput_state& input) {
     auto spline = app.splinesurf.get_spline_view(point.shape_id);
     auto cp     = spline.input.control_polygon(point.curve_id);
     auto t      = point.t;
-    //    for (int k = i + 1; k < isec_points.size(); k++) {
-    //      if (isec_points[k].spline_id != point.spline_id) break;
-    //      if (isec_points[k].boundary_id != point.boundary_id) break;
-    //      if (isec_points[k].curve_id != point.curve_id) break;
-    //    }
+    for (int k = i + 1; k < isec_points.size(); k++) {
+      if (isec_points[k].shape_id != point.shape_id) break;
+      if (isec_points[k].boundary_id != point.boundary_id) break;
+      if (isec_points[k].curve_id != point.curve_id) break;
+      isec_points[k].t /= t;
+    }
 
     auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
         app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp, t,
