@@ -363,13 +363,6 @@ inline void update_cell_shapes(App& app, const bool_state& state,
         app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
   }
 
-  // for (auto& [cell_id, shape_id] : cell_to_shape_id) {
-  //   if (cell_id >= num_cells) {
-  //     set_shape(app, shape_id, {});
-  //     updated_shapes += shape_id;
-  //   }
-  // }
-
   app.scene.instances[0].visible = false;
 }
 

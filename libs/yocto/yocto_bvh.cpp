@@ -225,7 +225,8 @@ static bvh_data make_embree_bvh(
   }
   for (auto instance_id = 0; instance_id < (int)scene.instances.size();
        instance_id++) {
-    auto& instance  = scene.instances[instance_id];
+    auto& instance = scene.instances[instance_id];
+    if (!instance.visible) continue;
     auto& sbvh      = bvh.shapes[instance.shape];
     auto  egeometry = rtcNewGeometry(edevice, RTC_GEOMETRY_TYPE_INSTANCE);
     rtcSetGeometryInstancedScene(egeometry, (RTCScene)sbvh.embree_bvh.get());
@@ -244,7 +245,8 @@ static void update_embree_bvh(bvh_data& bvh, const scene_data& scene,
   // scene bvh
   auto escene = (RTCScene)bvh.embree_bvh.get();
   for (auto instance_id : updated_instances) {
-    auto& instance    = scene.instances[instance_id];
+    auto& instance = scene.instances[instance_id];
+    if (!instance.visible) continue;
     auto& sbvh        = bvh.shapes[instance.shape];
     auto  embree_geom = rtcGetGeometry(escene, instance_id);
     rtcSetGeometryInstancedScene(embree_geom, (RTCScene)sbvh.embree_bvh.get());
@@ -597,10 +599,11 @@ bvh_data make_bvh(
   auto bboxes = vector<bbox3f>(scene.instances.size());
   for (auto idx = 0; idx < bboxes.size(); idx++) {
     auto& instance = scene.instances[idx];
-    auto& sbvh     = bvh.shapes[instance.shape];
-    bboxes[idx]    = sbvh.nodes.empty()
-                         ? invalidb3f
-                         : transform_bbox(instance.frame, sbvh.nodes[0].bbox);
+    if (!instance.visible) continue;
+    auto& sbvh  = bvh.shapes[instance.shape];
+    bboxes[idx] = sbvh.nodes.empty()
+                      ? invalidb3f
+                      : transform_bbox(instance.frame, sbvh.nodes[0].bbox);
   }
 
   // build nodes
@@ -664,8 +667,9 @@ void refit_bvh(bvh_data& bvh, const scene_data& scene,
   auto bboxes = vector<bbox3f>(scene.instances.size());
   for (auto idx = 0; idx < bboxes.size(); idx++) {
     auto& instance = scene.instances[idx];
-    auto& sbvh     = bvh.shapes[instance.shape];
-    bboxes[idx]    = transform_bbox(instance.frame, sbvh.nodes[0].bbox);
+    if (!instance.visible) continue;
+    auto& sbvh  = bvh.shapes[instance.shape];
+    bboxes[idx] = transform_bbox(instance.frame, sbvh.nodes[0].bbox);
   }
 
   // update nodes
@@ -851,7 +855,8 @@ static bool intersect_bvh(const bvh_data& bvh, const scene_data& scene,
     } else {
       for (auto idx = node.start; idx < node.start + node.num; idx++) {
         auto& instance_ = scene.instances[bvh.primitives[idx]];
-        auto  inv_ray   = transform_ray(
+        if (!instance_.visible) continue;
+        auto inv_ray = transform_ray(
             inverse(instance_.frame, non_rigid_frames), ray);
         if (intersect_bvh(bvh.shapes[instance_.shape],
                 scene.shapes[instance_.shape], inv_ray, element, uv, distance,

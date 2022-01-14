@@ -479,7 +479,12 @@ static mesh_hashgrid compute_hashgrid(bool_mesh&        mesh,
           if (curve_id == indices.x && s == indices.y - 1)
             vertex = first_vertex;
 
-          assert(segment.face == last_face);
+          if (segment.face != last_face) {
+            printf("\n\n  error in %s, %s, line %d\n", __FILE__, __FUNCTION__,
+                __LINE__);
+            printf("  segment.face != last_face, %d != %d]\n\n\n", segment.face,
+                last_face);
+          }
           last_vertex = add_vertex(mesh, hashgrid, {segment.face, segment.end},
               polyline_id, curve_id, segment.t_end, vertex);
         }

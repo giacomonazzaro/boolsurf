@@ -165,6 +165,29 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       update_boolsurf(app, input);
     }
 
+    if (draw_glbutton("Save Scene")) {
+      auto scene_dir = "boolsurf/scenes";
+
+      auto error = string{};
+      if (!make_directory(scene_dir, error)) {
+        printf("%s\n", error.c_str());
+      }
+      if (!make_directory(path_join(scene_dir, "shapes"), error)) {
+        printf("%s\n", error.c_str());
+      }
+      if (!make_directory(path_join(scene_dir, "textures"), error)) {
+        printf("%s\n", error.c_str());
+      }
+
+      auto scene_path = path_join(scene_dir, "scene.json");
+      auto result     = save_scene(scene_path, app.scene);
+
+      if (!result) {
+        printf("[Save Scene]: %s\n", result.error.c_str());
+      } else {
+        printf("[Save Scene]: Success!\n");
+      }
+    }
     if (draw_glbutton("close spline")) {
       auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
       close_spline(app.selected_spline(), add_app_shape);

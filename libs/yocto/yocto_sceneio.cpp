@@ -902,9 +902,9 @@ bool load_shape(const string& filename, shape_data& shape, string& error,
     get_faces(ply, shape.triangles, shape.quads);
     get_lines(ply, shape.lines);
     get_points(ply, shape.points);
-    if (shape.points.empty() && shape.lines.empty() &&
-        shape.triangles.empty() && shape.quads.empty())
-      return shape_error();
+    // if (shape.points.empty() && shape.lines.empty() &&
+    //     shape.triangles.empty() && shape.quads.empty())
+    // return shape_error();
     return true;
   } else if (ext == ".obj" || ext == ".OBJ") {
     auto obj = obj_shape{};
@@ -1064,7 +1064,7 @@ bool load_fvshape(const string& filename, fvshape_data& shape, string& error,
     get_quads(ply, shape.quadspos);
     if (!shape.normals.empty()) shape.quadsnorm = shape.quadspos;
     if (!shape.texcoords.empty()) shape.quadstexcoord = shape.quadspos;
-    if (shape.quadspos.empty()) return shape_error();
+    // if (shape.quadspos.empty()) return shape_error();
     return true;
   } else if (ext == ".obj" || ext == ".OBJ") {
     auto obj = obj_shape{};
@@ -3580,6 +3580,7 @@ static bool load_json_scene(
         get_opt(element, "frame", instance.frame);
         get_opt(element, "shape", instance.shape);
         get_opt(element, "material", instance.material);
+        get_opt(element, "visible", instance.visible);
       }
     }
     if (json.contains("environments")) {
@@ -3693,7 +3694,7 @@ static bool save_json_scene(const string& filename, const scene_data& scene,
 
   // names
   auto get_name = [](const vector<string>& names, size_t idx) -> string {
-    return (idx < names.size()) ? names[idx] : "";
+    return "";  //(idx < names.size()) ? names[idx] : "";
   };
   auto get_filename = [](const vector<string>& names, size_t idx,
                           const string& basename,
@@ -3832,6 +3833,7 @@ static bool save_json_scene(const string& filename, const scene_data& scene,
       set_val(element, "frame", instance.frame, default_.frame);
       set_val(element, "shape", instance.shape, default_.shape);
       set_val(element, "material", instance.material, default_.material);
+      set_val(element, "visible", instance.visible, default_.visible);
     }
   }
 
@@ -4184,7 +4186,7 @@ static bool load_ply_scene(
 static bool save_ply_scene(const string& filename, const scene_data& scene,
     string& error, bool noparallel) {
   // save shape
-  if (scene.shapes.empty()) throw std::invalid_argument{"empty shape"};
+  // if (scene.shapes.empty()) throw std::invalid_argument{"empty shape"};
   return save_shape(filename, scene.shapes.front(), error, false);
 }
 
@@ -4214,7 +4216,7 @@ static bool load_stl_scene(
 static bool save_stl_scene(const string& filename, const scene_data& scene,
     string& error, bool noparallel) {
   // save shape
-  if (scene.shapes.empty()) throw std::invalid_argument{"empty shape"};
+  // if (scene.shapes.empty()) throw std::invalid_argument{"empty shape"};
   return save_shape(filename, scene.shapes.front(), error, false);
 }
 
