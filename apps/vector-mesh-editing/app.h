@@ -39,6 +39,8 @@ struct App {
   shape_bvh   bvh        = {};
   float       time       = 0;
 
+  glinput_state last_input = {};
+
   BSH_graph bsh_input = {};
   int       patch_id  = 0;
 

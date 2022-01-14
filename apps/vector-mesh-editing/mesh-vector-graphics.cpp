@@ -3,16 +3,19 @@
 #include <yocto/yocto_parallel.h>
 #include <yocto/yocto_scene.h>
 #include <yocto/yocto_sceneio.h>
-#include <yocto_gui/yocto_shade.h>
 //
 #include <boolsurf/bsh.h>
+#include <yocto_gui/yocto_shade.h>
 
 #include "app.h"
 #include "render.h"
 
-#if YOCTO_OPENGL == 1
-#include <yocto_gui/yocto_glview.h>
+#ifdef __APPLE__
+#define GL_SILENCE_DEPRECATION
 #endif
+#include <GLFW/glfw3.h>
+#include <yocto_gui/yocto_glview.h>
+
 using namespace yocto;
 
 // view params
@@ -253,6 +256,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       set_selected_spline(app, spline_id);
     }
 
+    if (input.key_pressed[(int)gui_key::enter]) {
+      printf("%c pressed\n", 'I');
+    }
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
     for (auto& entry : app.new_shapes) {
@@ -268,7 +274,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
 
     new_shapes.clear();
-    // updated_shapes.clear();
+    app.last_input = input;
   };
   // run ui
   run_ui({1280 + 320, 720}, "yshade", callbacks);

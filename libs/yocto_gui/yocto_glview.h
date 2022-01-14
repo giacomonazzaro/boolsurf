@@ -246,30 +246,33 @@ void draw_scene(glscene_state& glscene, const scene_data& scene,
 // -----------------------------------------------------------------------------
 // WINDOW
 // -----------------------------------------------------------------------------
+struct GLFWwindow;
 namespace yocto {
 
 // Input state
 struct glinput_state {
-  bool     mouse_left           = false;  // left button
-  bool     mouse_right          = false;  // right button
-  bool     mouse_left_click     = false;  // left click
-  bool     mouse_right_click    = false;  // right click
-  bool     mouse_left_release   = false;  // left release
-  bool     mouse_right_release  = false;  // right release
-  bool     mouse_middle         = false;  // middle button
-  vec2f    mouse_pos            = {};     // position excluding widgets
-  vec2f    mouse_last           = {};  // last mouse position excluding widgets
-  vec2f    mouse_delta          = {};  // last mouse delta excluding widgets
-  bool     modifier_alt         = false;         // alt modifier
-  bool     modifier_ctrl        = false;         // ctrl modifier
-  bool     modifier_shift       = false;         // shift modifier
-  bool     widgets_active       = false;         // widgets are active
-  uint64_t clock_now            = 0;             // clock now
-  uint64_t clock_last           = 0;             // clock last
-  double   time_now             = 0;             // time now
-  double   time_delta           = 0;             // time delta
-  vec2i    window_size          = {0, 0};        // window size
-  vec4i    framebuffer_viewport = {0, 0, 0, 0};  // framebuffer viewport
+  bool        mouse_left          = false;  // left button
+  bool        mouse_right         = false;  // right button
+  bool        mouse_left_click    = false;  // left click
+  bool        mouse_right_click   = false;  // right click
+  bool        mouse_left_release  = false;  // left release
+  bool        mouse_right_release = false;  // right release
+  bool        mouse_middle        = false;  // middle button
+  vec2f       mouse_pos           = {};     // position excluding widgets
+  vec2f       mouse_last     = {};      // last mouse position excluding widgets
+  vec2f       mouse_delta    = {};      // last mouse delta excluding widgets
+  bool        modifier_alt   = false;   // alt modifier
+  bool        modifier_ctrl  = false;   // ctrl modifier
+  bool        modifier_shift = false;   // shift modifier
+  bool        widgets_active = false;   // widgets are active
+  uint64_t    clock_now      = 0;       // clock now
+  uint64_t    clock_last     = 0;       // clock last
+  double      time_now       = 0;       // time now
+  double      time_delta     = 0;       // time delta
+  vec2i       window_size    = {0, 0};  // window size
+  vec4i       framebuffer_viewport  = {0, 0, 0, 0};  // framebuffer viewport
+  GLFWwindow* glfw                  = nullptr;
+  std::array<bool, 256> key_pressed = {};
 };
 
 bool uiupdate_camera_params(const glinput_state& input, camera_data& camera);
@@ -376,6 +379,85 @@ bool draw_glcombobox(const char* lbl, string& value,
 // Progress bar
 void draw_glprogressbar(const char* lbl, float fraction);
 void draw_glprogressbar(const char* lbl, int current, int total);
+
+enum struct gui_key {
+  // For printable keys, just use the constructor, like gui_key('*').
+  // For letters, always use upper case, like gui_key('C').
+
+  escape        = 256,
+  enter         = 257,
+  tab           = 258,
+  backspace     = 259,
+  insert        = 260,
+  _delete       = 261,
+  right         = 262,
+  left          = 263,
+  down          = 264,
+  up            = 265,
+  page_up       = 266,
+  page_down     = 267,
+  home          = 268,
+  end           = 269,
+  caps_lock     = 280,
+  scroll_lock   = 281,
+  num_lock      = 282,
+  print_screen  = 283,
+  pause         = 284,
+  f1            = 290,
+  f2            = 291,
+  f3            = 292,
+  f4            = 293,
+  f5            = 294,
+  f6            = 295,
+  f7            = 296,
+  f8            = 297,
+  f9            = 298,
+  f10           = 299,
+  f11           = 300,
+  f12           = 301,
+  f13           = 302,
+  f14           = 303,
+  f15           = 304,
+  f16           = 305,
+  f17           = 306,
+  f18           = 307,
+  f19           = 308,
+  f20           = 309,
+  f21           = 310,
+  f22           = 311,
+  f23           = 312,
+  f24           = 313,
+  f25           = 314,
+  kp_0          = 320,
+  kp_1          = 321,
+  kp_2          = 322,
+  kp_3          = 323,
+  kp_4          = 324,
+  kp_5          = 325,
+  kp_6          = 326,
+  kp_7          = 327,
+  kp_8          = 328,
+  kp_9          = 329,
+  kp_decimal    = 330,
+  kp_divide     = 331,
+  kp_multiply   = 332,
+  kp_subtract   = 333,
+  kp_add        = 334,
+  kp_enter      = 335,
+  kp_equal      = 336,
+  left_shift    = 340,
+  left_control  = 341,
+  left_alt      = 342,
+  left_super    = 343,
+  right_shift   = 344,
+  right_control = 345,
+  right_alt     = 346,
+  right_super   = 347,
+  menu          = 348,
+  world_1       = 161,  //  non-us #1
+  world_2       = 162   //  non-us #2
+
+};
 
 }  // namespace yocto
 
