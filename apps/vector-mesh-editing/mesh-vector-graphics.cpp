@@ -10,12 +10,6 @@
 #include "app.h"
 #include "render.h"
 
-#ifdef __APPLE__
-#define GL_SILENCE_DEPRECATION
-#endif
-#include <GLFW/glfw3.h>
-#include <yocto_gui/yocto_glview.h>
-
 using namespace yocto;
 
 // view params

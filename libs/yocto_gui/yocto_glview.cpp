@@ -1752,7 +1752,7 @@ void run_ui(const vec2i& size, const string& title,
   glfwSetKeyCallback(window,
       [](GLFWwindow* window, int key, int scancode, int action, int mods) {
         auto& state = *(glwindow_state*)glfwGetWindowUserPointer(window);
-          if (action == GLFW_PRESS) state.input.key_pressed[key] = true;
+        if (action == GLFW_PRESS) state.input.key_pressed[key] = true;
       });
   glfwSetWindowSizeCallback(
       window, [](GLFWwindow* window, int width, int height) {
@@ -1802,8 +1802,6 @@ void run_ui(const vec2i& size, const string& title,
   // run ui
   while (!glfwWindowShouldClose(window)) {
     // update input
-    state.input.glfw = window;
-
     state.input.mouse_last = state.input.mouse_pos;
     auto mouse_posx = 0.0, mouse_posy = 0.0;
     glfwGetCursorPos(window, &mouse_posx, &mouse_posy);
@@ -1885,7 +1883,7 @@ void run_ui(const vec2i& size, const string& title,
     // draw
     glfwGetWindowSize(window, &state.window_size.x, &state.window_size.y);
     draw_window(state);
-    
+
     for (int i = 0; i < 256; i++) state.input.key_pressed[i] = false;
     glfwSwapBuffers(window);
 
