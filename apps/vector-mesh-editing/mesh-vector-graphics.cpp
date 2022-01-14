@@ -185,11 +185,10 @@ void run_app(App& app, const string& name, const glscene_params& params_,
         printf("[Save Scene]: Success!\n");
       }
     }
-    if (draw_glbutton("close spline")) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-      close_spline(app.selected_spline(), add_app_shape);
-      auto spline_id                  = add_spline(app.splinesurf);
-      app.editing.selection           = {};
+    if (draw_glbutton("Add Shape")) {
+      auto add_app_shape    = [&]() -> int { return add_shape(app, {}); };
+      auto spline_id        = add_spline(app.splinesurf);
+      app.editing.selection = {};
       app.editing.selection.spline_id = spline_id;
     }
 
@@ -245,8 +244,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
         !app.selected_spline().input.is_closed &&
         app.selected_spline().input.control_points.size() > 1) {
       auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-      close_spline(app.selected_spline(), add_app_shape);
-      auto spline_id = add_spline(app.splinesurf);
+      auto spline_id     = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
 

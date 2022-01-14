@@ -804,8 +804,9 @@ inline void insert_point(App& app, const glinput_state& input) {
   std::sort(isec_points.begin(), isec_points.end(), [](auto& a, auto& b) {
     if (a.shape_id != b.shape_id) return a.shape_id < b.shape_id;
     if (a.boundary_id != b.boundary_id) return a.boundary_id < b.boundary_id;
-    if (a.curve_id != b.curve_id) return a.curve_id > b.curve_id;
-    return a.t > b.t;
+    if (a.curve_id != b.curve_id)
+      return a.curve_id > b.curve_id;  // starting from end!
+    return a.t > b.t;                  // starting from end!
   });
 
   for (int i = 0; i < isec_points.size(); i++) {
@@ -823,11 +824,17 @@ inline void insert_point(App& app, const glinput_state& input) {
     auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
         app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp, t,
         false, -1);
+    // Previous handle
     spline.input.control_points[point.curve_id].handles[1] = left[1];
+    spline.cache.points[point.curve_id].tangents[1].path   = shortest_path(
+        app.mesh, left[0], left[1]);
+
     auto p    = anchor_point{right[0], {left[2], right[1]}};
     auto next = point.curve_id + 1;
     if (next >= (int)spline.input.control_points.size()) next = 0;
     spline.input.control_points[next].handles[0] = right[2];
+    spline.cache.points[next].tangents[0].path   = shortest_path(
+        app.mesh, right[0], left[2]);
 
     auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
     insert_anchor_point(spline, p, point.curve_id + 1, app.mesh, add_app_shape);

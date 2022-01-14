@@ -305,9 +305,3 @@ inline void move_selected_point(Splinesurf& splinesurf,
 
   spline.cache.points_to_update.insert(selection.control_point_id);
 }
-
-template <typename Add_Shape>
-inline int close_spline(Spline_View spline, Add_Shape& add_shape) {
-  // spline.input.is_closed = true;
-  // return add_curve(spline.cache, add_shape);
-}
