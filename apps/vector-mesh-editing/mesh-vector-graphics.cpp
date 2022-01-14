@@ -175,7 +175,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       if (!make_directory(path_join(scene_dir, "textures"), error)) {
         printf("%s\n", error.c_str());
       }
-
+      add_environment(scene, "boolsurf/scenes/uffizi.hdr", error);
       auto scene_path = path_join(scene_dir, "scene.json");
       auto result     = save_scene(scene_path, app.scene);
 

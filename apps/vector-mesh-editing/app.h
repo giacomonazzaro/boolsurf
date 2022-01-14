@@ -375,7 +375,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
 inline void update_boolsurf(App& app, const glinput_state& input) {
   PROFILE_SCOPE("boolsurf");
   app.bool_state = {};
-  update_boolsurf_input(app.bool_state, app);
+  // update_boolsurf_input(app.bool_state, app);
   {
     PROFILE_SCOPE("compute_cells");
     compute_cells(app.mesh, app.bool_state, app.shapes);
@@ -686,9 +686,10 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
   // Update spline rendering
 #if 1
   for (auto curve_id : cache.curves_to_update) {
-    if(curve_id >= cache.curves.size()) {
-        printf("if(curve_id >= cache.curves.size()), %d >= %d\n", (int)curve_id, (int)cache.curves.size());
-        continue;
+    if (curve_id >= cache.curves.size()) {
+      printf("if(curve_id >= cache.curves.size()), %d >= %d\n", (int)curve_id,
+          (int)cache.curves.size());
+      continue;
     }
     auto& curve = cache.curves[curve_id];
     curve.positions.resize(output.segments[curve_id].size() + 1);
@@ -753,10 +754,28 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
 inline void update_splines(
     App& app, scene_data& scene, hash_set<int>& updated_shapes) {
   // Update bezier outputs of edited curves.
-  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-    auto spline = app.get_spline_view(i);
+  for (int spline_id = 0; spline_id < app.splinesurf.num_splines();
+       spline_id++) {
+    auto spline = app.get_spline_view(spline_id);
     update_output(
         spline.output, spline.input, app.mesh, spline.cache.curves_to_update);
+
+    app.shapes.resize(app.splinesurf.num_splines());
+    app.shapes[spline_id].resize(1);
+    auto& boundary = app.shapes[spline_id][0];
+    for (auto curve_id : spline.cache.curves_to_update) {
+      // Add new 1-polygon shape to state
+      // if (test_polygon.empty()) continue;
+      boundary.resize(spline.input.control_points.size());
+      auto& curve = boundary[curve_id];
+
+      auto& polygon = spline.input.control_points;
+      auto  start   = polygon[curve_id];
+      auto  end     = polygon[(curve_id + 1) % polygon.size()];
+      curve         = make_curve_segments(app.mesh, start, end);
+      // boundary = recompute_polygon_segments(mesh,
+      // spline.input.control_points);
+    }
   }
 
   // Update bezier positions of edited curves.
@@ -768,30 +787,6 @@ inline void update_splines(
 }
 
 inline void insert_point(App& app, const glinput_state& input) {
-#if 1
-
-  // //    render.stop_render();
-  // state       = {};
-  // auto& mesh  = app.mesh;
-  // for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-  //   auto spline = app.splinesurf.get_spline_view(i);
-
-  //   // Add new 1-polygon shape to state
-  //   // if (test_polygon.empty()) continue;
-
-  //   auto& bool_shape = state.bool_shapes.emplace_back();
-  //   auto& polygon    = bool_shape.polygons.emplace_back();
-  //   //      polygon.points   = test_polygon;
-  //   for (auto& anchor : spline.input.control_points) {
-  //     polygon.points.push_back(
-  //         {anchor.point, {anchor.handles[0], anchor.handles[1]}});
-  //   }
-  //   recompute_polygon_segments(mesh, polygon);
-  // }
-
-  // compute_cells(app.mesh, app.bool_state);
-  // reset_mesh(app.mesh);
-
   auto& state = app.bool_state;
   // for (auto& isec : state.intersections)
   auto isec = state.intersections[0];
@@ -813,6 +808,8 @@ inline void insert_point(App& app, const glinput_state& input) {
             app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
             t0, false, -1);
         spline0.input.control_points[isec.curve_ids[0]].handles[1] = left[1];
+        // spline0.cache.points[isec.curve_ids[0]].tangents[1].path =
+        // shortest_path(app.mesh, left[0], left[1]);
         p0 = anchor_point{right[0], {left[2], right[1]}};
         spline1.input.control_points[isec.curve_ids[0] + 1].handles[0] =
             right[2];
@@ -823,10 +820,12 @@ inline void insert_point(App& app, const glinput_state& input) {
             app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp1,
             t1, false, -1);
         spline1.input.control_points[isec.curve_ids[1]].handles[1] = left[1];
-        p1 = anchor_point{right[0], {left[2], right[1]}};
-          auto next = isec.curve_ids[1] + 1 >= (int)spline1.input.control_points.size()? 0 : isec.curve_ids[1];
+        p1        = anchor_point{right[0], {left[2], right[1]}};
+        auto next = isec.curve_ids[1] + 1 >=
+                            (int)spline1.input.control_points.size()
+                        ? 0
+                        : isec.curve_ids[1];
         spline1.input.control_points[next].handles[0] = right[2];
-        auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
       }
 
       auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
@@ -848,8 +847,6 @@ inline void insert_point(App& app, const glinput_state& input) {
       spline1.cache.curves_to_update.insert(i);
     }
   }
-
-#endif
 }
 
 inline void draw_widgets(App& app, const glinput_state& input) {
