@@ -70,6 +70,13 @@ struct bool_mesh : shape_data {
   bbox3f    bbox = {};
 };
 
+struct bool_point {
+  int   shape_id;
+  int   boundary_id;
+  int   curve_id;
+  float t;
+};
+
 struct mesh_segment {
   vec2f start   = {};
   vec2f end     = {};

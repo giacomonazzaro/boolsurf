@@ -308,6 +308,6 @@ inline void move_selected_point(Splinesurf& splinesurf,
 
 template <typename Add_Shape>
 inline int close_spline(Spline_View spline, Add_Shape& add_shape) {
-  spline.input.is_closed = true;
-  return add_curve(spline.cache, add_shape);
+  // spline.input.is_closed = true;
+  // return add_curve(spline.cache, add_shape);
 }

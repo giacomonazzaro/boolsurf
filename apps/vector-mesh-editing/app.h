@@ -787,64 +787,58 @@ inline void update_splines(
 }
 
 inline void insert_point(App& app, const glinput_state& input) {
-  auto& state = app.bool_state;
-  // for (auto& isec : state.intersections)
-  auto isec = state.intersections[0];
-  {
-    assert(isec.boundary_ids[0] == 0);
-    assert(isec.boundary_ids[1] == 0);
-    auto spline0 = app.splinesurf.get_spline_view(isec.shape_ids[0]);
-    auto cp0     = spline0.input.control_polygon(isec.curve_ids[0]);
-    auto spline1 = app.splinesurf.get_spline_view(isec.shape_ids[1]);
-    auto cp1     = spline1.input.control_polygon(isec.curve_ids[1]);
-    auto t0      = isec.t[0];
-    auto t1      = isec.t[1];
+  auto& state       = app.bool_state;
+  auto  isec_points = vector<bool_point>{};
+  for (int i = 0; i < state.intersections.size(); i++) {
+    auto& point0       = isec_points.emplace_back();
+    point0.shape_id    = state.intersections[i].shape_ids[0];
+    point0.boundary_id = state.intersections[i].boundary_ids[0];
+    point0.curve_id    = state.intersections[i].curve_ids[0];
+    point0.t           = state.intersections[i].t[0];
+    auto& point1       = isec_points.emplace_back();
+    point1.shape_id    = state.intersections[i].shape_ids[1];
+    point1.boundary_id = state.intersections[i].boundary_ids[1];
+    point1.curve_id    = state.intersections[i].curve_ids[1];
+    point1.t           = state.intersections[i].t[1];
+  }
+  std::sort(isec_points.begin(), isec_points.end(), [](auto& a, auto& b) {
+    if (a.shape_id != b.shape_id) return a.shape_id < b.shape_id;
+    if (a.boundary_id != b.boundary_id) return a.boundary_id < b.boundary_id;
+    if (a.curve_id != b.curve_id) return a.curve_id > b.curve_id;
+    return a.t > b.t;
+  });
 
-    auto p0 = anchor_point{};
-    auto p1 = anchor_point{};
-    if (isec.shape_ids[0] == isec.shape_ids[1]) {
-      {
-        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
-            t0, false, -1);
-        spline0.input.control_points[isec.curve_ids[0]].handles[1] = left[1];
-        // spline0.cache.points[isec.curve_ids[0]].tangents[1].path =
-        // shortest_path(app.mesh, left[0], left[1]);
-        p0 = anchor_point{right[0], {left[2], right[1]}};
-        spline1.input.control_points[isec.curve_ids[0] + 1].handles[0] =
-            right[2];
-      }
+  for (int i = 0; i < isec_points.size(); i++) {
+    auto point  = isec_points[i];
+    auto spline = app.splinesurf.get_spline_view(point.shape_id);
+    auto cp     = spline.input.control_polygon(point.curve_id);
+    auto t      = point.t;
+    //    for (int k = i + 1; k < isec_points.size(); k++) {
+    //      if (isec_points[k].spline_id != point.spline_id) break;
+    //      if (isec_points[k].boundary_id != point.boundary_id) break;
+    //      if (isec_points[k].curve_id != point.curve_id) break;
+    //    }
 
-      {
-        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp1,
-            t1, false, -1);
-        spline1.input.control_points[isec.curve_ids[1]].handles[1] = left[1];
-        p1        = anchor_point{right[0], {left[2], right[1]}};
-        auto next = isec.curve_ids[1] + 1 >=
-                            (int)spline1.input.control_points.size()
-                        ? 0
-                        : isec.curve_ids[1];
-        spline1.input.control_points[next].handles[0] = right[2];
-      }
+    auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+        app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp, t,
+        false, -1);
+    spline.input.control_points[point.curve_id].handles[1] = left[1];
+    auto p    = anchor_point{right[0], {left[2], right[1]}};
+    auto next = point.curve_id + 1;
+    if (next >= (int)spline.input.control_points.size()) next = 0;
+    spline.input.control_points[next].handles[0] = right[2];
 
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-      insert_anchor_point(
-          spline0, p0, isec.curve_ids[0] + 1, app.mesh, add_app_shape);
-      insert_anchor_point(
-          spline1, p1, isec.curve_ids[1] + 2, app.mesh, add_app_shape);
+    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+    insert_anchor_point(spline, p, point.curve_id + 1, app.mesh, add_app_shape);
+  }
+
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    auto spline = app.get_spline_view(i);
+    for (int k = 0; k < spline.cache.points.size(); k++) {
+      spline.cache.points_to_update.insert(k);
     }
-    for (int i = 0; i < spline0.cache.points.size(); i++) {
-      spline0.cache.points_to_update.insert(i);
-    }
-    for (int i = 0; i < spline0.cache.curves.size(); i++) {
-      spline0.cache.curves_to_update.insert(i);
-    }
-    for (int i = 0; i < spline1.cache.points.size(); i++) {
-      spline1.cache.points_to_update.insert(i);
-    }
-    for (int i = 0; i < spline1.cache.curves.size(); i++) {
-      spline1.cache.curves_to_update.insert(i);
+    for (int k = 0; k < spline.cache.curves.size(); k++) {
+      spline.cache.curves_to_update.insert(k);
     }
   }
 }
@@ -870,7 +864,6 @@ inline void draw_widgets(App& app, const glinput_state& input) {
   }
   if (draw_glbutton("close spline")) {
     auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-    close_spline(app.selected_spline(), add_app_shape);
   }
   if (begin_glheader("render")) {
     auto edited  = 0;
