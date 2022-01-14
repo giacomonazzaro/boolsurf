@@ -10,7 +10,7 @@ struct Spline_Input {
   vector<anchor_point> control_points   = {};
   vector<bool>         is_smooth        = {};
   int                  num_subdivisions = 4;
-  bool                 is_closed        = false;
+  bool                 is_closed        = true;
 
   inline std::array<mesh_point, 4> control_polygon(int curve_id) const {
     if (is_closed && curve_id == control_points.size() - 1) {
@@ -195,6 +195,7 @@ inline int add_anchor_point(Spline_View& spline, const anchor_point& anchor,
 
   // Add curve
   if (point_id > 0) add_curve(spline.cache, add_path_shape);
+  if (spline.cache.curves.size() == 1) add_curve(spline.cache, add_path_shape);
 
   // Trigger update of this point.
   spline.cache.points_to_update.insert(point_id);
