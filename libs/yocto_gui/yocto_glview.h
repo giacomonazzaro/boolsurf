@@ -271,7 +271,7 @@ struct glinput_state {
   double   time_delta           = 0;             // time delta
   vec2i    window_size          = {0, 0};        // window size
   vec4i    framebuffer_viewport = {0, 0, 0, 0};  // framebuffer viewport
-  std::array<bool, 256> key_pressed = {};
+  std::array<bool, 512> key_pressed = {};
 };
 
 bool uiupdate_camera_params(const glinput_state& input, camera_data& camera);

@@ -1884,7 +1884,8 @@ void run_ui(const vec2i& size, const string& title,
     glfwGetWindowSize(window, &state.window_size.x, &state.window_size.y);
     draw_window(state);
 
-    for (int i = 0; i < 256; i++) state.input.key_pressed[i] = false;
+    for (int i = 0; i < state.input.key_pressed.size(); i++)
+      state.input.key_pressed[i] = false;
     glfwSwapBuffers(window);
 
     // event hadling

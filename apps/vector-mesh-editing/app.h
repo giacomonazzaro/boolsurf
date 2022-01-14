@@ -24,10 +24,9 @@ using namespace yocto;  // TODO(giacomo): Remove this.
 #define PROFILE() PROFILE_SCOPE(__FUNCTION__)
 
 struct Shape_Entry {
-  int        id       = -1;
-  shape_data shape    = {};
-  frame3f    frame    = {};
-  int        material = -1;
+  int           id       = -1;
+  shape_data    shape    = {};
+  instance_data instance = {};
 };
 
 struct App {
@@ -147,31 +146,34 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
 }
 
 inline void set_shape(App& app, int id, shape_data&& shape,
-    const frame3f& frame = identity3x4f, int material = 1) {
+    const frame3f& frame = identity3x4f, int material = 1, bool visible = true) {
   auto& item    = app.new_shapes.emplace_back();
   item.id       = id;
-  item.frame    = frame;
-  item.material = material;
+  item.instance.shape    = id;
+  item.instance.frame    = frame;
+  item.instance.material = material;
+  item.instance.visible = visible;
   swap(item.shape, shape);
   // app.new_shapes.push_back({id, (shape), frame, material});
   // app.new_shapes.push_back({id, std::move(shape), frame, material});
 }
 
 inline int add_shape(App& app, shape_data&& shape,
-    const frame3f& frame = identity3x4f, int material = 1) {
+    const frame3f& frame = identity3x4f, int material = 1,
+    bool visible = true) {
   auto id = (int)app.scene.shapes.size() + app.num_new_shapes;
-  set_shape(app, id, std::move(shape), frame, material);
+  set_shape(app, id, std::move(shape), frame, material, visible);
   app.num_new_shapes += 1;
   return id;
 }
 
 inline void add_new_shapes(App& app) {
   auto& scene = app.scene;
-  for (auto&& [id, shape, frame, material] : app.new_shapes) {
+  for (auto&& [id, shape, instance] : app.new_shapes) {
     scene.shapes.resize(max((int)scene.shapes.size(), id + 1));
     scene.instances.resize(max((int)scene.instances.size(), id + 1));
     scene.shapes[id]    = std::move(shape);
-    scene.instances[id] = {frame, id, material, true};
+    scene.instances[id] = instance;
   }
 
   app.new_shapes.clear();
@@ -246,6 +248,7 @@ inline shape_data make_mesh_patch(
 }
 
 inline void toggle_handle_visibility(App& app, bool visible) {
+  return;
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   if (selection.control_point_id == -1) return;
@@ -337,8 +340,8 @@ inline void update_cell_shapes(App& app, const bool_state& state,
       cell_to_shape_id[i] = shape_id;
     } else {
       shape_id = it->second;
+      app.scene.instances[shape_id].visible = true;
     }
-    app.scene.instances[shape_id].visible = true;
     updated_shapes += shape_id;
     shape_ids[i] = shape_id;
   }
@@ -680,7 +683,7 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
   auto& mesh = app.mesh;
 
   // Update spline rendering
-#if 0
+#if 1
   for (auto curve_id : cache.curves_to_update) {
     auto& curve = cache.curves[curve_id];
     curve.positions.resize(output.segments[curve_id].size() + 1);
@@ -757,6 +760,88 @@ inline void update_splines(
     update_cache(
         app, spline.cache, spline.input, spline.output, scene, updated_shapes);
   }
+}
+
+inline void insert_point(App& app, const glinput_state& input) {
+#if 0
+  {
+    // //    render.stop_render();
+    // state       = {};
+    // auto& mesh  = app.mesh;
+    // for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    //   auto spline = app.splinesurf.get_spline_view(i);
+
+    //   // Add new 1-polygon shape to state
+    //   // if (test_polygon.empty()) continue;
+
+    //   auto& bool_shape = state.bool_shapes.emplace_back();
+    //   auto& polygon    = bool_shape.polygons.emplace_back();
+    //   //      polygon.points   = test_polygon;
+    //   for (auto& anchor : spline.input.control_points) {
+    //     polygon.points.push_back(
+    //         {anchor.point, {anchor.handles[0], anchor.handles[1]}});
+    //   }
+    //   recompute_polygon_segments(mesh, polygon);
+    // }
+
+    // compute_cells(app.mesh, app.bool_state);
+    // reset_mesh(app.mesh);
+
+    auto& state = app.bool_state;
+    // for (auto& isec : state.intersections)
+    {
+      auto spline0 = app.splinesurf.get_spline_view(isec0.shape_ids[0] - 1);
+      auto cp0     = spline0.input.control_polygon(isec0.curve_ids[0]);
+      auto spline1 = app.splinesurf.get_spline_view(isec1.shape_id - 1);
+      auto cp1     = spline1.input.control_polygon(isec1.curve_id);
+      auto t0      = isec0.t;
+      auto t1      = isec1.t;
+
+      auto p0 = anchor_point{};
+      auto p1 = anchor_point{};
+      if (isec0.shape_id == isec1.shape_id) {
+        {
+          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp0,
+              t0, false, -1);
+          spline0.input.control_points[isec0.curve_id].handles[1] = left[1];
+          p0 = anchor_point{right[0], {left[2], right[1]}};
+          spline1.input.control_points[isec0.curve_id + 1].handles[0] =
+              right[2];
+        }
+
+        {
+          auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
+              app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies, cp1,
+              t1, false, -1);
+          spline1.input.control_points[isec1.curve_id].handles[1] = left[1];
+          p1 = anchor_point{right[0], {left[2], right[1]}};
+          spline1.input.control_points[isec1.curve_id + 1].handles[0] =
+              right[2];
+          auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+        }
+
+        auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+        insert_anchor_point(
+            spline0, p0, isec0.curve_id + 1, app.mesh, add_app_shape);
+        insert_anchor_point(
+            spline1, p1, isec1.curve_id + 2, app.mesh, add_app_shape);
+      }
+      for (int i = 0; i < spline0.cache.points.size(); i++) {
+        spline0.cache.points_to_update.insert(i);
+      }
+      for (int i = 0; i < spline0.cache.curves.size(); i++) {
+        spline0.cache.curves_to_update.insert(i);
+      }
+      for (int i = 0; i < spline1.cache.points.size(); i++) {
+        spline1.cache.points_to_update.insert(i);
+      }
+      for (int i = 0; i < spline1.cache.curves.size(); i++) {
+        spline1.cache.curves_to_update.insert(i);
+      }
+    }
+  }
+#endif
 }
 
 inline void draw_widgets(App& app, const glinput_state& input) {

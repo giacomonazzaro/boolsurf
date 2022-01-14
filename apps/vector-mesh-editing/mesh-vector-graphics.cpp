@@ -251,7 +251,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
-      printf("%c pressed\n", 'I');
+      insert_point(app, input);
     }
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
