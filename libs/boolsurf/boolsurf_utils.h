@@ -76,10 +76,6 @@ inline void insert(vector<T>& vec, size_t i, const T& x) {
 // }
 // }  // namespace std
 
-inline bool operator==(const mesh_point& a, const mesh_point& b) {
-  return (a.face == b.face) && (a.uv == b.uv);
-}
-
 // TODO(giacomo): Expose this function in yocto_mesh.h
 inline int find_in_vec(const vec3i& vec, int x) {
   for (auto i = 0; i < 3; i++)

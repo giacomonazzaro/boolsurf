@@ -925,24 +925,25 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
     for (auto& path : shape.paths) {
       auto spline_id = add_spline(splinesurf);
       auto spline    = splinesurf.get_spline_view(spline_id);
-      // auto& polygon = state.polygons.emplace_back();
 
-      auto control_points = vector<mesh_point>{};
+      auto points2D = vector<vec2f>{};
       for (auto& curve : path) {
-        // polygon.curves.push_back({});
+        if (curve[0] == curve[1]) continue;
         for (int i = 0; i < 3; i++) {
-          // vec2f uv = clamp(curve[i], 0.0f, 1.0f);
-          vec2f uv = curve[i];
-          uv -= vec2f{0.5, 0.5};
-          uv = rot * uv;
-          uv *= svg_size;
-          auto line = straightest_path(mesh, center, uv);
-          control_points += line.end;
+          points2D += curve[i];
         }
       }
-      control_points.pop_back();
-      control_points.pop_back();
-      control_points.pop_back();
+      assert(points2D[0] != points2D.back());
+
+      auto control_points = vector<mesh_point>{};
+      for (auto uv : points2D) {
+        uv -= vec2f{0.5, 0.5};
+        uv = rot * uv;
+        uv *= svg_size;
+        auto line = straightest_path(mesh, center, uv);
+        control_points += line.end;
+      }
+
       for (int i = 0; i < control_points.size(); i += 3) {
         auto anchor  = anchor_point{};
         anchor.point = control_points[i];

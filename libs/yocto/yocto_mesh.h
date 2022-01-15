@@ -162,6 +162,13 @@ struct mesh_point {
   vec2f uv   = {0, 0};
 };
 
+inline bool operator==(const mesh_point& a, const mesh_point& b) {
+  return a.face == b.face && a.uv == b.uv;
+}
+inline bool operator!=(const mesh_point& a, const mesh_point& b) {
+  return !(a == b);
+}
+
 // compute geodesic distance from  a source Point to all the vertices of the
 // mesh(triangles,positions,adjacencies)
 vector<float> compute_geodesic_distances(const geodesic_solver& solver,
