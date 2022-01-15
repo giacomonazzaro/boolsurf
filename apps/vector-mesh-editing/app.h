@@ -920,6 +920,7 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
     rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
   }
 
+  auto bbox = invalidb2f;
   for (auto& shape : svg) {
     for (auto& path : shape.paths) {
       auto spline_id = add_spline(splinesurf);
@@ -933,9 +934,25 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
         }
       }
       assert(points2D[0] != points2D.back());
-      auto bbox = invalidb2f;
       for (auto& p : points2D) bbox = merge(bbox, p);
-      for (auto& p : points2D) p = (p - center(bbox)) / max(size(bbox));
+    }
+  }
+
+  for (auto& shape : svg) {
+    for (auto& path : shape.paths) {
+      auto spline_id = add_spline(splinesurf);
+      auto spline    = splinesurf.get_spline_view(spline_id);
+
+      auto points2D = vector<vec2f>{};
+      for (auto& curve : path) {
+        if (curve[0] == curve[1]) continue;
+        for (int i = 0; i < 3; i++) {
+          auto p = curve[i];
+          p      = (p - center(bbox)) / max(size(bbox));
+          points2D += p;
+        }
+      }
+      assert(points2D[0] != points2D.back());
 
       auto control_points = vector<mesh_point>{};
       for (auto uv : points2D) {
