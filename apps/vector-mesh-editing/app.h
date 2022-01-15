@@ -31,12 +31,14 @@ struct Shape_Entry {
 
 struct App {
   Render      render;
-  scene_data  scene      = {};
-  shade_scene glscene    = {};
-  bool_mesh   mesh       = {};
-  bool_state  bool_state = {};
-  shape_bvh   bvh        = {};
-  float       time       = 0;
+  scene_data  scene        = {};
+  shade_scene glscene      = {};
+  bool_mesh   mesh         = {};
+  bool_state  bool_state   = {};
+  bool_test   bool_test    = {};
+  string      svg_filename = {};
+  shape_bvh   bvh          = {};
+  float       time         = 0;
 
   glinput_state last_input = {};
 
@@ -104,8 +106,10 @@ void init_app(App& app, const Params& params) {
   // loading shape
   auto error = string{};
 
+  app.svg_filename = params.svg;
+
   auto test = bool_test{};
-  load_test(test, params.shape);
+  if (!params.test.empty()) load_test(test, params.test);
 
   // if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
@@ -130,19 +134,23 @@ void init_app(App& app, const Params& params) {
   // add_mesh_edges(app.scene, app.mesh);
 }
 
-inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
-  auto& shape    = app.scene.shapes.at(0);
-  auto& camera   = app.scene.cameras.at(0);
-  auto  mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-      input.mouse_pos.y / float(input.window_size.y)};
-  auto  ray      = camera_ray(
-      camera.frame, camera.lens, camera.aspect, camera.film, mouse_uv);
+inline mesh_point intersect_mesh(App& app, const vec2f& screen_uv) {
+  auto& camera = app.scene.cameras.at(0);
+  auto& shape  = app.scene.shapes.at(0);
+  auto  ray    = camera_ray(
+      camera.frame, camera.lens, camera.aspect, camera.film, screen_uv);
   auto isec = intersect_triangles_bvh(
       app.bvh, shape.triangles, shape.positions, ray, false);
   if (isec.hit) {
     return mesh_point{isec.element, isec.uv};
-  }
-  return {};
+  } else
+    return {};
+}
+
+inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
+  auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+      input.mouse_pos.y / float(input.window_size.y)};
+  return intersect_mesh(app, mouse_uv);
 }
 
 inline void set_shape(App& app, int id, shape_data&& shape,
@@ -505,6 +513,18 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
   return false;
 }
 
+inline int add_anchor_point(
+    App& app, Spline_View& spline, const anchor_point& point) {
+  auto add_path_shape  = [&]() -> int { return add_shape(app, {}); };
+  auto add_point_shape = [&]() -> int {
+    auto radius   = app.line_thickness * 2;
+    auto shape_id = add_shape(app, make_sphere(8, radius, 1), {}, 1);
+    app.updated_shapes += shape_id;
+    return shape_id;
+  };
+  return add_anchor_point(spline, point, add_point_shape, add_path_shape);
+}
+
 inline void process_click(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
@@ -600,16 +620,8 @@ inline void process_click(
   if (app.editing.selection.spline_id == -1) return;
 
   // Add new anchor point.
-  auto spline          = app.selected_spline();
-  auto add_point_shape = [&]() -> int {
-    auto radius   = app.line_thickness * 2;
-    auto shape_id = add_shape(app, make_sphere(8, radius, 1), {}, 1);
-    updated_shapes += shape_id;
-    return shape_id;
-  };
-  auto add_path_shape = [&]() -> int { return add_shape(app, {}); };
-  auto anchor_id      = add_anchor_point(
-      spline, point, add_point_shape, add_path_shape);
+  auto spline    = app.selected_spline();
+  auto anchor_id = add_anchor_point(app, spline, {point, {point, point}});
   set_selected_point(app, app.editing.selection.spline_id, anchor_id, 1);
   // app.editing.selection.control_point_id = anchor_id;
   // app.editing.selection.handle_id        = 1;
@@ -678,11 +690,14 @@ void update_output(Spline_Output& output, const Spline_Input& input,
   }
 }
 
-void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
-    const Spline_Output& output, scene_data& scene,
+void update_cache(App& app, int spline_id, scene_data& scene,
     hash_set<int>& updated_shapes) {
   auto& mesh = app.mesh;
-
+    auto spline = app.get_spline_view(spline_id);
+    auto& input = spline.input;
+    auto& cache = spline.cache;
+    auto& output = spline.output;
+    
   // Update spline rendering
 #if 1
   for (auto curve_id : cache.curves_to_update) {
@@ -697,9 +712,9 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
       auto& segment      = output.segments[curve_id][i];
       curve.positions[i] = eval_position(mesh, {segment.face, segment.start});
     }
-    auto& segment          = output.segments[curve_id].back();
-    curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
-  }
+    //    auto& segment          = output.segments[curve_id].back();
+      //  curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
+      }
 
   for (auto curve_id : cache.curves_to_update) {
     auto  shape_id = cache.curves[curve_id].shape_id;
@@ -715,6 +730,9 @@ void update_cache(App& app, Spline_Cache& cache, const Spline_Input& input,
     auto& anchor = cache.points[point_id];
     for (int k = 0; k < 2; k++) {
       auto& tangent   = anchor.tangents[k];
+        if(tangent.path.strip.empty()) {
+            tangent.path = shortest_path(app.mesh, input.control_points[point_id].point, input.control_points[point_id].handles[k]);
+        }
       auto  shape_id  = tangent.shape_id;
       auto  positions = path_positions(
           tangent.path, app.mesh.triangles, app.mesh.positions);
@@ -782,7 +800,19 @@ inline void update_splines(
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
     update_cache(
-        app, spline.cache, spline.input, spline.output, scene, updated_shapes);
+        app, i, scene, updated_shapes);
+  }
+}
+
+inline void update_all_splines(App& app) {
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    auto spline = app.get_spline_view(i);
+    for (int k = 0; k < spline.cache.points.size(); k++) {
+      spline.cache.points_to_update.insert(k);
+    }
+    for (int k = 0; k < spline.cache.curves.size(); k++) {
+      spline.cache.curves_to_update.insert(k);
+    }
   }
 }
 
@@ -840,13 +870,61 @@ inline void insert_point(App& app, const glinput_state& input) {
     insert_anchor_point(spline, p, point.curve_id + 1, app.mesh, add_app_shape);
   }
 
-  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-    auto spline = app.get_spline_view(i);
-    for (int k = 0; k < spline.cache.points.size(); k++) {
-      spline.cache.points_to_update.insert(k);
-    }
-    for (int k = 0; k < spline.cache.curves.size(); k++) {
-      spline.cache.curves_to_update.insert(k);
+  update_all_splines(app);
+}
+
+void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
+    const mesh_point& center, const vector<Svg_Shape>& svg, float svg_size,
+    int svg_subdivs) {
+  auto p0  = eval_position(mesh, {center.face, {0, 0}});
+  auto p1  = eval_position(mesh, {center.face, {1, 0}});
+  auto rot = mat2f{};
+  {
+    auto frame = mat3f{};
+    frame.x    = normalize(p1 - p0);
+    frame.z    = eval_normal(mesh, center.face);
+    frame.y    = normalize(cross(frame.z, frame.x));
+
+    auto up = vec3f{0, 1, 0};
+    auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
+    rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
+  }
+
+  for (auto& shape : svg) {
+    for (auto& path : shape.paths) {
+      auto spline_id = add_spline(splinesurf);
+      auto spline    = splinesurf.get_spline_view(spline_id);
+      // auto& polygon = state.polygons.emplace_back();
+
+      auto control_points = vector<mesh_point>{};
+      for (auto& curve : path) {
+        // polygon.curves.push_back({});
+        for (int i = 0; i < 3; i++) {
+          // vec2f uv = clamp(curve[i], 0.0f, 1.0f);
+          vec2f uv = curve[i];
+          uv -= vec2f{0.5, 0.5};
+          uv = rot * uv;
+          uv *= svg_size;
+          auto line = straightest_path(mesh, center, uv);
+          control_points += line.end;
+        }
+      }
+      for (int i = 0; i < control_points.size(); i += 3) {
+        auto anchor  = anchor_point{};
+        anchor.point = control_points[i];
+        if (i != 0)
+          anchor.handles[0] = control_points[i - 1];
+        else
+          anchor.handles[0] = control_points.back();
+        anchor.handles[1] = control_points[i + 1];
+        add_anchor_point(app, spline, anchor);
+      }
+
+      // for (int i = 0; i < bezier.size() - 1; i++) {
+      //   if (i > 0 && bezier[i] == bezier[i - 1]) continue;
+      //   polygon.points += (int)state.points.size();
+      //   state.points += bezier[i];
+      // }
     }
   }
 }

@@ -1033,6 +1033,7 @@ void set_point_size(ogl_shape& shape, float point_size) {
 
 void draw_shape(const ogl_shape& shape) {
   if (shape.shape_id == 0) return;
+  if (shape.vertex_buffers.empty()) return;
   bind_shape(shape);
   auto type = GL_TRIANGLES;
   switch (shape.elements) {

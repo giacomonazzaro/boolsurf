@@ -12,19 +12,6 @@
 
 using namespace yocto;
 
-// view params
-struct view_params {
-  string shape  = "shape.ply";
-  string output = "out.ply";
-  bool   addsky = false;
-};
-
-void add_options(const cli_command& cli, view_params& params) {
-  add_argument(cli, "shape", params.shape, "Input shape.");
-  add_option(cli, "output", params.output, "Output shape.");
-  add_option(cli, "addsky", params.addsky, "Add sky.");
-}
-
 #ifndef YOCTO_OPENGL
 
 // view shapes
@@ -63,8 +50,15 @@ void run_view(const view_params& params) { print_fatal("Opengl not compiled"); }
 //  return shape;
 //}
 
+struct glview_params {
+  string shape  = "shape.ply";
+  string svg    = "";
+  string test   = "";
+  bool   addsky = false;
+};
+
 // view shapes
-void run_view(const view_params& params) {
+void run_view(const glview_params& params) {
   // load shape
   //  auto error = string{};
   //  auto shape = shape_data{};
@@ -82,15 +76,12 @@ void run_view(const view_params& params) {
 
 #endif
 
-struct glview_params {
-  string shape  = "shape.ply";
-  bool   addsky = false;
-};
-
 // Cli
 void add_options(const cli_command& cli, glview_params& params) {
   add_argument(cli, "shape", params.shape, "Input shape.");
   add_option(cli, "addsky", params.addsky, "Add sky.");
+  add_option(cli, "test", params.test, "Load test.");
+  add_option(cli, "svg", params.svg, "Load svg.");
 }
 
 #ifndef YOCTO_OPENGL
@@ -162,6 +153,15 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       update_boolsurf(app, input);
     }
 
+    static auto svg_size = 0.1f;
+    draw_glslider("svg size", svg_size, 0, 1);
+
+    if (draw_glbutton("Load SVG")) {
+      auto svg    = load_svg(app.svg_filename);
+      auto center = intersect_mesh(app, vec2f{0.5, 0.5});
+      init_from_svg(app, app.splinesurf, app.mesh, center, svg, svg_size, 4);
+      update_all_splines(app);
+    }
     if (draw_glbutton("Save Scene")) {
       auto scene_dir = "boolsurf/scenes";
 
@@ -186,10 +186,9 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       }
     }
     if (draw_glbutton("Add Shape")) {
-      auto add_app_shape    = [&]() -> int { return add_shape(app, {}); };
-      auto spline_id        = add_spline(app.splinesurf);
-      app.editing.selection = {};
-      app.editing.selection.spline_id = spline_id;
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      auto spline_id     = add_spline(app.splinesurf);
+      set_selected_spline(app, spline_id);
     }
 
     if (begin_glheader("shade")) {
@@ -211,29 +210,29 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     // draw_scene_editor(scene, selection, {});
     if (widgets_callback) {
       widgets_callback(input, app);
-      if (!updated_shapes.empty()) {
-        update_glscene(glscene, scene, updated_shapes);
-        updated_shapes.clear();
-      }
+      //      if (!updated_shapes.empty()) {
+      //        update_glscene(glscene, scene, updated_shapes);
+      //        updated_shapes.clear();
+      //      }
     }
   };
   callbacks.update_cb = [&](const glinput_state& input) {
     if (update_callback) {
       update_callback(input, app);
-      if (!updated_shapes.empty()) {
-        update_glscene(glscene, scene, updated_shapes);
-        updated_shapes.clear();
-      }
+      //      if (!updated_shapes.empty()) {
+      //        update_glscene(glscene, scene, updated_shapes);
+      //        updated_shapes.clear();
+      //      }
     }
   };
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
     // handle mouse and keyboard for navigation
     if (uiupdate_callback) {
       uiupdate_callback(input, app);
-      if (!updated_shapes.empty()) {
-        update_glscene(glscene, scene, updated_shapes);
-        updated_shapes.clear();
-      }
+      //      if (!updated_shapes.empty()) {
+      //        update_glscene(glscene, scene, updated_shapes);
+      //        updated_shapes.clear();
+      //      }
     }
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
@@ -291,14 +290,12 @@ void run_glview(const glview_params& params) {
 
   // run viewer
   run_app(app, "yshape", {}, widgets_callback, update_callback);
-  // , update_callback);
 }
 
 #endif
 
 struct app_params {
   string        command = "view";
-  view_params   view    = {};
   glview_params glview  = {};
 };
 
@@ -308,7 +305,7 @@ void add_options(const cli_command& cli, app_params& params) {
   // add_command(cli, "convert", params.convert, "Convert shapes.");
   // add_command(
   //     cli, "fvconvert", params.fvconvert, "Convert face-varying shapes.");
-  add_command(cli, "view", params.view, "View shapes.");
+  //  add_command(cli, "view", params.view, "View shapes.");
   // add_command(cli, "heightfield", params.heightfield, "Create an
   // heightfield."); add_command(cli, "hair", params.hair, "Grow hairs on a
   // shape."); add_command(cli, "sample", params.sample, "Sample shapepoints on
@@ -326,7 +323,7 @@ void run(const vector<string>& args) {
 
   // dispatch commands
   if (params.command == "view") {
-    return run_view(params.view);
+    return run_glview(params.glview);
   } else if (params.command == "glview") {
     return run_glview(params.glview);
   } else {

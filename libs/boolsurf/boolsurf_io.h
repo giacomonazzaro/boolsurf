@@ -181,8 +181,9 @@ struct Svg_Shape {
   vec3f            color = {};
   vector<Svg_Path> paths = {};
 };
+using Svg = vector<Svg_Shape>;
 
-vector<Svg_Shape> load_svg(const string& filename);
+Svg load_svg(const string& filename);
 
 void init_from_svg(bool_state& state, const bool_mesh& mesh,
     const mesh_point& center, const vector<Svg_Shape>& svg, float svg_size,
