@@ -51,10 +51,11 @@ void run_view(const view_params& params) { print_fatal("Opengl not compiled"); }
 //}
 
 struct glview_params {
-  string shape  = "shape.ply";
-  string svg    = "";
-  string test   = "";
-  bool   addsky = false;
+  string shape          = "shape.ply";
+  string svg            = "";
+  float  line_thickness = 0.001;
+  string test           = "";
+  bool   addsky         = false;
 };
 
 // view shapes
@@ -82,6 +83,7 @@ void add_options(const cli_command& cli, glview_params& params) {
   add_option(cli, "addsky", params.addsky, "Add sky.");
   add_option(cli, "test", params.test, "Load test.");
   add_option(cli, "svg", params.svg, "Load svg.");
+  add_option(cli, "line-thickness", params.line_thickness, "Line thickness.");
 }
 
 #ifndef YOCTO_OPENGL
@@ -252,19 +254,29 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     }
     process_click(app, updated_shapes, input);
     process_mouse(app, updated_shapes, input);
+
     for (auto& entry : app.new_shapes) {
       glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
     }
     add_new_shapes(app);
+    new_shapes.clear();
 
-    update_splines(app, scene, updated_shapes);
+    auto edited = update_splines(app, scene, updated_shapes);
+    if (edited) {
+      update_boolsurf(app, input);
+    }
+
+    for (auto& entry : app.new_shapes) {
+      glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
+    }
+    add_new_shapes(app);
+    new_shapes.clear();
 
     if (!updated_shapes.empty()) {
       update_glscene(glscene, scene, updated_shapes);
       updated_shapes.clear();
     }
 
-    new_shapes.clear();
     app.last_input = input;
   };
   // run ui

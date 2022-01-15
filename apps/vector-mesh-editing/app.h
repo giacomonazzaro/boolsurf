@@ -106,7 +106,8 @@ void init_app(App& app, const Params& params) {
   // loading shape
   auto error = string{};
 
-  app.svg_filename = params.svg;
+  app.svg_filename   = params.svg;
+  app.line_thickness = params.line_thickness;
 
   auto test = bool_test{};
   if (!params.test.empty()) load_test(test, params.test);
@@ -690,14 +691,14 @@ void update_output(Spline_Output& output, const Spline_Input& input,
   }
 }
 
-void update_cache(App& app, int spline_id, scene_data& scene,
-    hash_set<int>& updated_shapes) {
-  auto& mesh = app.mesh;
-    auto spline = app.get_spline_view(spline_id);
-    auto& input = spline.input;
-    auto& cache = spline.cache;
-    auto& output = spline.output;
-    
+void update_cache(
+    App& app, int spline_id, scene_data& scene, hash_set<int>& updated_shapes) {
+  auto& mesh   = app.mesh;
+  auto  spline = app.get_spline_view(spline_id);
+  auto& input  = spline.input;
+  auto& cache  = spline.cache;
+  auto& output = spline.output;
+
   // Update spline rendering
 #if 1
   for (auto curve_id : cache.curves_to_update) {
@@ -707,14 +708,15 @@ void update_cache(App& app, int spline_id, scene_data& scene,
       continue;
     }
     auto& curve = cache.curves[curve_id];
-    curve.positions.resize(output.segments[curve_id].size() + 1);
-    for (int i = 0; i < output.segments[curve_id].size(); i++) {
-      auto& segment      = output.segments[curve_id][i];
+    if (app.shapes[spline_id][0][curve_id].empty()) continue;
+    curve.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
+    for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
+      auto& segment      = app.shapes[spline_id][0][curve_id][i];
       curve.positions[i] = eval_position(mesh, {segment.face, segment.start});
     }
-    //    auto& segment          = output.segments[curve_id].back();
-      //  curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
-      }
+    auto& segment          = app.shapes[spline_id][0][curve_id].back();
+    curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
+  }
 
   for (auto curve_id : cache.curves_to_update) {
     auto  shape_id = cache.curves[curve_id].shape_id;
@@ -729,12 +731,14 @@ void update_cache(App& app, int spline_id, scene_data& scene,
   for (auto point_id : cache.points_to_update) {
     auto& anchor = cache.points[point_id];
     for (int k = 0; k < 2; k++) {
-      auto& tangent   = anchor.tangents[k];
-        if(tangent.path.strip.empty()) {
-            tangent.path = shortest_path(app.mesh, input.control_points[point_id].point, input.control_points[point_id].handles[k]);
-        }
-      auto  shape_id  = tangent.shape_id;
-      auto  positions = path_positions(
+      auto& tangent = anchor.tangents[k];
+      if (tangent.path.strip.empty()) {
+        tangent.path = shortest_path(app.mesh,
+            input.control_points[point_id].point,
+            input.control_points[point_id].handles[k]);
+      }
+      auto shape_id  = tangent.shape_id;
+      auto positions = path_positions(
           tangent.path, app.mesh.triangles, app.mesh.positions);
 
       auto& instance    = scene.instances[shape_id];
@@ -769,12 +773,16 @@ void update_cache(App& app, int spline_id, scene_data& scene,
   cache.curves_to_update.clear();
 }
 
-inline void update_splines(
+inline bool update_splines(
     App& app, scene_data& scene, hash_set<int>& updated_shapes) {
+  bool updated = false;
+
   // Update bezier outputs of edited curves.
   for (int spline_id = 0; spline_id < app.splinesurf.num_splines();
        spline_id++) {
     auto spline = app.get_spline_view(spline_id);
+    if (spline.cache.curves_to_update.size()) updated = true;
+
     update_output(
         spline.output, spline.input, app.mesh, spline.cache.curves_to_update);
 
@@ -799,9 +807,9 @@ inline void update_splines(
   // Update bezier positions of edited curves.
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
-    update_cache(
-        app, i, scene, updated_shapes);
+    update_cache(app, i, scene, updated_shapes);
   }
+  return updated;
 }
 
 inline void update_all_splines(App& app) {
@@ -809,6 +817,11 @@ inline void update_all_splines(App& app) {
     auto spline = app.get_spline_view(i);
     for (int k = 0; k < spline.cache.points.size(); k++) {
       spline.cache.points_to_update.insert(k);
+      app.updated_shapes += spline.cache.points[k].anchor_id;
+      app.updated_shapes += spline.cache.points[k].handle_ids[0];
+      app.updated_shapes += spline.cache.points[k].handle_ids[1];
+      app.updated_shapes += spline.cache.points[k].tangents[0].shape_id;
+      app.updated_shapes += spline.cache.points[k].tangents[1].shape_id;
     }
     for (int k = 0; k < spline.cache.curves.size(); k++) {
       spline.cache.curves_to_update.insert(k);
