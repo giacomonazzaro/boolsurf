@@ -1242,9 +1242,15 @@ static trace_result trace_falsecolor(const scene_data& scene,
     case trace_falsecolor_type::mtype:
       result = hashed_color((int)material.type);
       break;
-    case trace_falsecolor_type::texcoord:
-      result = {fmod(texcoord.x, 1.0f), fmod(texcoord.y, 1.0f), 0};
+    case trace_falsecolor_type::texcoord: {
+      result.x = fmod(25 * fabs(intersection.uv.x), 1.0f) * 0.5;
+      result.x += fmod(10 * fabs(intersection.uv.y), 1.0f) * 0.5;
+      result.y = yocto::max(intersection.uv.x - 0.5f, 0.0f);
+      result.z = yocto::max(-(intersection.uv.x - 0.5f), 0.0f);
+      // result = {fmod(10 * fabs(intersection.uv.x), 1.0f), intersection.uv.y,
+      // -intersection.uv.y};
       break;
+    }
     case trace_falsecolor_type::color: result = material.color; break;
     case trace_falsecolor_type::emission: result = material.emission; break;
     case trace_falsecolor_type::roughness:

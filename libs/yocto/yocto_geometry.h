@@ -700,9 +700,181 @@ inline bool intersect_point(
   return true;
 }
 
+// Intersect a ray with a sphere
+inline bool intersect_sphere(const ray3f& ray, const vec3f& center,
+    float radius, vec2f& uv, float& dist) {
+  // compute parameters
+  auto a = dot(ray.d, ray.d);
+  auto b = 2 * dot(ray.o - center, ray.d);
+  auto c = dot(ray.o - center, ray.o - center) - radius * radius;
+
+  // check discriminant
+  auto dis = b * b - 4 * a * c;
+  if (dis < 0) return false;
+
+  // compute ray parameter
+  auto t = (-b - sqrt(dis)) / (2 * a);
+
+  // exit if not within bounds
+  if (t < ray.tmin || t > ray.tmax) return false;
+
+  // try other ray parameter
+  t = (-b + sqrt(dis)) / (2 * a);
+
+  // exit if not within bounds
+  if (t < ray.tmin || t > ray.tmax) return false;
+
+  // compute local point for uvs
+  auto plocal = ((ray.o + ray.d * t) - center) / radius;
+  auto u      = atan2(plocal.y, plocal.x) / (2 * pif);
+  if (u < 0) u += 1;
+  auto v = acos(clamp(plocal.z, -1.0f, 1.0f)) / pif;
+
+  // intersection occurred: set params and exit
+  uv   = {u, v};
+  dist = t;
+  return true;
+}
+
+/*
+  truncated cone equation:
+      ||p||^2 - p.z^2 = lerp(r0, r1, p.z / height)^2   &&   0 <= p.z <= 1
+      where r = (p.z / height) * r0 + (1 - p.z / height) * r1
+  point on ray:
+      p = ray.o + t * ray.d
+*/
+
+// (o + d * t)'*(o + d * t) - (o + d * t)(3) * (o + d * t)(3) == (((o + d *
+// t)(3) / h) * r0 + (1 - (o + d * t)(3) / h) * r1)^2
+
+// Intersect a ray with a line
+inline bool intersect_rounded_cone(const ray3f& ray_, const vec3f& p0,
+    const vec3f& p1, float r0, float r1, vec2f& uv, float& dist) {
+  if (p0 == p1) return false;
+
+  // truncated cone equation:
+  //   ||p||^2 - p.z^2 = lerp(r0, r1, p.z / height)^2   &&   0 <= p.z <= height
+  // point on ray: p = ray.o + t * ray.d
+
+  auto height = length(p0 - p1);
+  auto frame  = inverse(frame_fromz(p0, p1 - p0));
+  auto ray    = transform_ray(frame, ray_);
+
+  auto square = [](const auto x) { return x * x; };
+
+  // from matlab. This works.
+  auto o1 = ray.o.x;
+  auto o2 = ray.o.y;
+  auto o3 = ray.o.z;
+  auto d1 = ray.d.x;
+  auto d2 = ray.d.y;
+  auto d3 = ray.d.z;
+  auto h  = height;
+  auto c  = square(o1) - square(r1 * (o3 / h - 1) - (o3 * r0) / h) + square(o2);
+  auto b  = 2 * d1 * o1 + 2 * d2 * o2 +
+           2 * (r1 * (o3 / h - 1) - (o3 * r0) / h) *
+               ((d3 * r0) / h - (d3 * r1) / h);
+  auto a = square(d1) - square((d3 * r0) / h - (d3 * r1) / h) + square(d2);
+
+  auto delta = b * b - 4 * a * c;
+  if (delta < 0) return false;
+  auto t = (-b - sqrt(delta)) / (2 * a);
+  if (t < ray.tmin || t > ray.tmax) return false;
+
+  auto p = ray.o + t * ray.d;
+  if (p.z >= 0 && p.z <= height) {
+    dist = t;
+    uv.x = p.z / height;
+    uv.y = atan2(p.y, p.x);
+    return true;
+  }
+
+  {
+    // caps: intersect with a single sphere by offsetting ray origin if needed.
+    auto ro     = ray.o;
+    auto radius = r1;
+    if (p.z > height) {
+      ro.z -= height;
+      radius = r0;
+    };
+    auto b     = dot(ray.d, ro);
+    auto c     = dot(ro, ro) - radius * radius;
+    auto delta = b * b - c;
+    if (delta > 0.0) {
+      auto t = -b - sqrt(delta);
+      if (t < ray.tmin || t > ray.tmax) return false;
+      dist = t;
+      p    = ray.o + dist * ray.d;
+      uv.x = p.z / height;
+      uv.y = atan2(p.y, p.x);
+      return true;
+    }
+  }
+  return false;
+}
+
+inline bool intersect_capsule(const ray3f& ray_, const vec3f& p0,
+    const vec3f& p1, float radius, vec2f& uv, float& dist) {
+  if (p0 == p1) return false;
+  auto height = length(p0 - p1);
+  auto frame  = inverse(frame_fromz(p0, p1 - p0));
+  auto ray    = transform_ray(frame, ray_);
+
+  // body: solve quadratic equation (using reduced formula).
+  // cylinder equation:  ||p||^2 - p.z^2 = radius^2   &&   0 <= p.z <= height
+  // point on ray:       p = ray.o + t * ray.d
+  // auto a = dot(ray.d, ray.d) - ray.d.z * ray.d.z;
+  // auto b = dot(ray.d, ray.o) - ray.d.z * ray.o.z;
+  // auto c = dot(ray.o, ray.o) - ray.o.z * ray.o.z - radius * radius;
+  auto a = ray.d.x * ray.d.x + ray.d.y * ray.d.y;
+  auto b = ray.d.x * ray.o.x + ray.d.y * ray.o.y;
+  auto c = ray.o.x * ray.o.x + ray.o.y * ray.o.y - radius * radius;
+
+  auto delta = b * b - a * c;
+  if (delta < 0) return false;
+  auto t = (-b - sqrt(delta)) / a;
+  if (t < ray.tmin || t > ray.tmax) return false;
+
+  auto p = ray.o + t * ray.d;
+  if (p.z >= 0 && p.z <= height) {
+    dist = t;
+    uv.x = p.z / height;
+    uv.y = atan2(p.y, p.x);
+    return true;
+  }
+
+  {
+    // caps: intersect with a single sphere by offsetting ray origin if needed.
+    auto ro = ray.o;
+    if (p.z > height) ro.z -= height;
+    auto b     = dot(ray.d, ro);
+    auto c     = dot(ro, ro) - radius * radius;
+    auto delta = b * b - c;
+    if (delta > 0.0) {
+      auto t = -b - sqrt(delta);
+      if (t < ray.tmin || t > ray.tmax) return false;
+      dist = t;
+      p    = ray.o + dist * ray.d;
+      uv.x = p.z / height;
+      uv.y = atan2(p.y, p.x);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Intersect a ray with a line
 inline bool intersect_line(const ray3f& ray, const vec3f& p0, const vec3f& p1,
     float r0, float r1, vec2f& uv, float& dist) {
+#if 1
+  if (r0 == r1) {
+    return intersect_capsule(ray, p0, p1, r0, uv, dist);
+  } else {
+    return intersect_rounded_cone(ray, p0, p1, r0, r1, uv, dist);
+  }
+#endif
+
   // setup intersection params
   auto u = ray.d;
   auto v = p1 - p0;
@@ -742,42 +914,6 @@ inline bool intersect_line(const ray3f& ray, const vec3f& p0, const vec3f& p1,
 
   // intersection occurred: set params and exit
   uv   = {s, sqrt(d2) / r};
-  dist = t;
-  return true;
-}
-
-// Intersect a ray with a sphere
-inline bool intersect_sphere(
-    const ray3f& ray, const vec3f& p, float r, vec2f& uv, float& dist) {
-  // compute parameters
-  auto a = dot(ray.d, ray.d);
-  auto b = 2 * dot(ray.o - p, ray.d);
-  auto c = dot(ray.o - p, ray.o - p) - r * r;
-
-  // check discriminant
-  auto dis = b * b - 4 * a * c;
-  if (dis < 0) return false;
-
-  // compute ray parameter
-  auto t = (-b - sqrt(dis)) / (2 * a);
-
-  // exit if not within bounds
-  if (t < ray.tmin || t > ray.tmax) return false;
-
-  // try other ray parameter
-  t = (-b + sqrt(dis)) / (2 * a);
-
-  // exit if not within bounds
-  if (t < ray.tmin || t > ray.tmax) return false;
-
-  // compute local point for uvs
-  auto plocal = ((ray.o + ray.d * t) - p) / r;
-  auto u      = atan2(plocal.y, plocal.x) / (2 * pif);
-  if (u < 0) u += 1;
-  auto v = acos(clamp(plocal.z, -1.0f, 1.0f)) / pif;
-
-  // intersection occurred: set params and exit
-  uv   = {u, v};
   dist = t;
   return true;
 }

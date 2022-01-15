@@ -466,13 +466,67 @@ vec3f eval_shading_position(const scene_data& scene,
   if (!shape.triangles.empty() || !shape.quads.empty()) {
     return eval_position(scene, instance, element, uv);
   } else if (!shape.lines.empty()) {
-    return eval_position(scene, instance, element, uv);
+    auto& p0     = shape.positions[shape.lines[element].x];
+    auto& p1     = shape.positions[shape.lines[element].y];
+    auto& r0     = shape.radius[shape.lines[element].x];
+    auto& r1     = shape.radius[shape.lines[element].y];
+    auto  height = length(p1 - p0);
+    auto  p0p1   = normalize(p1 - p0);
+    auto  frame  = instance.frame * frame_fromz(p0, p0p1);
+
+    if (uv.x >= 0 && uv.x <= 1) {
+      auto r = lerp(r0, r1, uv.x);
+      auto p = vec3f{r * cos(uv.y), r * sin(uv.y), uv.x * height};
+      return transform_point(frame, p);
+    } else {
+      auto r = uv.x > 1 ? r1 : r0;
+      auto p = vec3f{cos(uv.y), sin(uv.y), uv.x};  // point on cylinder
+
+      // project onto spherical caps
+      if (uv.x > 1) p.z -= 1;
+      p.z /= (r / height);
+      p.x *= sqrt(max(1 - p.z * p.z, 0.0f));
+      p.y *= sqrt(max(1 - p.z * p.z, 0.0f));
+      p *= r;
+      if (uv.x > 1) p.z += height;
+      return transform_point(frame, p);
+    }
   } else if (!shape.points.empty()) {
     return eval_position(shape, element, uv);
   } else {
     return {0, 0, 0};
   }
 }
+
+// std::array<glm::vec3, 2> getLine2ConeIntersection(
+//     const glm::vec3& coneBaseCntr_, const glm::vec3& coneVertex_,
+//     float coneRadius_) const {
+//   glm::vec3 axis  = (coneBaseCntr_ - coneVertex_);
+//   glm::vec3 theta = (axis / glm::length(axis));
+//   float     m     = pow(coneRadius_, 2) / pow(glm::length(axis), 2);
+//   glm::vec3 w     = (ray.o - coneVertex_);
+
+//   float a = glm::dot(ray.d, ray.d) - m * (pow(glm::dot(ray.d, theta), 2)) -
+//             pow(glm::dot(ray.d, theta), 2);
+//   float b = 2.f * (glm::dot(ray.d, w) -
+//                       m * glm::dot(ray.d, theta) * glm::dot(w, theta) -
+//                       glm::dot(ray.d, theta) * glm::dot(w, theta));
+//   float c = glm::dot(w, w) - m * pow(glm::dot(w, theta), 2) -
+//             pow(glm::dot(w, theta), 2);
+
+//   float Discriminant = pow(b, 2) - (4.f * a * c);
+
+//   if (Discriminant >= 0)
+//     return std::array<glm::vec3, 2>{
+//         {(ray.o + static_cast<float>(((-b) - sqrt(Discriminant)) / (2.f * a))
+//         *
+//                       ray.d),
+//             (ray.o +
+//                 static_cast<float>(((-b) + sqrt(Discriminant)) / (2.f * a)) *
+//                     ray.d)}};
+
+//   return glm::vec3(0, 0, 0);
+// }
 
 // Eval shading normal
 vec3f eval_shading_normal(const scene_data& scene,
@@ -488,8 +542,40 @@ vec3f eval_shading_normal(const scene_data& scene,
     if (material.type == material_type::refractive) return normal;
     return dot(normal, outgoing) >= 0 ? normal : -normal;
   } else if (!shape.lines.empty()) {
-    auto normal = eval_normal(scene, instance, element, uv);
-    return orthonormalize(outgoing, normal);
+    auto& p0     = shape.positions[shape.lines[element].x];
+    auto& p1     = shape.positions[shape.lines[element].y];
+    auto& r0     = shape.radius[shape.lines[element].x];
+    auto& r1     = shape.radius[shape.lines[element].y];
+    auto  height = length(p1 - p0);
+    auto  p0p1   = normalize(p1 - p0);
+    auto  frame  = instance.frame * frame_fromz(p0, p0p1);
+
+    auto h = uv.x;
+    if (h < 0 || h > 1) {
+      auto p      = vec3f{cos(uv.y), sin(uv.y), h};  // point on cylinder
+      auto radius = uv.x > 1 ? r1 : r0;
+
+      // project onto spherical caps
+      if (h > 1) p.z -= 1;
+      p.z /= (radius / height);
+      p.x *= sqrt(max(1 - p.z * p.z, 0.0f));
+      p.y *= sqrt(max(1 - p.z * p.z, 0.0f));
+      return normalize(transform_direction(frame, p));
+    } else {
+      auto n = vec3f{};
+      if (r0 == r1) {
+        n = vec3f{cos(uv.y), sin(uv.y), 0};
+      } else {
+        // auto cone_slope = (r0 - r1) / height;
+        // n        = vec3f{sqrt(1 - cone_slope * cone_slope), 0, cone_slope};
+        // auto rot = rotation_frame({0, 0, 1}, uv.y);
+        // n        = transform_direction(rot, n);
+        auto p = eval_shading_position(scene, instance, element, uv, outgoing);
+        n      = 2 * p;
+        n.z += -2 * p.z - r0 / height - r1 / height;
+      }
+      return normalize(transform_direction(frame, n));
+    }
   } else if (!shape.points.empty()) {
     // HACK: sphere
     if (true) {
