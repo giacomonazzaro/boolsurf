@@ -316,7 +316,8 @@ inline int intersect_segments(const App& app, const vec2f& mouse_uv,
 
 inline void update_cell_shapes(App& app, const bool_state& state,
     const vector<bool>& bsh_output, hash_set<int>& updated_shapes) {
-  static auto cell_to_shape_id = hash_map<int, int>{};
+  static auto cell_to_shape_id    = hash_map<int, int>{};
+  static auto cell_to_material_id = hash_map<int, int>{};
   for (auto& [cell_id, shape_id] : cell_to_shape_id) {
     app.scene.instances[shape_id].visible = false;
   }
@@ -330,8 +331,16 @@ inline void update_cell_shapes(App& app, const bool_state& state,
   auto shape_ids    = vector<int>(num_cells);
   auto material_ids = vector<int>(num_cells);
   for (int i = 0; i < num_cells; i++) {
-    auto  material_id  = (int)app.scene.materials.size();
-    auto& material     = app.scene.materials.emplace_back();
+    int material_id;
+    if (auto it = cell_to_material_id.find(i); it == cell_to_material_id.end()) {
+      material_id = app.scene.materials.size();
+      app.scene.materials.push_back({});
+      cell_to_material_id[i] = material_id;
+    } else {
+      material_id = it->second;
+    }
+    auto& material = app.scene.materials[material_id];
+
     material.type      = material_type::glossy;
     material.roughness = 0.4;
     if (state.labels.size())
