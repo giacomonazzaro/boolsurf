@@ -106,15 +106,12 @@ void update_glscene(shade_scene& glscene, const scene_data& scene,
 
 using app_callback = std::function<void(const glinput_state& input, App& app)>;
 
-void run_app(App& app, const string& name, const shade_params& params_,
-    const app_callback& widgets_callback  = {},
-    const app_callback& uiupdate_callback = {},
-    const app_callback& update_callback   = {}) {
+void run_app(App& app) {
   auto& glscene = app.glscene;
   auto& scene   = app.scene;
 
   // draw params
-  auto params = params_;
+  auto params = shade_params{};
 
   // camera names
   auto camera_names = scene.camera_names;
@@ -124,16 +121,12 @@ void run_app(App& app, const string& name, const shade_params& params_,
     }
   }
 
-  // gpu updates
-  auto& updated_shapes = app.updated_shapes;
-
   // scene
   auto& new_shapes = app.new_shapes;
 
   // callbacks
   auto callbacks    = glwindow_callbacks{};
   callbacks.init_cb = [&](const glinput_state& input) {
-    //    init_glscene(glscene, scene);
     init_scene(glscene, scene);
   };
   callbacks.clear_cb = [&](const glinput_state& input) {
@@ -144,10 +137,8 @@ void run_app(App& app, const string& name, const shade_params& params_,
   };
 
   // top level combo
-  auto names           = vector<string>{name};
   auto selected        = 0;
   callbacks.widgets_cb = [&](const glinput_state& input) {
-    draw_glcombobox("name", selected, names);
     draw_gllabel("frame time (ms)", app.frame_time_ms);
     draw_glcheckbox("flag", app.flag);
 
@@ -212,36 +203,12 @@ void run_app(App& app, const string& name, const shade_params& params_,
       draw_glcoloredit("background", params.background);
       end_glheader();
     }
-    // draw_scene_editor(scene, selection, {});
-    if (widgets_callback) {
-      widgets_callback(input, app);
-      //      if (!updated_shapes.empty()) {
-      //        update_glscene(glscene, scene, updated_shapes);
-      //        updated_shapes.clear();
-      //      }
-    }
   };
-  callbacks.update_cb = [&](const glinput_state& input) {
-    if (update_callback) {
-      update_callback(input, app);
-      //      if (!updated_shapes.empty()) {
-      //        update_glscene(glscene, scene, updated_shapes);
-      //        updated_shapes.clear();
-      //      }
-    }
-  };
+
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
     auto timer = simple_timer();
     start_timer(timer);
 
-    // handle mouse and keyboard for navigation
-    if (uiupdate_callback) {
-      uiupdate_callback(input, app);
-      //      if (!updated_shapes.empty()) {
-      //        update_glscene(glscene, scene, updated_shapes);
-      //        updated_shapes.clear();
-      //      }
-    }
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
       scene.cameras.at(params.camera) = camera;
@@ -250,7 +217,6 @@ void run_app(App& app, const string& name, const shade_params& params_,
     if (input.modifier_ctrl && input.modifier_shift &&
         !app.selected_spline().input.is_closed &&
         app.selected_spline().input.control_points.size() > 1) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
       auto spline_id     = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
@@ -258,8 +224,8 @@ void run_app(App& app, const string& name, const shade_params& params_,
     if (input.key_pressed[(int)gui_key::enter]) {
       insert_point(app, input);
     }
-    process_click(app, updated_shapes, input);
-    process_mouse(app, updated_shapes, input);
+    process_click(app, app.updated_shapes, input);
+    process_mouse(app, app.updated_shapes, input);
 
     for (auto& entry : app.new_shapes) {
       glscene.shapes.resize(max((int)glscene.shapes.size(), entry.id + 1));
@@ -267,7 +233,7 @@ void run_app(App& app, const string& name, const shade_params& params_,
     add_new_shapes(app);
     new_shapes.clear();
 
-    auto edited = update_splines(app, scene, updated_shapes);
+    auto edited = update_splines(app, scene, app.updated_shapes);
     if (edited) {
       update_boolsurf(app, input);
     }
@@ -278,9 +244,9 @@ void run_app(App& app, const string& name, const shade_params& params_,
     add_new_shapes(app);
     new_shapes.clear();
 
-    if (!updated_shapes.empty()) {
-      update_glscene(glscene, scene, updated_shapes);
-      updated_shapes.clear();
+    if (!app.updated_shapes.empty()) {
+      update_glscene(glscene, scene, app.updated_shapes);
+      app.updated_shapes.clear();
     }
 
     app.frame_time_ms = elapsed_seconds(timer) * 1000;
@@ -289,25 +255,12 @@ void run_app(App& app, const string& name, const shade_params& params_,
   run_ui({1280 + 320, 720}, "yshade", callbacks);
 }
 
-void widgets_callback(const glinput_state& input, App& app) {
-  //  auto time = app.time;
-  // if (input.widgets_active) {
-  // printf("time: %f, function: %s\n", time, __FUNCTION__);
-  // }
-}
-
-void update_callback(const glinput_state& input, App& app) {
-  app.time =
-      std::chrono::high_resolution_clock::now().time_since_epoch().count() *
-      1e-9;
-};
-
 void run_glview(const glview_params& params) {
   auto app = App{};
   init_app(app, params);
 
   // run viewer
-  run_app(app, "yshape", {}, widgets_callback, update_callback);
+  run_app(app);
 }
 
 #endif
