@@ -7,10 +7,9 @@ using namespace yocto;
 using Anchor_Point = anchor_point;
 
 struct Spline_Input {
-  vector<anchor_point> control_points   = {};
-  vector<bool>         is_smooth        = {};
-  int                  num_subdivisions = 4;
-  bool                 is_closed        = true;
+  vector<anchor_point> control_points = {};
+  vector<bool>         is_smooth      = {};
+  bool                 is_closed      = true;
 
   inline std::array<mesh_point, 4> control_polygon(int curve_id) const {
     if (is_closed && curve_id == control_points.size() - 1) {

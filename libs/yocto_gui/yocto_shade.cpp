@@ -254,11 +254,15 @@ glshape_handle add_shape(shade_scene& scene) {
   return (int)scene.shapes.size() - 1;
 }
 
-void set_shape(shade_shape& glshape, const shape_data& shape, bool edges) {
+void set_shape(shade_shape& glshape, const shape_data& shape) {
   if (shape.points.size() != 0) {
     set_points(glshape, shape.points);
   } else if (shape.lines.size() != 0) {
-    set_lines(glshape, shape.lines);
+    auto polyline_shape = polyline_to_cylinders(
+        shape.positions, 16, shape.radius[0]);
+    polyline_shape.normals = compute_normals(polyline_shape);
+    set_shape(glshape, polyline_shape);
+    return;
   } else if (shape.triangles.size() != 0) {
     set_triangles(glshape, shape.triangles);
   } else if (shape.quads.size() != 0) {

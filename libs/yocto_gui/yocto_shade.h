@@ -173,8 +173,7 @@ const ogl_arraybuffer& get_colors(const shade_shape& shape);
 const ogl_arraybuffer& get_tangents(const shade_shape& shape);
 
 // set shape object
-void set_shape(
-    shade_shape& glshape, const shape_data& shape, bool edges = false);
+void set_shape(shade_shape& glshape, const shape_data& shape);
 
 // environment
 glenvironment_handle add_environment(shade_scene& scene, const frame3f& frame,

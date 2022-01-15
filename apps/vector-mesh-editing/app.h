@@ -58,8 +58,9 @@ struct App {
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
 
-  bool  flag           = true;
-  float line_thickness = 0.001;
+  bool  flag             = true;
+  float line_thickness   = 0.001;
+  int   num_subdivisions = 4;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -332,7 +333,8 @@ inline void update_cell_shapes(App& app, const bool_state& state,
   auto material_ids = vector<int>(num_cells);
   for (int i = 0; i < num_cells; i++) {
     int material_id;
-    if (auto it = cell_to_material_id.find(i); it == cell_to_material_id.end()) {
+    if (auto it = cell_to_material_id.find(i);
+        it == cell_to_material_id.end()) {
       material_id = app.scene.materials.size();
       app.scene.materials.push_back({});
       cell_to_material_id[i] = material_id;
@@ -684,7 +686,8 @@ vector<mesh_segment> make_bezier_segments(const bool_mesh& mesh,
 }
 
 void update_output(Spline_Output& output, const Spline_Input& input,
-    const bool_mesh& mesh, const hash_set<int>& curves_to_update) {
+    const bool_mesh& mesh, int num_subdivisions,
+    const hash_set<int>& curves_to_update) {
   for (auto curve_id : curves_to_update) {
     if (output.segments.size() <= curve_id)
       output.segments.resize(curve_id + 1);
@@ -695,7 +698,7 @@ void update_output(Spline_Output& output, const Spline_Input& input,
           mesh, control_polygon[0], control_polygon[3]);
     } else {
       output.segments[curve_id] = make_bezier_segments(
-          mesh, control_polygon, input.num_subdivisions);
+          mesh, control_polygon, num_subdivisions);
     }
   }
 }
@@ -718,23 +721,29 @@ void update_cache(
     }
     auto& curve = cache.curves[curve_id];
     if (app.shapes[spline_id][0][curve_id].empty()) continue;
-    curve.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
-    for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
-      auto& segment      = app.shapes[spline_id][0][curve_id][i];
-      curve.positions[i] = eval_position(mesh, {segment.face, segment.start});
-    }
-    auto& segment          = app.shapes[spline_id][0][curve_id].back();
-    curve.positions.back() = eval_position(mesh, {segment.face, segment.end});
-  }
 
-  for (auto curve_id : cache.curves_to_update) {
     auto  shape_id = cache.curves[curve_id].shape_id;
     auto& shape    = scene.shapes[shape_id];
-    shape          = polyline_to_cylinders(
-        cache.curves[curve_id].positions, 16, app.line_thickness);
-    shape.normals = compute_normals(shape);
+    // TODO(giacomo): Cleanup.
+    shape.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
+    shape.lines.resize(app.shapes[spline_id][0][curve_id].size());
+    shape.radius.assign(shape.positions.size(), app.line_thickness);
+    for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
+      auto& segment      = app.shapes[spline_id][0][curve_id][i];
+      shape.positions[i] = eval_position(mesh, {segment.face, segment.start});
+      shape.lines[i]     = {i, i + 1};
+    }
+    auto& segment          = app.shapes[spline_id][0][curve_id].back();
+    shape.positions.back() = eval_position(mesh, {segment.face, segment.end});
+
     updated_shapes += cache.curves[curve_id].shape_id;
   }
+
+  // for (auto curve_id : cache.curves_to_update) {
+  //   shape          = polyline_to_cylinders(
+  //       cache.curves[curve_id].positions, 16, app.line_thickness);
+  //   shape.normals = compute_normals(shape);
+  // }
 #endif
 
   for (auto point_id : cache.points_to_update) {
@@ -792,8 +801,8 @@ inline bool update_splines(
     auto spline = app.get_spline_view(spline_id);
     if (spline.cache.curves_to_update.size()) updated = true;
 
-    update_output(
-        spline.output, spline.input, app.mesh, spline.cache.curves_to_update);
+    update_output(spline.output, spline.input, app.mesh, app.num_subdivisions,
+        spline.cache.curves_to_update);
 
     app.shapes.resize(app.splinesurf.num_splines());
     app.shapes[spline_id].resize(1);
@@ -931,6 +940,9 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
           control_points += line.end;
         }
       }
+      control_points.pop_back();
+      control_points.pop_back();
+      control_points.pop_back();
       for (int i = 0; i < control_points.size(); i += 3) {
         auto anchor  = anchor_point{};
         anchor.point = control_points[i];
