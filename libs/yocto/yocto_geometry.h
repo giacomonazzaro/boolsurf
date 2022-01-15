@@ -93,6 +93,9 @@ inline bbox2f merge(const bbox2f& a, const bbox2f& b);
 inline void   expand(bbox2f& a, const vec2f& b);
 inline void   expand(bbox2f& a, const bbox2f& b);
 
+inline bbox2f make_bbox(const std::vector<vec2f>& positions);
+inline void   fit_into_square(std::vector<vec2f>& positions, float max_size = 1);
+
 // Bounding box properties
 inline vec3f center(const bbox3f& a);
 inline vec3f size(const bbox3f& a);
@@ -106,6 +109,9 @@ inline bbox3f merge(const bbox3f& a, const vec3f& b);
 inline bbox3f merge(const bbox3f& a, const bbox3f& b);
 inline void   expand(bbox3f& a, const vec3f& b);
 inline void   expand(bbox3f& a, const bbox3f& b);
+
+inline bbox3f make_bbox(const std::vector<vec3f>& positions);
+inline void   fit_into_cube(std::vector<vec3f>& positions, float max_size = 1);
 
 }  // namespace yocto
 
@@ -377,8 +383,20 @@ inline bbox2f merge(const bbox2f& a, const vec2f& b) {
 inline bbox2f merge(const bbox2f& a, const bbox2f& b) {
   return {min(a.min, b.min), max(a.max, b.max)};
 }
-inline void expand(bbox2f& a, const vec2f& b) { a = merge(a, b); }
-inline void expand(bbox2f& a, const bbox2f& b) { a = merge(a, b); }
+inline void   expand(bbox2f& a, const vec2f& b) { a = merge(a, b); }
+inline void   expand(bbox2f& a, const bbox2f& b) { a = merge(a, b); }
+inline bbox2f make_bbox(const std::vector<vec2f>& positions) {
+  auto bbox = invalidb2f;
+  for (auto& pos : positions) bbox = merge(bbox, pos);
+  return bbox;
+}
+inline void fit_into_square(std::vector<vec2f>& positions, float max_size) {
+  // Fit into box not larger than [-max_size, max_size]^2
+  auto bbox = make_bbox(positions);
+  auto s    = max(size(bbox)) / max_size;
+  auto c    = center(bbox);
+  for (auto& pos : positions) pos = (pos - c) / s;
+}
 
 // Bounding box properties
 inline vec3f center(const bbox3f& a) { return (a.min + a.max) / 2; }
@@ -399,8 +417,20 @@ inline bbox3f merge(const bbox3f& a, const vec3f& b) {
 inline bbox3f merge(const bbox3f& a, const bbox3f& b) {
   return {min(a.min, b.min), max(a.max, b.max)};
 }
-inline void expand(bbox3f& a, const vec3f& b) { a = merge(a, b); }
-inline void expand(bbox3f& a, const bbox3f& b) { a = merge(a, b); }
+inline void   expand(bbox3f& a, const vec3f& b) { a = merge(a, b); }
+inline void   expand(bbox3f& a, const bbox3f& b) { a = merge(a, b); }
+inline bbox3f make_bbox(const std::vector<vec3f>& positions) {
+  auto bbox = invalidb3f;
+  for (auto& pos : positions) bbox = merge(bbox, pos);
+  return bbox;
+}
+inline void fit_into_cube(std::vector<vec3f>& positions, float max_size) {
+  // Fit into box not larger than [-max_size, max_size]^3
+  auto bbox = make_bbox(positions);
+  auto s    = max(size(bbox)) / max_size;
+  auto c    = center(bbox);
+  for (auto& pos : positions) pos = (pos - c) / s;
+}
 
 }  // namespace yocto
 

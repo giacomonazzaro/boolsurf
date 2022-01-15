@@ -39,7 +39,6 @@ scope_timer::scope_timer(const string& msg) {
   if (scope_timer_indent == 0) printf("       \n");
   printf("[timer]");
   printf(" %.*s", scope_timer_indent, "|||||||||||||||||||||||||");
-  // printf("%d", scope_timer_indent);
   printf("%s started\n", msg.c_str());
   scope_timer_indent += 1;
   message    = msg;
@@ -71,68 +70,28 @@ scope_timer::~scope_timer() {
   printf("%s %s\n", message.c_str(), format_duration(elapsed).c_str());
 }
 
-// Build adjacencies between faces (sorted counter-clockwise)
-static vector<vec3i> face_adjacencies_fast(const vector<vec3i>& triangles) {
-  auto get_edge = [](const vec3i& triangle, int i) -> vec2i {
-    auto x = triangle[i], y = triangle[i < 2 ? i + 1 : 0];
-    return x < y ? vec2i{x, y} : vec2i{y, x};
-  };
-
-  auto adjacencies = vector<vec3i>{triangles.size(), vec3i{-1, -1, -1}};
-  auto edge_map    = hash_map<vec2i, int>();
-  edge_map.reserve((size_t)(triangles.size() * 1.5));
-  for (int i = 0; i < triangles.size(); ++i) {
-    for (int k = 0; k < 3; ++k) {
-      auto edge = get_edge(triangles[i], k);
-      auto it   = edge_map.find(edge);
-      if (it == edge_map.end()) {
-        edge_map[edge] = i;
-      } else {
-        auto neighbor     = it->second;
-        adjacencies[i][k] = neighbor;
-        for (int kk = 0; kk < 3; ++kk) {
-          auto edge2 = get_edge(triangles[neighbor], kk);
-          if (edge2 == edge) {
-            adjacencies[neighbor][kk] = i;
-            break;
-          }
-        }
-      }
-    }
-  }
-  return adjacencies;
-}
-
 void init_mesh(bool_mesh& mesh) {
+  // Make triangle mesh inside [-1, 1]^ cube.
   if (mesh.quads.size()) {
     mesh.triangles = quads_to_triangles(mesh.quads);
     mesh.quads.clear();
   }
+  fit_into_cube(mesh.positions);
 
-  mesh.normals.clear();
-  mesh.adjacencies = face_adjacencies_fast(mesh.triangles);
+  // Adjacency data
+  mesh.adjacencies = face_adjacencies(mesh.triangles);
+  mesh.dual_solver = make_dual_geodesic_solver(
+      mesh.triangles, mesh.positions, mesh.adjacencies);
 
+  // Additional data for computing cells
   mesh.is_edge_on_boundary = vector<bool>(3 * mesh.triangles.size(), false);
   mesh.face_tags           = vector<int>(mesh.triangles.size(), -1);
   mesh.polygon_borders.clear();
 
+  // Backup information for fast reset
   mesh.old_adjacencies = mesh.adjacencies;
   mesh.num_triangles   = (int)mesh.triangles.size();
   mesh.num_positions   = (int)mesh.positions.size();
-
-  // Fit shape in [-1, +1]^3
-  auto bbox = invalidb3f;
-  for (auto& pos : mesh.positions) bbox = merge(bbox, pos);
-  for (auto& pos : mesh.positions) pos = (pos - center(bbox)) / max(size(bbox));
-
-  mesh.bbox     = bbox;
-  mesh.bbox.min = (mesh.bbox.min - center(bbox)) / max(size(bbox));
-  mesh.bbox.max = (mesh.bbox.max - center(bbox)) / max(size(bbox));
-
-  mesh.bvh = make_triangles_bvh(mesh.triangles, mesh.positions, {});
-
-  mesh.dual_solver = make_dual_geodesic_solver(
-      mesh.triangles, mesh.positions, mesh.adjacencies);
 
   // @MUTLITHREAD_DANGER
   mesh.triangles.reserve(mesh.triangles.size() * 2);
@@ -144,6 +103,7 @@ void reset_mesh(bool_mesh& mesh) {
   mesh.positions.resize(mesh.num_positions);
   mesh.triangulated_faces.clear();
   mesh.polygon_borders.clear();
+  mesh.adjacencies = mesh.old_adjacencies;
 
   // mesh.is_edge_on_boundary    = vector<bool>(3 * mesh.triangles.size(),
   // false); mesh.face_tags       = vector<int>(mesh.triangles.size(), -1);
@@ -165,7 +125,6 @@ void reset_mesh(bool_mesh& mesh) {
 
   // assert(mesh.old_adjacencies == mesh.adjacencies);
   // mesh.adjacencies.resize(mesh.num_triangles);
-  mesh.adjacencies = mesh.old_adjacencies;
 }
 
 geodesic_path compute_geodesic_path(
@@ -1907,14 +1866,6 @@ void compute_bool_operations(
   for (auto& op : ops) {
     compute_bool_operation(state, op);
   }
-}
-
-mesh_point intersect_mesh(const bool_mesh& mesh, const shape_bvh& bvh,
-    const camera_data& camera, const vec2f& uv) {
-  auto ray = camera_ray(
-      camera.frame, camera.lens, camera.aspect, camera.film, uv);
-  auto isec = intersect_triangles_bvh(bvh, mesh.triangles, mesh.positions, ray);
-  return {isec.element, isec.uv};
 }
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes) {

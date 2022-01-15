@@ -64,10 +64,6 @@ struct bool_mesh : shape_data {
   vector<vec3i> old_adjacencies = {};
   int           num_triangles   = 0;
   int           num_positions   = 0;
-
-  // Utility
-  shape_bvh bvh  = {};
-  bbox3f    bbox = {};
 };
 
 struct bool_point {
@@ -265,14 +261,6 @@ inline vec3f eval_normal(const bool_mesh& mesh, int face) {
   auto [x, y, z] = mesh.triangles[face];
   return triangle_normal(
       mesh.positions[x], mesh.positions[y], mesh.positions[z]);
-}
-
-mesh_point intersect_mesh(const bool_mesh& mesh, const shape_bvh& bvh,
-    const camera_data& camera, const vec2f& uv);
-
-inline mesh_point intersect_mesh(
-    const bool_mesh& mesh, const camera_data& camera, const vec2f& uv) {
-  return intersect_mesh(mesh, mesh.bvh, camera, uv);
 }
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes);
