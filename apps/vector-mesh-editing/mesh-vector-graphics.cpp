@@ -106,7 +106,7 @@ void update_glscene(shade_scene& glscene, const scene_data& scene,
 
 using app_callback = std::function<void(const glinput_state& input, App& app)>;
 
-void run_app(App& app, const string& name, const glscene_params& params_,
+void run_app(App& app, const string& name, const shade_params& params_,
     const app_callback& widgets_callback  = {},
     const app_callback& uiupdate_callback = {},
     const app_callback& update_callback   = {}) {
@@ -140,7 +140,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
     clear_scene(glscene);
   };
   callbacks.draw_cb = [&](const glinput_state& input) {
-    draw_scene(glscene, scene, input.framebuffer_viewport, {});
+    draw_scene(glscene, scene, input.framebuffer_viewport, params);
   };
 
   // top level combo
@@ -148,6 +148,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
   auto selected        = 0;
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_glcombobox("name", selected, names);
+    draw_gllabel("frame time (ms)", app.frame_time_ms);
     draw_glcheckbox("flag", app.flag);
 
     if (draw_glslider(
@@ -282,11 +283,7 @@ void run_app(App& app, const string& name, const glscene_params& params_,
       updated_shapes.clear();
     }
 
-    if (edited) {
-      auto s = elapsed_seconds(timer);
-      printf("[timer]: frame %f ms\n", float(s) * 1000);
-    }
-    app.last_input = input;
+    app.frame_time_ms = elapsed_seconds(timer) * 1000;
   };
   // run ui
   run_ui({1280 + 320, 720}, "yshade", callbacks);

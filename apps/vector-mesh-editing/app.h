@@ -31,16 +31,15 @@ struct Shape_Entry {
 
 struct App {
   Render      render;
-  scene_data  scene        = {};
-  shade_scene glscene      = {};
-  bool_mesh   mesh         = {};
-  bool_state  bool_state   = {};
-  bool_test   bool_test    = {};
-  string      svg_filename = {};
-  shape_bvh   bvh          = {};
-  float       time         = 0;
-
-  glinput_state last_input = {};
+  scene_data  scene         = {};
+  shade_scene glscene       = {};
+  bool_mesh   mesh          = {};
+  bool_state  bool_state    = {};
+  bool_test   bool_test     = {};
+  string      svg_filename  = {};
+  shape_bvh   bvh           = {};
+  float       time          = 0;
+  float       frame_time_ms = 0;
 
   BSH_graph bsh_input = {};
   int       patch_id  = 0;

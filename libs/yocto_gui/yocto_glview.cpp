@@ -1933,6 +1933,9 @@ void draw_gllabel(const char* lbl, const string& label) {
 void draw_gllabel(const char* lbl, int value) {
   ImGui::LabelText(lbl, "%s", std::to_string(value).c_str());
 }
+void draw_gllabel(const char* lbl, float value) {
+  ImGui::LabelText(lbl, "%s", std::to_string(value).c_str());
+}
 void draw_gllabel(const char* lbl, bool value) {
   ImGui::LabelText(lbl, "%s", value ? "true" : "false");
 }

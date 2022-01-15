@@ -318,6 +318,7 @@ void end_glheader();
 // Labels
 void draw_gllabel(const char* lbl, const string& text);
 void draw_gllabel(const char* lbl, int value);
+void draw_gllabel(const char* lbl, float value);
 void draw_gllabel(const char* lbl, bool value);
 
 // Lines
