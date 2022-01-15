@@ -47,10 +47,6 @@ inline vec2i curves_adjacent_to_point(const Spline_Input& input, int point_id) {
   return result;
 }
 
-struct Spline_Output {
-  vector<vector<mesh_segment>> segments = {};
-};
-
 struct Spline_Cache {
   struct Curve {
     vector<vec3f> positions = {};
@@ -72,28 +68,24 @@ struct Spline_Cache {
 };
 
 struct Spline_View {
-  Spline_Input&  input;
-  Spline_Output& output;
-  Spline_Cache&  cache;
+  Spline_Input& input;
+  Spline_Cache& cache;
 };
 
 struct Const_Spline_View {
-  const Spline_Input&  input;
-  const Spline_Output& output;
-  const Spline_Cache&  cache;
+  const Spline_Input& input;
+  const Spline_Cache& cache;
 };
 
 struct Splinesurf {
-  vector<Spline_Input>  spline_input  = {};
-  vector<Spline_Output> spline_output = {};
-  vector<Spline_Cache>  spline_cache  = {};
+  vector<Spline_Input> spline_input = {};
+  vector<Spline_Cache> spline_cache = {};
 
   Spline_View get_spline_view(int id) {
-    return Spline_View{spline_input[id], spline_output[id], spline_cache[id]};
+    return Spline_View{spline_input[id], spline_cache[id]};
   }
   const Const_Spline_View get_spline_view(int id) const {
-    return Const_Spline_View{
-        spline_input[id], spline_output[id], spline_cache[id]};
+    return Const_Spline_View{spline_input[id], spline_cache[id]};
   }
   inline int num_splines() const { return (int)spline_input.size(); }
 };
@@ -113,7 +105,6 @@ struct Editing {
 inline int add_spline(Splinesurf& splinesurf) {
   auto id = (int)splinesurf.spline_input.size();
   splinesurf.spline_input.push_back({});
-  splinesurf.spline_output.push_back({});
   splinesurf.spline_cache.push_back({});
   return id;
 }

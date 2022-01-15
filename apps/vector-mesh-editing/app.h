@@ -660,7 +660,6 @@ void update_cache(
   auto  spline = app.get_spline_view(spline_id);
   auto& input  = spline.input;
   auto& cache  = spline.cache;
-  auto& output = spline.output;
 
   // Update spline rendering
 #if 0
