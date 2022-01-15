@@ -454,8 +454,6 @@ inline void process_mouse(
     return;
   }
 
-  update_boolsurf(app, input);
-
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   if (selection.control_point_id == -1) return;
@@ -712,7 +710,7 @@ void update_cache(
   auto& output = spline.output;
 
   // Update spline rendering
-#if 1
+#if 0
   for (auto curve_id : cache.curves_to_update) {
     if (curve_id >= cache.curves.size()) {
       printf("if(curve_id >= cache.curves.size()), %d >= %d\n", (int)curve_id,
@@ -793,6 +791,7 @@ void update_cache(
 
 inline bool update_splines(
     App& app, scene_data& scene, hash_set<int>& updated_shapes) {
+  PROFILE();
   bool updated = false;
 
   // Update bezier outputs of edited curves.
@@ -895,7 +894,7 @@ inline void insert_point(App& app, const glinput_state& input) {
     if (next >= (int)spline.input.control_points.size()) next = 0;
     spline.input.control_points[next].handles[0] = right[2];
     spline.cache.points[next].tangents[0].path   = shortest_path(
-        app.mesh, right[0], left[2]);
+        app.mesh, right[3], right[2]);
 
     auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
     insert_anchor_point(spline, p, point.curve_id + 1, app.mesh, add_app_shape);
@@ -905,15 +904,15 @@ inline void insert_point(App& app, const glinput_state& input) {
 }
 
 void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
-    const mesh_point& center, const vector<Svg_Shape>& svg, float svg_size,
-    int svg_subdivs) {
-  auto p0  = eval_position(mesh, {center.face, {0, 0}});
-  auto p1  = eval_position(mesh, {center.face, {1, 0}});
+    const mesh_point& center_point, const vector<Svg_Shape>& svg,
+    float svg_size, int svg_subdivs) {
+  auto p0  = eval_position(mesh, {center_point.face, {0, 0}});
+  auto p1  = eval_position(mesh, {center_point.face, {1, 0}});
   auto rot = mat2f{};
   {
     auto frame = mat3f{};
     frame.x    = normalize(p1 - p0);
-    frame.z    = eval_normal(mesh, center.face);
+    frame.z    = eval_normal(mesh, center_point.face);
     frame.y    = normalize(cross(frame.z, frame.x));
 
     auto up = vec3f{0, 1, 0};
@@ -934,13 +933,16 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
         }
       }
       assert(points2D[0] != points2D.back());
+      auto bbox = invalidb2f;
+      for (auto& p : points2D) bbox = merge(bbox, p);
+      for (auto& p : points2D) p = (p - center(bbox)) / max(size(bbox));
 
       auto control_points = vector<mesh_point>{};
       for (auto uv : points2D) {
-        uv -= vec2f{0.5, 0.5};
+        // uv -= vec2f{0.5, 0.5};
         uv = rot * uv;
         uv *= svg_size;
-        auto line = straightest_path(mesh, center, uv);
+        auto line = straightest_path(mesh, center_point, uv);
         control_points += line.end;
       }
 
