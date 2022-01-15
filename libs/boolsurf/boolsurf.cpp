@@ -127,7 +127,7 @@ void reset_mesh(bool_mesh& mesh) {
   // mesh.adjacencies.resize(mesh.num_triangles);
 }
 
-geodesic_path compute_geodesic_path(
+geodesic_path shortest_path(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
   auto path = geodesic_path{};
   if (start.face == end.face) {
@@ -144,7 +144,7 @@ geodesic_path compute_geodesic_path(
   return path;
 }
 
-mesh_point eval_geodesic_path(
+mesh_point eval_path(
     const bool_mesh& mesh, const geodesic_path& path, float t) {
   return eval_path_point(
       path, mesh.triangles, mesh.positions, mesh.adjacencies, t);
@@ -191,7 +191,7 @@ vector<mesh_segment> make_curve_segments(
   auto curve = vector<mesh_segment>{};
 
   auto get_segments = [&](const mesh_point& start, const mesh_point& end) {
-    auto path      = compute_geodesic_path(mesh, start, end);
+    auto path      = shortest_path(mesh, start, end);
     auto threshold = 0.001f;
     for (auto& l : path.lerps) {
       l = yocto::clamp(l, 0 + threshold, 1 - threshold);

@@ -225,16 +225,15 @@ void compute_symmetrical_difference(
 vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
     const vector<vec3f>& positions, const geodesic_path& path);
 
-geodesic_path compute_geodesic_path(
+geodesic_path shortest_path(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end);
 
-mesh_point eval_geodesic_path(
-    const bool_mesh& mesh, const geodesic_path& path, float t);
+mesh_point eval_path(const bool_mesh& mesh, const geodesic_path& path, float t);
 
 vector<mesh_segment> make_curve_segments(
     const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
-vector<vector<mesh_segment>> make_boundary_segments(
-    const bool_mesh& mesh, const vector<anchor_point>& polygon);
+// vector<vector<mesh_segment>> make_boundary_segments(
+//     const bool_mesh& mesh, const vector<anchor_point>& polygon);
 
 inline geodesic_path straightest_path(const bool_mesh& mesh,
     const mesh_point& start, const vec2f& direction, float length) {

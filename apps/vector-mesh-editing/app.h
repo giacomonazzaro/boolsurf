@@ -191,35 +191,6 @@ inline void add_new_shapes(App& app) {
   app.num_new_shapes = 0;
 }
 
-void update_boolsurf_input(bool_state& state, App& app) {
-  PROFILE();
-
-  auto& mesh   = app.mesh;
-  auto  spline = app.selected_spline();
-  if (spline.input.control_points.size() <= 1) return;
-
-  auto selected_spline_id = app.editing.selection.spline_id;
-  auto selected_point_id  = app.editing.selection.control_point_id;
-  if (selected_spline_id >= app.shapes.size()) app.shapes.push_back({});
-  if (app.shapes[selected_spline_id].size() == 0)
-    app.shapes[selected_spline_id].push_back({});
-  auto& boundary = app.shapes[selected_spline_id][0];
-
-  for (int i : curves_adjacent_to_point(spline.input, selected_point_id)) {
-    if (i == -1) continue;
-    // Add new 1-polygon shape to state
-    // if (test_polygon.empty()) continue;
-    if (i >= boundary.size()) boundary.push_back({});
-    auto& curve = boundary[i];
-
-    auto& polygon = spline.input.control_points;
-    auto  start   = polygon[i];
-    auto  end     = polygon[(i + 1) % polygon.size()];
-    curve         = make_curve_segments(mesh, start, end);
-    // boundary = recompute_polygon_segments(mesh, spline.input.control_points);
-  }
-}
-
 inline shape_data make_mesh_patch(
     const vector<vec3f>& positions, vector<vec3i>&& triangles) {
   // PROFILE();
@@ -652,7 +623,7 @@ inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
 
 inline vector<mesh_segment> make_segments(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
-  auto path      = compute_geodesic_path(mesh, start, end);
+  auto path      = shortest_path(mesh, start, end);
   auto threshold = 0.001f;
   for (auto& l : path.lerps) {
     l = yocto::clamp(l, 0 + threshold, 1 - threshold);
@@ -681,24 +652,6 @@ vector<mesh_segment> make_bezier_segments(const bool_mesh& mesh,
     result += segments;
   }
   return result;
-}
-
-void update_output(Spline_Output& output, const Spline_Input& input,
-    const bool_mesh& mesh, int num_subdivisions,
-    const hash_set<int>& curves_to_update) {
-  for (auto curve_id : curves_to_update) {
-    if (output.segments.size() <= curve_id)
-      output.segments.resize(curve_id + 1);
-    auto control_polygon = input.control_polygon(curve_id);
-    if (control_polygon[0] == control_polygon[1] &&
-        control_polygon[2] == control_polygon[3]) {
-      output.segments[curve_id] = make_segments(
-          mesh, control_polygon[0], control_polygon[3]);
-    } else {
-      output.segments[curve_id] = make_bezier_segments(
-          mesh, control_polygon, num_subdivisions);
-    }
-  }
 }
 
 void update_cache(
@@ -799,9 +752,6 @@ inline bool update_splines(
        spline_id++) {
     auto spline = app.get_spline_view(spline_id);
     if (spline.cache.curves_to_update.size()) updated = true;
-
-    update_output(spline.output, spline.input, app.mesh, app.num_subdivisions,
-        spline.cache.curves_to_update);
 
     app.shapes.resize(app.splinesurf.num_splines());
     app.shapes[spline_id].resize(1);

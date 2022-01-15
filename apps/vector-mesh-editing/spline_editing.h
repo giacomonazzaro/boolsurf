@@ -141,24 +141,6 @@ inline vec2f tangent_path_direction(
   return normalize(direction);
 }
 
-inline geodesic_path shortest_path(
-    const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
-  //  check_point(start);
-  //  check_point(end);
-  auto path = geodesic_path{};
-  if (start.face == end.face) {
-    path.start = start;
-    path.end   = end;
-    path.strip = {start.face};
-    return path;
-  }
-  auto strip = compute_strip(
-      mesh.dual_solver, mesh.triangles, mesh.positions, end, start);
-  path = shortest_path(
-      mesh.triangles, mesh.positions, mesh.adjacencies, start, end, strip);
-  return path;
-}
-
 template <typename Add_Shape>
 inline int add_curve(
     Spline_Cache& cache, Add_Shape& add_shape, int _curve_id = -1) {
