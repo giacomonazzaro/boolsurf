@@ -1,10 +1,68 @@
 #pragma once
-#include <boolsurf/boolsurf.h>
-#include <yocto/yocto_mesh.h>
+#include "../yocto/yocto_mesh.h"  // TODO(giacomo): Solve include situation.
 
 using namespace yocto;
 
-using Anchor_Point = anchor_point;
+struct spline_mesh : shape_data {
+  // Precomputed
+  vector<vec3i>        adjacencies = {};
+  dual_geodesic_solver dual_solver = {};
+};
+
+inline geodesic_path shortest_path(
+    const spline_mesh& mesh, const mesh_point& start, const mesh_point& end) {
+  auto path = geodesic_path{};
+  if (start.face == end.face) {
+    path.start = start;
+    path.end   = end;
+    path.strip = {start.face};
+    return path;
+  }
+
+  auto strip = compute_strip(
+      mesh.dual_solver, mesh.triangles, mesh.positions, end, start);
+  path = shortest_path(
+      mesh.triangles, mesh.positions, mesh.adjacencies, start, end, strip);
+  return path;
+}
+
+inline mesh_point eval_path(
+    const spline_mesh& mesh, const geodesic_path& path, float t) {
+  return eval_path_point(
+      path, mesh.triangles, mesh.positions, mesh.adjacencies, t);
+}
+
+inline geodesic_path straightest_path(const spline_mesh& mesh,
+    const mesh_point& start, const vec2f& direction, float length) {
+  return straightest_path(mesh.triangles, mesh.positions, mesh.adjacencies,
+      start, direction, length);
+}
+
+inline geodesic_path straightest_path(
+    const spline_mesh& mesh, const mesh_point& start, const vec2f& coord) {
+  auto len = length(coord);
+  return straightest_path(mesh.triangles, mesh.positions, mesh.adjacencies,
+      start, coord / len, len);
+}
+
+inline vec3f eval_position(const spline_mesh& mesh, const mesh_point& point) {
+  return eval_position(mesh.triangles, mesh.positions, point);
+}
+
+inline vec3f eval_normal(const spline_mesh& mesh, const mesh_point& point) {
+  return eval_normal(mesh.triangles, mesh.normals, point);
+}
+
+inline vec3f eval_normal(const spline_mesh& mesh, int face) {
+  auto [x, y, z] = mesh.triangles[face];
+  return triangle_normal(
+      mesh.positions[x], mesh.positions[y], mesh.positions[z]);
+}
+
+struct anchor_point {
+  mesh_point point      = {};
+  mesh_point handles[2] = {{}, {}};
+};
 
 struct Spline_Input {
   vector<anchor_point> control_points = {};
@@ -110,7 +168,7 @@ inline int add_spline(Splinesurf& splinesurf) {
 }
 
 inline vec2f tangent_path_direction(
-    const bool_mesh& mesh, const geodesic_path& path) {
+    const spline_mesh& mesh, const geodesic_path& path) {
   auto find = [](const vec3i& vec, int x) {
     for (int i = 0; i < size(vec); i++)
       if (vec[i] == x) return i;
@@ -177,7 +235,7 @@ inline int add_anchor_point(Spline_View& spline, const anchor_point& anchor,
 
 template <typename Add_Shape>
 inline int insert_anchor_point(Spline_View& spline, const anchor_point& anchor,
-    int point_id, const bool_mesh& mesh, Add_Shape& add_shape) {
+    int point_id, const spline_mesh& mesh, Add_Shape& add_shape) {
   // Add point to input.
   // auto point_id = (int)spline.input.control_points.size();
   insert(spline.input.control_points, point_id, anchor);
@@ -207,12 +265,12 @@ template <typename Add_Point_Shape, typename Add_Path_Shape>
 inline int add_anchor_point(Spline_View& spline, const mesh_point& point,
     Add_Point_Shape& add_point_shape, Add_Path_Shape& add_path_shape) {
   // Create anchor point with zero-length tangents.
-  auto anchor = Anchor_Point{point, {point, point}};
+  auto anchor = anchor_point{point, {point, point}};
   return add_anchor_point(spline, anchor, add_point_shape, add_path_shape);
 }
 
 inline void move_selected_point(Splinesurf& splinesurf,
-    const Editing::Selection& selection, const bool_mesh& mesh,
+    const Editing::Selection& selection, const spline_mesh& mesh,
     const mesh_point& point, bool symmetric_length) {
   assert(selection.spline_id != -1);
   assert(selection.control_point_id != -1);

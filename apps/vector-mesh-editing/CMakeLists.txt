@@ -1,4 +1,4 @@
-add_executable(mesh-vector-graphics mesh-vector-graphics.cpp app.h render.h spline_editing.h)
+add_executable(mesh-vector-graphics mesh-vector-graphics.cpp app.h render.h)
 
 set_target_properties(mesh-vector-graphics  PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 target_include_directories(mesh-vector-graphics  PRIVATE ${CMAKE_SOURCE_DIR}/libs)

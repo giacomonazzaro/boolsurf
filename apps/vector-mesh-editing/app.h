@@ -13,8 +13,8 @@
 #include <yocto_gui/yocto_glview.h>
 #endif
 
+#include "../libs/mesh_spline_editing/spline_editing.h"
 #include "render.h"
-#include "spline_editing.h"
 
 using namespace yocto;  // TODO(giacomo): Remove this.
 

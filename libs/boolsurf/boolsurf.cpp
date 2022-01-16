@@ -104,29 +104,6 @@ void reset_mesh(bool_mesh& mesh) {
   // mesh.adjacencies.resize(mesh.num_triangles);
 }
 
-geodesic_path shortest_path(
-    const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
-  auto path = geodesic_path{};
-  if (start.face == end.face) {
-    path.start = start;
-    path.end   = end;
-    path.strip = {start.face};
-    return path;
-  }
-
-  auto strip = compute_strip(
-      mesh.dual_solver, mesh.triangles, mesh.positions, end, start);
-  path = shortest_path(
-      mesh.triangles, mesh.positions, mesh.adjacencies, start, end, strip);
-  return path;
-}
-
-mesh_point eval_path(
-    const bool_mesh& mesh, const geodesic_path& path, float t) {
-  return eval_path_point(
-      path, mesh.triangles, mesh.positions, mesh.adjacencies, t);
-}
-
 vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
     const vector<vec3f>& positions, const geodesic_path& path) {
   auto result = vector<mesh_segment>{};

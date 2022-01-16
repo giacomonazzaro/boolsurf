@@ -1,6 +1,8 @@
 #pragma once
 
 #include "boolsurf_utils.h"
+//
+#include "../mesh_spline_editing/spline_editing.h"
 
 using namespace yocto;
 using namespace std;
@@ -40,11 +42,7 @@ struct facet {
   int                  id      = -1;  // id in mesh.triangles
 };
 
-struct bool_mesh : shape_data {
-  // Precomputed
-  vector<vec3i>        adjacencies = {};
-  dual_geodesic_solver dual_solver = {};
-
+struct bool_mesh : spline_mesh {
   // Boolsurf output
   vector<bool> is_edge_on_boundary = {};
 
@@ -79,11 +77,6 @@ struct mesh_segment {
   float t_start = 0.0f;
   float t_end   = 0.0f;
   int   face    = -1;
-};
-
-struct anchor_point {
-  mesh_point point      = {};
-  mesh_point handles[2] = {{}, {}};
 };
 
 struct bool_shape {
@@ -225,42 +218,10 @@ void compute_symmetrical_difference(
 vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
     const vector<vec3f>& positions, const geodesic_path& path);
 
-geodesic_path shortest_path(
-    const bool_mesh& mesh, const mesh_point& start, const mesh_point& end);
-
-mesh_point eval_path(const bool_mesh& mesh, const geodesic_path& path, float t);
-
 vector<mesh_segment> make_curve_segments(
     const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
 // vector<vector<mesh_segment>> make_boundary_segments(
 //     const bool_mesh& mesh, const vector<anchor_point>& polygon);
-
-inline geodesic_path straightest_path(const bool_mesh& mesh,
-    const mesh_point& start, const vec2f& direction, float length) {
-  return straightest_path(mesh.triangles, mesh.positions, mesh.adjacencies,
-      start, direction, length);
-}
-
-inline geodesic_path straightest_path(
-    const bool_mesh& mesh, const mesh_point& start, const vec2f& coord) {
-  auto len = length(coord);
-  return straightest_path(mesh.triangles, mesh.positions, mesh.adjacencies,
-      start, coord / len, len);
-}
-
-inline vec3f eval_position(const bool_mesh& mesh, const mesh_point& point) {
-  return eval_position(mesh.triangles, mesh.positions, point);
-}
-
-inline vec3f eval_normal(const bool_mesh& mesh, const mesh_point& point) {
-  return eval_normal(mesh.triangles, mesh.normals, point);
-}
-
-inline vec3f eval_normal(const bool_mesh& mesh, int face) {
-  auto [x, y, z] = mesh.triangles[face];
-  return triangle_normal(
-      mesh.positions[x], mesh.positions[y], mesh.positions[z]);
-}
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes);
 
