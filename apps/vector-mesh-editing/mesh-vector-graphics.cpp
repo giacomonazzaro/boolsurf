@@ -54,8 +54,10 @@ void run_app(App& app) {
 
   // draw params
   auto params = shade_params{};
-  if (scene.environments.size())
-    params.lighting = shade_lighting_type::envlight;
+  if (scene.environments.size()) {
+    params.lighting         = shade_lighting_type::envlight;
+    params.hide_environment = true;
+  }
 
   // camera names
   auto camera_names = scene.camera_names;
@@ -85,6 +87,15 @@ void run_app(App& app) {
   callbacks.widgets_cb = [&](const glinput_state& input) {
     draw_gllabel("frame time (ms)", app.frame_time_ms);
     draw_glcheckbox("flag", app.flag);
+    if (draw_glcheckbox("splines visibility", app.are_splines_visible)) {
+      update_all_splines(app);
+      for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+        auto spline = app.get_spline_view(i);
+        for (auto& curve : spline.cache.curves) {
+          app.scene.instances[curve.shape_id].visible = app.are_splines_visible;
+        }
+      }
+    }
 
     if (draw_glslider(
             "patch-id", app.patch_id, 0, (int)app.bsh_input.patches.size())) {
@@ -93,11 +104,15 @@ void run_app(App& app) {
 
     static auto svg_size = 0.1f;
     draw_glslider("svg size", svg_size, 0, 1);
+    static auto svg_rotation = 0.1f;
+    draw_glslider("svg rotation", svg_rotation, 0, 360);
 
     if (draw_glbutton("Load SVG")) {
       auto svg    = load_svg(app.svg_filename);
       auto center = intersect_mesh(app, vec2f{0.5, 0.5});
-      init_from_svg(app, app.splinesurf, app.mesh, center, svg, svg_size, 4);
+      auto angle  = radians(svg_rotation);
+      init_from_svg(
+          app, app.splinesurf, app.mesh, center, svg, svg_size, angle, 4);
       update_all_splines(app);
     }
     if (draw_glbutton("Save Scene")) {
@@ -159,7 +174,6 @@ void run_app(App& app) {
     }
 
     if (input.modifier_ctrl && input.modifier_shift &&
-        !app.selected_spline().input.is_closed &&
         app.selected_spline().input.control_points.size() > 1) {
       auto spline_id = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
@@ -171,6 +185,7 @@ void run_app(App& app) {
           app.bool_state.intersections, add_app_shape);
       update_all_splines(app);
     }
+
     process_click(app, app.updated_shapes, input);
     process_mouse(app, app.updated_shapes, input);
 

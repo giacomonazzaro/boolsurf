@@ -57,11 +57,12 @@ struct App {
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
 
-  bool   flag             = true;
-  float  line_thickness   = 0.001;
-  bool   envlight         = false;
-  string envlight_texture = "";
-  int    num_subdivisions = 4;
+  bool   flag                = true;
+  float  line_thickness      = 0.001;
+  bool   are_splines_visible = true;
+  bool   envlight            = false;
+  string envlight_texture    = "";
+  int    num_subdivisions    = 4;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -551,39 +552,39 @@ void update_cache(
   auto& cache  = spline.cache;
 
   // Update spline rendering
-#if 0
-  for (auto curve_id : cache.curves_to_update) {
-    if (curve_id >= cache.curves.size()) {
-      printf("if(curve_id >= cache.curves.size()), %d >= %d\n", (int)curve_id,
-          (int)cache.curves.size());
-      continue;
-    }
-    auto& curve = cache.curves[curve_id];
-    if (app.shapes[spline_id][0][curve_id].empty()) continue;
+  if (app.are_splines_visible) {
+    for (auto curve_id : cache.curves_to_update) {
+      if (curve_id >= cache.curves.size()) {
+        printf("if(curve_id >= cache.curves.size()), %d >= %d\n", (int)curve_id,
+            (int)cache.curves.size());
+        continue;
+      }
+      auto& curve = cache.curves[curve_id];
+      if (app.shapes[spline_id][0][curve_id].empty()) continue;
 
-    auto  shape_id = cache.curves[curve_id].shape_id;
-    auto& shape    = scene.shapes[shape_id];
-    // TODO(giacomo): Cleanup.
-    shape.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
-    shape.lines.resize(app.shapes[spline_id][0][curve_id].size());
-    shape.radius.assign(shape.positions.size(), app.line_thickness);
-    for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
-      auto& segment      = app.shapes[spline_id][0][curve_id][i];
-      shape.positions[i] = eval_position(mesh, {segment.face, segment.start});
-      shape.lines[i]     = {i, i + 1};
-    }
-    auto& segment          = app.shapes[spline_id][0][curve_id].back();
-    shape.positions.back() = eval_position(mesh, {segment.face, segment.end});
+      auto  shape_id = cache.curves[curve_id].shape_id;
+      auto& shape    = scene.shapes[shape_id];
+      // TODO(giacomo): Cleanup.
+      shape.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
+      shape.lines.resize(app.shapes[spline_id][0][curve_id].size());
+      shape.radius.assign(shape.positions.size(), app.line_thickness);
+      for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
+        auto& segment      = app.shapes[spline_id][0][curve_id][i];
+        shape.positions[i] = eval_position(mesh, {segment.face, segment.start});
+        shape.lines[i]     = {i, i + 1};
+      }
+      auto& segment          = app.shapes[spline_id][0][curve_id].back();
+      shape.positions.back() = eval_position(mesh, {segment.face, segment.end});
 
-    updated_shapes += cache.curves[curve_id].shape_id;
+      updated_shapes += cache.curves[curve_id].shape_id;
+    }
+
+    // for (auto curve_id : cache.curves_to_update) {
+    //   shape          = polyline_to_cylinders(
+    //       cache.curves[curve_id].positions, 16, app.line_thickness);
+    //   shape.normals = compute_normals(shape);
+    // }
   }
-
-  // for (auto curve_id : cache.curves_to_update) {
-  //   shape          = polyline_to_cylinders(
-  //       cache.curves[curve_id].positions, 16, app.line_thickness);
-  //   shape.normals = compute_normals(shape);
-  // }
-#endif
 
   for (auto point_id : cache.points_to_update) {
     auto& anchor = cache.points[point_id];
@@ -686,7 +687,7 @@ inline void update_all_splines(App& app) {
 
 void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
     const mesh_point& center_point, const vector<Svg_Shape>& svg,
-    float svg_size, int svg_subdivs) {
+    float svg_size, float svg_rotation, int svg_subdivs) {
   auto p0  = eval_position(mesh, {center_point.face, {0, 0}});
   auto p1  = eval_position(mesh, {center_point.face, {1, 0}});
   auto rot = mat2f{};
@@ -699,6 +700,10 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
     auto up = vec3f{0, 1, 0};
     auto v  = normalize(vec2f{dot(up, frame.x), dot(up, frame.y)});
     rot     = mat2f{{v.x, v.y}, {-v.y, v.x}};
+
+    auto a   = svg_rotation;
+    auto mat = mat2f{{std::cos(a), std::sin(a)}, {-std::sin(a), std::cos(a)}};
+    rot      = mat * rot;
   }
 
   auto bbox = invalidb2f;
