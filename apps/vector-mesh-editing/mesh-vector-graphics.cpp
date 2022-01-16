@@ -166,7 +166,8 @@ void run_app(App& app) {
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
-      insert_point(app, input);
+      insert_points(app, app.bool_state.intersections);
+      update_all_splines(app);
     }
     process_click(app, app.updated_shapes, input);
     process_mouse(app, app.updated_shapes, input);

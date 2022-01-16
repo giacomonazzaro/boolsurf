@@ -9,34 +9,6 @@ using namespace std;
 
 const static int null_label = -999;
 
-namespace yocto {
-struct BSH_patch {
-  int         adj_cell_0  = -1;
-  int         adj_cell_1  = -1;
-  float       weight      = 1;
-  int         shape_id    = -1;
-  int         num_samples = 0;
-  vector<int> adj_patches = {};
-};
-
-struct BSH_graph {
-  int               num_cells        = 0;
-  vector<BSH_patch> patches          = {};
-  vector<int>       segment_to_patch = {};
-};
-}  // namespace yocto
-
-struct scope_timer {
-  string  message    = "";
-  int64_t start_time = -1;
-  bool    print      = true;
-  scope_timer(const string& msg);
-  ~scope_timer();  // print time when scope ends
-};
-#define _PROFILE_SCOPE(name) ;
-// #define _PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
-#define _PROFILE() _PROFILE_SCOPE(__FUNCTION__)
-
 struct facet {
   std::array<vec2f, 3> corners = {};  // barycentric coordinated of vertices
   int                  id      = -1;  // id in mesh.triangles
@@ -46,7 +18,7 @@ struct bool_mesh : spline_mesh {
   // Boolsurf output
   vector<bool> is_edge_on_boundary = {};
 
-  struct shape_segment {
+  struct shape_segment {  // TODO(giacomo): Move outside of mesh.
     int   shape_id;
     int   boundary_id;
     int   curve_id;
@@ -94,12 +66,31 @@ struct bool_cell {
   hash_set<vec3i> adjacency = {};  // {cell_id, crossed_polygon_id, entering}
 };
 
+// TODO(giacomo): This is a pair of bool_point.
 struct bool_shape_intersection {
   vec2i shape_ids    = {-1, -1};
   vec2i boundary_ids = {-1, -1};
   vec2i curve_ids    = {-1, -1};
   vec2f t            = {0.0f, 0.0f};
 };
+
+namespace yocto {
+struct BSH_patch {
+  int         adj_cell_0  = -1;
+  int         adj_cell_1  = -1;
+  float       weight      = 1;
+  int         shape_id    = -1;
+  int         num_samples = 0;
+  vector<int> adj_patches = {};
+};
+
+struct BSH_graph {
+  int               num_cells        = 0;
+  vector<BSH_patch> patches          = {};
+  vector<int>       segment_to_patch = {};
+};
+}  // namespace yocto
+
 
 struct bool_state {
   vector<bool_shape> shapes = {};
@@ -224,6 +215,17 @@ vector<mesh_segment> make_curve_segments(
 //     const bool_mesh& mesh, const vector<anchor_point>& polygon);
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes);
+
+struct scope_timer {
+  string  message    = "";
+  int64_t start_time = -1;
+  bool    print      = true;
+  scope_timer(const string& msg);
+  ~scope_timer();  // print time when scope ends
+};
+#define _PROFILE_SCOPE(name) ;
+// #define _PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
+#define _PROFILE() _PROFILE_SCOPE(__FUNCTION__)
 
 /*
  *

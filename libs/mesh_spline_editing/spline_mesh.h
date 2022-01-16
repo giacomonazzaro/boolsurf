@@ -58,7 +58,13 @@ inline vec3f eval_normal(const spline_mesh& mesh, int face) {
 }
 
 inline vector<mesh_point> bezier_spline(const spline_mesh& mesh,
-    const std::array<mesh_point, 4>& control_points, int subdivisions) {
+    const array<mesh_point, 4>& control_points, int subdivisions) {
   return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
       mesh.adjacencies, control_points, subdivisions);
+}
+
+inline array<array<mesh_point, 4>, 2> insert_bezier_point(
+    const spline_mesh& mesh, const array<mesh_point, 4>& polygon, float t) {
+  return insert_bezier_point(mesh.dual_solver, mesh.triangles, mesh.positions,
+      mesh.adjacencies, polygon, t, false, 0);
 }
