@@ -7,28 +7,6 @@
 
 constexpr auto adjacent_to_nothing = -2;
 
-#define DEBUG_DATA 0
-#if DEBUG_DATA
-#define add_debug_triangle(face, triangle) debug_triangles()[face] = triangle
-#else
-#define add_debug_triangle(face, triangle) ;
-#endif
-#if DEBUG_DATA
-#define add_debug_edge(face, edge) debug_edges()[face] = edge
-#else
-#define add_debug_edge(face, edge) ;
-#endif
-#if DEBUG_DATA
-#define add_debug_node(face, node) debug_nodes()[face] = node
-#else
-#define add_debug_node(face, node) ;
-#endif
-#if DEBUG_DATA
-#define add_debug_index(face, index) debug_indices()[face] = index
-#else
-#define add_debug_index(face, index) ;
-#endif
-
 // get time in nanoseconds - useful only to compute difference of times
 inline int64_t get_time_() {
   return std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -66,7 +44,6 @@ scope_timer::~scope_timer() {
   auto elapsed = get_time_() - start_time;
   printf("[timer]");
   printf(" %.*s", scope_timer_indent, "|||||||||||||||||||||||||");
-  // printf("%d", scope_timer_indent);
   printf("%s %s\n", message.c_str(), format_duration(elapsed).c_str());
 }
 
@@ -533,143 +510,6 @@ vector<bool_cell> make_cell_graph(bool_mesh& mesh) {
   }
 
   return cells;
-}
-
-static vector<int> find_roots(const vector<bool_cell>& cells) {
-  // Trova le celle non hanno archi entranti con segno di poligono positivo.
-  auto adjacency = vector<int>(cells.size(), 0);
-  for (auto& cell : cells) {
-    for (auto& [neighbor, shape_id, entering] : cell.adjacency) {
-      if (entering > 0) adjacency[neighbor] += 1;
-    }
-  }
-
-  auto result = vector<int>{};
-  for (int i = 0; i < adjacency.size(); i++) {
-    if (adjacency[i] == 0) result.push_back(i);
-  }
-  return result;
-}
-
-static vector<bool_cell> compute_shape_macrograph(
-    const vector<bool_cell>& cells, int shape_id) {
-  auto components      = vector<vector<int>>();
-  auto shape_component = hash_map<int, int>();
-  auto visited         = vector<bool>(cells.size(), false);
-
-  for (auto c = 0; c < cells.size(); c++) {
-    if (visited[c]) continue;
-
-    auto  component_id = (int)components.size();
-    auto& component    = components.emplace_back();
-
-    auto stack = vector<int>();
-    stack.push_back(c);
-
-    while (!stack.empty()) {
-      auto cell_id = stack.back();
-      stack.pop_back();
-
-      if (visited[cell_id]) continue;
-      visited[cell_id] = true;
-      component.push_back(cell_id);
-      shape_component[cell_id] = component_id;
-
-      auto& cell = cells[cell_id];
-      for (auto& [neighbor, n_shape_id, entering] : cell.adjacency) {
-        if (n_shape_id == shape_id) continue;
-        if (visited[neighbor]) continue;
-        stack.push_back(neighbor);
-      }
-    }
-  }
-
-  auto macrograph = vector<bool_cell>((int)components.size());
-  for (auto c = 0; c < (int)components.size(); c++) {
-    for (auto id : components[c]) {
-      for (auto& [neighbor, n_shape_id, entering] : cells[id].adjacency) {
-        if (n_shape_id != shape_id) continue;
-
-        auto neighbor_component = shape_component.at(neighbor);
-        macrograph[c].adjacency.insert(
-            {neighbor_component, n_shape_id});  // Now missing sign.
-      }
-    }
-  }
-
-  return macrograph;
-}
-
-static void compute_cycles(const vector<bool_cell>& cells, int node,
-    vec2i parent, vector<int> visited, vector<vec2i> parents,
-    vector<vector<vec2i>>& cycles) {
-  // Se il nodo il considerazione è già stato completamente visitato allora
-  // terminiamo la visita
-  if (visited[node] == 2) return;
-
-  // Se il nodo in considerazione non è stato completamente visitato e lo
-  // stiamo rivisitando ora allora abbiamo trovato un ciclo
-  if (visited[node] == 1) {
-    auto  cycle   = vector<vec2i>();
-    auto& current = parent;
-    cycle.push_back(current);
-
-    // Risalgo l'albero della visita fino a che non trovo lo stesso nodo e
-    // salvo il ciclo individuato
-    while (current.x != node) {
-      auto prev = parents[current.x];
-
-      // (marzia) check: è vero che ho un ciclo corretto se il verso
-      // (entrante/uscente) è lo stesso per tutti gli archi?
-      // if (sign(prev.y) != sign(current.y)) return;
-      current = prev;
-      cycle.push_back(current);
-    }
-
-    cycles.push_back(cycle);
-    return;
-  }
-
-  // Settiamo il padre del nodo attuale e iniziamo ad esplorare i suoi vicini
-  parents[node] = parent;
-  visited[node] = 1;
-
-  for (auto& [neighbor, shape_id, entering] : cells[node].adjacency) {
-    // Se stiamo percorrendo lo stesso arco ma al contrario allora continuo,
-    // altrimenti esploriamo il vicino
-    // if (shape_id > 0) continue;
-    // if (neighbor == parent.x && shape_id == -parent.y) continue;
-    compute_cycles(cells, neighbor, {node, shape_id}, visited, parents, cycles);
-  }
-
-  // Settiamo il nodo attuale come completamente visitato
-  visited[node] = 2;
-}
-
-inline vector<vector<vec2i>> compute_graph_cycles(
-    const vector<bool_cell>& cells) {
-  // _PROFILE();
-  auto visited        = vector<int>(cells.size(), 0);
-  auto parents        = vector<vec2i>(cells.size(), {0, 0});
-  auto cycles         = vector<vector<vec2i>>();
-  auto start_node     = 0;
-  auto invalid_parent = vec2i{-1, -1};
-  compute_cycles(cells, start_node, invalid_parent, visited, parents, cycles);
-  return cycles;
-}
-
-hash_set<int> compute_invalid_shapes(
-    const vector<bool_cell>& cells, int num_shapes) {
-  _PROFILE();
-  auto invalid_shapes = hash_set<int>();
-  for (auto s = 1; s < num_shapes; s++) {
-    auto shape_graph = compute_shape_macrograph(cells, s);
-    auto cycles      = compute_graph_cycles(shape_graph);
-
-    for (auto cycle : cycles)
-      if (cycle.size() % 2 == 1) invalid_shapes.insert(s);
-  }
-  return invalid_shapes;
 }
 
 inline vector<vector<int>> compute_components(
@@ -1224,9 +1064,6 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
     // constraints).
     auto info = triangulation_constraints(mesh, face, polylines);
 
-    //    add_debug_node(face, info.nodes);
-    //    add_debug_index(face, info.indices);
-
     // Se la faccia contiene solo segmenti corrispondenti ad edge del
     // triangolo stesso, non serve nessuna triangolazione.
     if (info.nodes.size() == 3) {
@@ -1291,9 +1128,6 @@ static void triangulate(bool_mesh& mesh, const mesh_hashgrid& hashgrid) {
         }
       }
     }
-
-    add_debug_edge(face, info.edges);
-    add_debug_triangle(face, triangles);
 
     // TODO(giacomo): Pericoloso: se resize() innesca una riallocazione, il
     // codice dopo l'unlock che sta eseguendo su un altro thread continua a
@@ -1831,14 +1665,19 @@ void compute_bool_operation(bool_state& state, const bool_operation& op) {
   auto bb = vector<bool>(state.cells.size(), false);
   for (auto& c : b.cells) bb[c] = true;
 
-  if (op.type == bool_operation::Type::op_union) {
-    for (auto i = 0; i < aa.size(); i++) aa[i] = aa[i] || bb[i];
-  } else if (op.type == bool_operation::Type::op_intersection) {
-    for (auto i = 0; i < aa.size(); i++) aa[i] = aa[i] && bb[i];
-  } else if (op.type == bool_operation::Type::op_difference) {
-    for (auto i = 0; i < aa.size(); i++) aa[i] = aa[i] && !bb[i];
-  } else if (op.type == bool_operation::Type::op_symmetrical_difference) {
-    for (auto i = 0; i < aa.size(); i++) aa[i] = aa[i] != bb[i];
+  for (auto i = 0; i < aa.size(); i++) {
+    if (op.type == bool_operation::Type::op_union) {
+      aa[i] = (aa[i] || bb[i]);
+    }
+    if (op.type == bool_operation::Type::op_intersection) {
+      aa[i] = (aa[i] && bb[i]);
+    }
+    if (op.type == bool_operation::Type::op_difference) {
+      aa[i] = (aa[i] && !bb[i]);
+    }
+    if (op.type == bool_operation::Type::op_symmetrical_difference) {
+      aa[i] = (aa[i] != bb[i]);
+    }
   }
 
   // Le shape 'a' e 'b' sono state usate nell'operazione,
@@ -1852,6 +1691,7 @@ void compute_bool_operation(bool_state& state, const bool_operation& op) {
   auto& c        = state.shapes.emplace_back();
   c.generators   = {op.shape_a, op.shape_b};
   c.color        = state.shapes[op.shape_a].color;
+  c.is_root      = true;
   auto sorting   = find_idx(state.shapes_sorting, op.shape_a);
 
   insert(state.shapes_sorting, sorting, (int)shape_id);
@@ -1895,41 +1735,4 @@ vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes) {
     }
     return color;
   }
-}
-
-hash_map<int, vector<vec3i>>& debug_triangles() {
-  static hash_map<int, vector<vec3i>> result = {};
-  return result;
-}
-
-hash_map<int, vector<vec2i>>& debug_edges() {
-  static hash_map<int, vector<vec2i>> result = {};
-  return result;
-}
-
-hash_map<int, vector<vec2f>>& debug_nodes() {
-  static hash_map<int, vector<vec2f>> result = {};
-  return result;
-}
-
-hash_map<int, vector<int>>& debug_indices() {
-  static hash_map<int, vector<int>> result = {};
-  return result;
-}
-
-vector<int>& debug_result() {
-  static vector<int> result = {};
-  return result;
-}
-vector<bool>& debug_visited() {
-  static vector<bool> result = {};
-  return result;
-}
-vector<int>& debug_stack() {
-  static vector<int> result = {};
-  return result;
-}
-bool& debug_restart() {
-  static bool result = {};
-  return result;
 }
