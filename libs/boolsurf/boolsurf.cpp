@@ -104,8 +104,8 @@ void reset_mesh(bool_mesh& mesh) {
   // mesh.adjacencies.resize(mesh.num_triangles);
 }
 
-vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
-    const vector<vec3f>& positions, const geodesic_path& path) {
+vector<mesh_segment> mesh_segments(
+    const vector<vec3i>& triangles, const geodesic_path& path) {
   auto result = vector<mesh_segment>{};
   result.reserve(path.strip.size());
 
@@ -150,7 +150,7 @@ vector<mesh_segment> make_curve_segments(
     for (auto& l : path.lerps) {
       l = yocto::clamp(l, 0 + threshold, 1 - threshold);
     }
-    auto segments = mesh_segments(mesh.triangles, mesh.positions, path);
+    auto segments = mesh_segments(mesh.triangles, path);
     auto t        = path_parameters(path, mesh.triangles, mesh.positions);
     for (int i = 0; i < segments.size(); i++) {
       segments[i].t_start = t[i];
@@ -701,6 +701,21 @@ static void add_polygon_intersection_points(bool_state& state,
     }
   }
 }
+
+// Informazioni per la triangolazione di una faccia della mesh
+// Contiene: UV coords dei nodi locali di un triangolo.
+// Indici globali della mesh corrispondenti ai nodi locali
+// Edges con indici locali per vincolare la triangolazione
+// Mappa che va da lato del triangolo k = 1, 2, 3 e a lista di nodi e lerp
+// corrispondenti su quel lato (serve per creare ulteriori vincoli)
+struct triangulation_info {
+  int face = -1;
+
+  vector<vec2f>                      nodes   = {};
+  vector<int>                        indices = {};
+  vector<vec2i>                      edges   = {};
+  array<vector<pair<int, float>>, 3> edgemap = {};
+};
 
 triangulation_info triangulation_constraints(const bool_mesh& mesh, int face,
     const vector<hashgrid_polyline>& polylines) {

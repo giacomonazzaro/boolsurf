@@ -38,7 +38,7 @@ struct bool_mesh : spline_mesh {
 
 struct bool_point {
   int   shape_id;
-  int   boundary_id;
+  int   boundary_id = 0;
   int   curve_id;
   float t;
 };
@@ -50,6 +50,12 @@ struct mesh_segment {
   float t_end   = 0.0f;
   int   face    = -1;
 };
+
+vector<mesh_segment> mesh_segments(
+    const vector<vec3i>& triangles, const geodesic_path& path);
+
+vector<mesh_segment> make_curve_segments(
+    const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
 
 struct bool_shape {
   vector<int>   generators = {};
@@ -90,7 +96,6 @@ struct BSH_graph {
   vector<int>       segment_to_patch = {};
 };
 }  // namespace yocto
-
 
 struct bool_state {
   vector<bool_shape> shapes = {};
@@ -136,21 +141,6 @@ inline vector<vector<vec3i>> make_cell_triangles(const vector<int>& face_tags,
   }
   return cell_triangles;
 }
-
-// Informazioni per la triangolazione di una faccia della mesh
-// Contiene: UV coords dei nodi locali di un triangolo.
-// Indici globali della mesh corrispondenti ai nodi locali
-// Edges con indici locali per vincolare la triangolazione
-// Mappa che va da lato del triangolo k = 1, 2, 3 e a lista di nodi e lerp
-// corrispondenti su quel lato (serve per creare ulteriori vincoli)
-struct triangulation_info {
-  int face = -1;
-
-  vector<vec2f>                      nodes   = {};
-  vector<int>                        indices = {};
-  vector<vec2i>                      edges   = {};
-  array<vector<pair<int, float>>, 3> edgemap = {};
-};
 
 inline bool_state*& global_state() {
   static bool_state* state = nullptr;
@@ -203,16 +193,64 @@ void       compute_bool_operation(bool_state& state, const bool_operation& op);
 void       compute_bool_operations(
           bool_state& state, const vector<bool_operation>& ops);
 
+template <typename Add_Shape>
+void insert_anchor_points(Splinesurf& splinesurf, const spline_mesh& mesh,
+    const vector<bool_shape_intersection>& intersections,
+    Add_Shape&&                            add_shape) {
+  auto isec_points = vector<bool_point>{};
+  for (int i = 0; i < intersections.size(); i++) {
+    auto& point0       = isec_points.emplace_back();
+    point0.shape_id    = intersections[i].shape_ids[0];
+    point0.boundary_id = intersections[i].boundary_ids[0];
+    point0.curve_id    = intersections[i].curve_ids[0];
+    point0.t           = intersections[i].t[0];
+    auto& point1       = isec_points.emplace_back();
+    point1.shape_id    = intersections[i].shape_ids[1];
+    point1.boundary_id = intersections[i].boundary_ids[1];
+    point1.curve_id    = intersections[i].curve_ids[1];
+    point1.t           = intersections[i].t[1];
+  }
+  std::sort(isec_points.begin(), isec_points.end(), [](auto& a, auto& b) {
+    if (a.shape_id != b.shape_id) return a.shape_id < b.shape_id;
+    if (a.boundary_id != b.boundary_id) return a.boundary_id < b.boundary_id;
+    if (a.curve_id != b.curve_id)
+      return a.curve_id > b.curve_id;  // starting from end!
+    return a.t > b.t;                  // starting from end!
+  });
+
+  for (int i = 0; i < isec_points.size(); i++) {
+    auto point  = isec_points[i];
+    auto spline = splinesurf.get_spline_view(point.shape_id);
+    auto cp     = spline.input.control_polygon(point.curve_id);
+    auto t      = point.t;
+
+    // Adjust t of following intersections.
+    for (int k = i + 1; k < isec_points.size(); k++) {
+      if (isec_points[k].shape_id != point.shape_id) break;
+      if (isec_points[k].boundary_id != point.boundary_id) break;
+      if (isec_points[k].curve_id != point.curve_id) break;
+      isec_points[k].t /= t;
+    }
+
+    auto [left, right] = insert_bezier_point(mesh, cp, t);
+
+    // Edit previous handle.
+    spline.input.control_points[point.curve_id].handles[1] = left[1];
+
+    // Edit next handle.
+    auto next = point.curve_id + 1;
+    if (next >= (int)spline.input.control_points.size()) next = 0;
+    spline.input.control_points[next].handles[0] = right[2];
+
+    // Inserted anchor point.
+    auto p = anchor_point{right[0], {left[2], right[1]}};
+    insert_anchor_point(spline, point.curve_id + 1, p, add_shape);
+    // TODO(giacomo): Trigger update only of instersected curves.
+  }
+}
+
 void compute_symmetrical_difference(
     bool_state& state, const vector<int>& shapes);
-
-vector<mesh_segment> mesh_segments(const vector<vec3i>& triangles,
-    const vector<vec3f>& positions, const geodesic_path& path);
-
-vector<mesh_segment> make_curve_segments(
-    const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
-// vector<vector<mesh_segment>> make_boundary_segments(
-//     const bool_mesh& mesh, const vector<anchor_point>& polygon);
 
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes);
 

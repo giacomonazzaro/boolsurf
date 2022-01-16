@@ -684,65 +684,6 @@ inline void update_all_splines(App& app) {
   }
 }
 
-template <typename Add_Shape>
-inline void insert_points(Splinesurf& splinesurf, const spline_mesh& mesh,
-    const vector<bool_shape_intersection>& intersections,
-    Add_Shape&&                            add_shape) {
-  auto isec_points = vector<bool_point>{};
-  for (int i = 0; i < intersections.size(); i++) {
-    auto& point0       = isec_points.emplace_back();
-    point0.shape_id    = intersections[i].shape_ids[0];
-    point0.boundary_id = intersections[i].boundary_ids[0];
-    point0.curve_id    = intersections[i].curve_ids[0];
-    point0.t           = intersections[i].t[0];
-    auto& point1       = isec_points.emplace_back();
-    point1.shape_id    = intersections[i].shape_ids[1];
-    point1.boundary_id = intersections[i].boundary_ids[1];
-    point1.curve_id    = intersections[i].curve_ids[1];
-    point1.t           = intersections[i].t[1];
-  }
-  std::sort(isec_points.begin(), isec_points.end(), [](auto& a, auto& b) {
-    if (a.shape_id != b.shape_id) return a.shape_id < b.shape_id;
-    if (a.boundary_id != b.boundary_id) return a.boundary_id < b.boundary_id;
-    if (a.curve_id != b.curve_id)
-      return a.curve_id > b.curve_id;  // starting from end!
-    return a.t > b.t;                  // starting from end!
-  });
-
-  for (int i = 0; i < isec_points.size(); i++) {
-    auto point  = isec_points[i];
-    auto spline = splinesurf.get_spline_view(point.shape_id);
-    auto cp     = spline.input.control_polygon(point.curve_id);
-    auto t      = point.t;
-
-    // Adjust t of following intersections.
-    for (int k = i + 1; k < isec_points.size(); k++) {
-      if (isec_points[k].shape_id != point.shape_id) break;
-      if (isec_points[k].boundary_id != point.boundary_id) break;
-      if (isec_points[k].curve_id != point.curve_id) break;
-      isec_points[k].t /= t;
-    }
-
-    auto [left, right] = insert_bezier_point(mesh, cp, t);
-
-    // Previous handle.
-    spline.input.control_points[point.curve_id].handles[1] = left[1];
-    // spline.cache.points[point.curve_id].tangents[1].path   = shortest_path(
-    //     mesh, left[0], left[1]);
-
-    auto p = anchor_point{right[0], {left[2], right[1]}};
-
-    // Next handle.
-    auto next = point.curve_id + 1;
-    if (next >= (int)spline.input.control_points.size()) next = 0;
-    spline.input.control_points[next].handles[0] = right[2];
-    // spline.cache.points[next].tangents[0].path   = shortest_path(
-    //     mesh, right[3], right[2]);
-
-    insert_anchor_point(spline, point.curve_id + 1, p, add_shape);
-  }
-}
-
 void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
     const mesh_point& center_point, const vector<Svg_Shape>& svg,
     float svg_size, int svg_subdivs) {
