@@ -205,15 +205,11 @@ void init_scene(shade_scene& glscene, const scene_data& scene,
     set_shape(glscene.shapes[shape_id], shape);
   }
 
-  // TODO(giacomo): Incomplete.
-  // for (auto& texture : scene.textures) {
-  //   auto texture_id = add_texture(glscene);
-  //   set_texture(glscene.textures[texture_id], texture);
-  // }
-  // for (auto& environment : scene.environments) {
-  //   auto environment_id = add_environment(glscene);
-  //   set_environment(glscene.environments[environment_id], environment);
-  // }
+  for (auto& texture : scene.textures) {
+    auto texture_id = add_texture(glscene);
+    set_texture(glscene.textures[texture_id], texture.width,
+        texture.height, texture.pixelsf, true);
+  }
 
   if (scene.environments.size() > 0) {
     assert(scene.environments.size() == 1 &&
@@ -504,6 +500,7 @@ void draw_scene(shade_scene& glscene, const scene_data& scene,
   auto  view   = make_scene_view(camera, viewport, params);
   draw_instances(glscene, scene, view, params);
   draw_environment(glscene, scene, view, params);
+  assert_ogl_error();
 }
 
 // image based lighting

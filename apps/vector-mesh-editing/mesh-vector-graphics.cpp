@@ -12,88 +12,30 @@
 
 using namespace yocto;
 
-#ifndef YOCTO_OPENGL
-
-// view shapes
-void run_view(const view_params& params) { print_fatal("Opengl not compiled"); }
-
-#else
-
-// inline shape_data make_polygon_shape(
-//    const App::Mesh& mesh, const vector<vec3f>& positions, float line_width) {
-//  auto shape = shape_data{};
-//
-//  {
-//    auto froms = vector<vec3f>();
-//    auto tos   = vector<vec3f>();
-//    froms.reserve(positions.size() - 1);
-//    tos.reserve(positions.size() - 1);
-//    for (int i = 0; i < positions.size() - 1; i++) {
-//      auto from = positions[i];
-//      auto to   = positions[i + 1];
-//      if (from == to) continue;
-//      froms.push_back(from);
-//      tos.push_back(to);
-//    }
-//
-//    auto cylinder = make_uvcylinder({16, 1, 1}, {line_width, 1});
-//    for (auto& p : cylinder.positions) {
-//      p.z = p.z * 0.5 + 0.5;
-//    }
-//
-//    shape.quads     = cylinder.quads;
-//    shape.positions = cylinder.positions;
-//    shape.normals   = cylinder.normals;
-//    shape.froms     = froms;
-//    shape.tos       = tos;
-//  }
-//  return shape;
-//}
-
 struct glview_params {
-  string shape          = "shape.ply";
-  string svg            = "";
-  float  line_thickness = 0.001;
-  string test           = "";
-  bool   addsky         = false;
+  string shape            = "shape.ply";
+  string svg              = "";
+  string envlight_texture = "boolsurf/scenes/uffizi.hdr";
+  float  line_thickness   = 0.001;
+  bool   envlight         = false;
 };
 
 // view shapes
 void run_view(const glview_params& params) {
-  // load shape
-  //  auto error = string{};
-  //  auto shape = shape_data{};
-  //  if (!load_shape(params.shape, shape, error, true)) print_fatal(error);
-  //
-  //  // make scene
-  //  auto scene = make_shape_scene(shape, params.addsky);
-
   auto app = App{};
   init_app(app, params);
-
-  // run view
   view_raytraced_scene(app, "yshape", params.shape, app.scene);
 }
-
-#endif
 
 // Cli
 void add_options(const cli_command& cli, glview_params& params) {
   add_argument(cli, "shape", params.shape, "Input shape.");
-  add_option(cli, "addsky", params.addsky, "Add sky.");
-  add_option(cli, "test", params.test, "Load test.");
   add_option(cli, "svg", params.svg, "Load svg.");
   add_option(cli, "line-thickness", params.line_thickness, "Line thickness.");
+  add_option(cli, "envlight", params.envlight, "Environment lighting.");
+  add_option(cli, "envlight-texture", params.envlight_texture,
+      "Environment lighting texture.");
 }
-
-#ifndef YOCTO_OPENGL
-
-// view shapes
-void run_glview(const glview_params& params) {
-  print_fatal("Opengl not compiled");
-}
-
-#else
 
 void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
@@ -112,6 +54,8 @@ void run_app(App& app) {
 
   // draw params
   auto params = shade_params{};
+  if (scene.environments.size())
+    params.lighting = shade_lighting_type::envlight;
 
   // camera names
   auto camera_names = scene.camera_names;
@@ -127,7 +71,7 @@ void run_app(App& app) {
   // callbacks
   auto callbacks    = glwindow_callbacks{};
   callbacks.init_cb = [&](const glinput_state& input) {
-    init_scene(glscene, scene);
+    init_scene(glscene, scene, false, true);
   };
   callbacks.clear_cb = [&](const glinput_state& input) {
     clear_scene(glscene);
@@ -170,7 +114,7 @@ void run_app(App& app) {
         printf("%s\n", error.c_str());
       }
       if (scene.environments.empty()) {
-        add_environment(scene, "boolsurf/scenes/uffizi.hdr", error);
+        add_environment(scene, app.envlight_texture, error);
       }
       auto scene_path = path_join(scene_dir, "scene.json");
       auto result     = save_scene(scene_path, app.scene);
@@ -217,7 +161,7 @@ void run_app(App& app) {
     if (input.modifier_ctrl && input.modifier_shift &&
         !app.selected_spline().input.is_closed &&
         app.selected_spline().input.control_points.size() > 1) {
-      auto spline_id     = add_spline(app.splinesurf);
+      auto spline_id = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
 
@@ -255,57 +199,17 @@ void run_app(App& app) {
   run_ui({1280 + 320, 720}, "yshade", callbacks);
 }
 
-void run_glview(const glview_params& params) {
+// Main
+int main(int argc, const char* argv[]) {
+  auto args   = make_cli_args(argc, argv);
+  auto error  = string{};
+  auto params = glview_params{};
+  auto cli    = make_cli("yshape", params, "Process and view shapes.");
+  if (!parse_cli(cli, args, error)) print_fatal(error);
+
   auto app = App{};
   init_app(app, params);
 
   // run viewer
   run_app(app);
-}
-
-#endif
-
-struct app_params {
-  string        command = "view";
-  glview_params glview  = {};
-};
-
-// Cli
-void add_options(const cli_command& cli, app_params& params) {
-  set_command_var(cli, params.command);
-  // add_command(cli, "convert", params.convert, "Convert shapes.");
-  // add_command(
-  //     cli, "fvconvert", params.fvconvert, "Convert face-varying shapes.");
-  //  add_command(cli, "view", params.view, "View shapes.");
-  // add_command(cli, "heightfield", params.heightfield, "Create an
-  // heightfield."); add_command(cli, "hair", params.hair, "Grow hairs on a
-  // shape."); add_command(cli, "sample", params.sample, "Sample shapepoints on
-  // a shape.");
-  add_command(cli, "glview", params.glview, "View shapes with OpenGL.");
-}
-
-// Run
-void run(const vector<string>& args) {
-  // command line parameters
-  auto error  = string{};
-  auto params = app_params{};
-  auto cli    = make_cli("yshape", params, "Process and view shapes.");
-  if (!parse_cli(cli, args, error)) print_fatal(error);
-
-  // dispatch commands
-  if (params.command == "view") {
-    return run_glview(params.glview);
-  } else if (params.command == "glview") {
-    return run_glview(params.glview);
-  } else {
-    print_fatal("yshape: unknown command");
-  }
-}
-
-// Main
-int main(int argc, const char* argv[]) {
-  // auto labels = vector<bool>{};
-  // load_bsh_result(labels, argv[1]);
-  // return 0;
-  run(make_cli_args(argc, argv));
 }

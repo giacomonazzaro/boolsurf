@@ -57,9 +57,11 @@ struct App {
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
 
-  bool  flag             = true;
-  float line_thickness   = 0.001;
-  int   num_subdivisions = 4;
+  bool   flag             = true;
+  float  line_thickness   = 0.001;
+  bool   envlight         = false;
+  string envlight_texture = "";
+  int    num_subdivisions = 4;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -106,22 +108,22 @@ void init_app(App& app, const Params& params) {
   // loading shape
   auto error = string{};
 
-  app.svg_filename   = params.svg;
-  app.line_thickness = params.line_thickness;
+  app.svg_filename     = params.svg;
+  app.line_thickness   = params.line_thickness;
+  app.envlight         = params.envlight;
+  app.envlight_texture = params.envlight_texture;
 
   auto test = bool_test{};
-  if (!params.test.empty()) load_test(test, params.test);
 
   // if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
   init_mesh(app.mesh);
 
-  app.bool_state = state_from_test(app.mesh, test, 0.0, false);
   app.mesh.normals.clear();
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
-  app.scene = make_shape_scene(app.mesh, params.addsky);
+  app.scene = make_shape_scene(app.mesh, false);
 
   // Add line material.
   auto spline_material  = app.scene.materials[0];
@@ -132,7 +134,9 @@ void init_app(App& app, const Params& params) {
   tangent_material.color = {0, 0, 1};
   app.scene.materials.push_back(tangent_material);
 
-  // add_mesh_edges(app.scene, app.mesh);
+  if (app.envlight) {
+    add_environment(app.scene, app.envlight_texture, error);
+  }
 }
 
 inline mesh_point intersect_mesh(App& app, const vec2f& screen_uv) {
@@ -473,9 +477,6 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
             app.mesh, ray, anchor.handles[k], radius);
         if (hit) {
           set_selected_point(app, spline_id, i, k);
-          // selection.spline_id        = spline_id;
-          // selection.control_point_id = i;
-          // selection.handle_id        = k;
           return true;
         }
       }
@@ -483,9 +484,6 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
       auto hit = intersect_mesh_point(app.mesh, ray, anchor.point, radius);
       if (hit) {
         set_selected_point(app, spline_id, i, -1);
-        // selection.spline_id        = spline_id;
-        // selection.control_point_id = i;
-        // selection.handle_id        = -1;
         return true;
       }
     }
@@ -509,70 +507,7 @@ inline void process_click(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
   if (input.modifier_alt) return;
   if (input.mouse_right_click) {
-    auto click_timer = scope_timer("click-timer");
-    app.render.stop_render();
-
-    // auto t              = app.mesh.triangles;
-    // auto p              = app.mesh.positions;
-    // app.mesh            = {};
-    // app.mesh.triangles  = t;
-    // app.mesh.positions  = p;
-    // app.scene.shapes[0] = app.mesh;
-    // init_mesh(app.mesh);
-
-    //
-    //    struct Intersection {
-    //      int   curve_id = -1;
-    //      float t        = 0;
-    //    };
-    //    auto intersection_map = hash_map<int, vector<Intersection>>{};
-    //
-    //    for (auto& isec : state.intersections) {
-    //      for (int k = 0; k < 2; k++) {
-    //        auto& item     = isec.locations[k];
-    //        auto  shape_id = item.shape_id;
-    //        intersection_map[shape_id].push_back({item.curve_id, item.t});
-    //      }
-    //    }
-    //    auto stuff = vector<std::function<void()>>{};
-    //    for (auto& [shape_id, insertions] : intersection_map) {
-    //      auto num_insertions = 0;
-    //      sort(insertions.begin(), insertions.end(),
-    //          [](auto& a, auto& b) { return a.curve_id < b.curve_id; });
-    //
-    //      // TODO(giacomo): [null polygon refactor].
-    //      auto spline = app.splinesurf.get_spline_view(shape_id - 1);
-    //
-    //      auto old_input = spline.input;
-    //      for (auto& insertion : insertions) {
-    //        auto curve_id = insertion.curve_id + num_insertions;
-    //        auto cp       = spline.input.control_polygon(insertion.curve_id);
-    //
-    //        auto [left, right] = insert_bezier_point(app.mesh.dual_solver,
-    //            app.mesh.triangles, app.mesh.positions, app.mesh.adjacencies,
-    //            cp, insertion.t, false, -1);
-    //        spline.input.control_points[curve_id].handles[1] = left[1];
-    //        auto p = anchor_point{right[0], {left[2], right[1]}};
-    //        spline.input.control_points[curve_id + 1].handles[0] = right[2];
-    //        stuff.push_back([&, p, curve_id]() {
-    //          auto add_app_shape = [&]() -> int { return add_shape(app, {});
-    //          }; insert_anchor_point(spline, p, curve_id + 1, app.mesh,
-    //          add_app_shape);
-    //        });
-    //        num_insertions += 1;
-    //      }
-    //
-    //      for (auto& s : stuff) s();
-    //      stuff.clear();
-    //
-    //      // Update graphics.
-    //      for (int i = 0; i < spline.cache.points.size(); i++) {
-    //        spline.cache.points_to_update.insert(i);
-    //      }
-    //      for (int i = 0; i < spline.cache.curves.size(); i++) {
-    //        spline.cache.curves_to_update.insert(i);
-    //      }
-    app.render.restart();
+    return;
   }
 
   if (!input.mouse_left_click) return;
@@ -611,11 +546,6 @@ inline void process_click(
 // TODO(giacomo): Put following stuff in splinesurf.h
 inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
     const std::array<mesh_point, 4>& control_points, int subdivisions) {
-  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
-      mesh.adjacencies, control_points, subdivisions);
-}
-inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
-    const vector<mesh_point>& control_points, int subdivisions) {
   return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
       mesh.adjacencies, control_points, subdivisions);
 }
@@ -990,22 +920,6 @@ inline void draw_widgets(App& app, const glinput_state& input) {
       set_image(render.glimage, render.display);
     }
   }
-}
-
-bool uiupdate_image_params(
-    const glinput_state& input, glimage_params& glparams) {
-  // handle mouse
-  if (input.mouse_left && input.modifier_alt && !input.widgets_active) {
-    if (input.modifier_ctrl) {
-      glparams.scale *= yocto::pow(
-          2.0f, (input.mouse_pos.y - input.mouse_last.y) * 0.001f);
-      return true;
-    } else {
-      glparams.center += input.mouse_pos - input.mouse_last;
-      return true;
-    }
-  }
-  return false;
 }
 
 inline void update(
