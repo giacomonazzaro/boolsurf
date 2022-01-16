@@ -543,13 +543,6 @@ inline void process_click(
   app.editing.creating_new_point = true;
 }
 
-// TODO(giacomo): Put following stuff in splinesurf.h
-inline vector<mesh_point> bezier_spline(const bool_mesh& mesh,
-    const std::array<mesh_point, 4>& control_points, int subdivisions) {
-  return compute_bezier_path(mesh.dual_solver, mesh.triangles, mesh.positions,
-      mesh.adjacencies, control_points, subdivisions);
-}
-
 inline vector<mesh_segment> make_segments(
     const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
   auto path      = shortest_path(mesh, start, end);
