@@ -175,11 +175,11 @@ inline int add_anchor_point(Spline_View& spline, const anchor_point& anchor,
   return point_id;
 }
 
+// TODO(giacomo): Very similar too add_anchor_point. Merge?
 template <typename Add_Shape>
-inline int insert_anchor_point(Spline_View& spline, const anchor_point& anchor,
-    int point_id, const spline_mesh& mesh, Add_Shape& add_shape) {
+inline int insert_anchor_point(Spline_View& spline, int point_id,
+    const anchor_point& anchor, Add_Shape& add_shape) {
   // Add point to input.
-  // auto point_id = (int)spline.input.control_points.size();
   insert(spline.input.control_points, point_id, anchor);
   insert(spline.input.is_smooth, point_id, true);
 
@@ -190,10 +190,6 @@ inline int insert_anchor_point(Spline_View& spline, const anchor_point& anchor,
   cache.tangents[0].shape_id = add_shape();
   cache.tangents[1].shape_id = add_shape();
   for (int k = 0; k < 2; k++) cache.handle_ids[k] = add_shape();
-  for (int k = 0; k < 2; k++) {
-    cache.tangents[k].path = shortest_path(
-        mesh, anchor.point, anchor.handles[k]);
-  }
 
   // Add curve
   if (point_id > 0) add_curve(spline.cache, add_shape, point_id);

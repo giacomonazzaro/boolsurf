@@ -166,7 +166,9 @@ void run_app(App& app) {
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
-      insert_points(app, app.bool_state.intersections);
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      insert_points(app.splinesurf, app.mesh, app.bool_state.intersections,
+          add_app_shape);
       update_all_splines(app);
     }
     process_click(app, app.updated_shapes, input);

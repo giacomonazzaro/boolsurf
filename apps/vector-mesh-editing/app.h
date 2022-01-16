@@ -684,8 +684,10 @@ inline void update_all_splines(App& app) {
   }
 }
 
-inline void insert_points(
-    App& app, const vector<bool_shape_intersection>& intersections) {
+template <typename Add_Shape>
+inline void insert_points(Splinesurf& splinesurf, const spline_mesh& mesh,
+    const vector<bool_shape_intersection>& intersections,
+    Add_Shape&&                            add_shape) {
   auto isec_points = vector<bool_point>{};
   for (int i = 0; i < intersections.size(); i++) {
     auto& point0       = isec_points.emplace_back();
@@ -709,7 +711,7 @@ inline void insert_points(
 
   for (int i = 0; i < isec_points.size(); i++) {
     auto point  = isec_points[i];
-    auto spline = app.splinesurf.get_spline_view(point.shape_id);
+    auto spline = splinesurf.get_spline_view(point.shape_id);
     auto cp     = spline.input.control_polygon(point.curve_id);
     auto t      = point.t;
 
@@ -721,12 +723,12 @@ inline void insert_points(
       isec_points[k].t /= t;
     }
 
-    auto [left, right] = insert_bezier_point(app.mesh, cp, t);
+    auto [left, right] = insert_bezier_point(mesh, cp, t);
 
     // Previous handle.
     spline.input.control_points[point.curve_id].handles[1] = left[1];
-    spline.cache.points[point.curve_id].tangents[1].path   = shortest_path(
-        app.mesh, left[0], left[1]);
+    // spline.cache.points[point.curve_id].tangents[1].path   = shortest_path(
+    //     mesh, left[0], left[1]);
 
     auto p = anchor_point{right[0], {left[2], right[1]}};
 
@@ -734,11 +736,10 @@ inline void insert_points(
     auto next = point.curve_id + 1;
     if (next >= (int)spline.input.control_points.size()) next = 0;
     spline.input.control_points[next].handles[0] = right[2];
-    spline.cache.points[next].tangents[0].path   = shortest_path(
-        app.mesh, right[3], right[2]);
+    // spline.cache.points[next].tangents[0].path   = shortest_path(
+    //     mesh, right[3], right[2]);
 
-    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-    insert_anchor_point(spline, p, point.curve_id + 1, app.mesh, add_app_shape);
+    insert_anchor_point(spline, point.curve_id + 1, p, add_shape);
   }
 }
 
