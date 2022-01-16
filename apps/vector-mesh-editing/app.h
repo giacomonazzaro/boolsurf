@@ -543,39 +543,6 @@ inline void process_click(
   app.editing.creating_new_point = true;
 }
 
-inline vector<mesh_segment> make_segments(
-    const bool_mesh& mesh, const mesh_point& start, const mesh_point& end) {
-  auto path      = shortest_path(mesh, start, end);
-  auto threshold = 0.001f;
-  for (auto& l : path.lerps) {
-    l = yocto::clamp(l, 0 + threshold, 1 - threshold);
-  }
-  auto segments = mesh_segments(mesh.triangles, mesh.positions, path);
-  auto t        = path_parameters(path, mesh.triangles, mesh.positions);
-  for (int i = 0; i < segments.size(); i++) {
-    segments[i].t_start = t[i];
-    segments[i].t_end   = t[i + 1];
-  }
-  return segments;
-};
-
-vector<mesh_segment> make_bezier_segments(const bool_mesh& mesh,
-    const array<mesh_point, 4>& control_polygon, int num_subdivisions) {
-  auto result = vector<mesh_segment>{};
-  auto points = bezier_spline(mesh, control_polygon, num_subdivisions);
-  for (int k = 0; k < points.size() - 1; k++) {
-    auto segments = make_segments(mesh, points[k], points[k + 1]);
-    auto min      = float(k) / points.size();
-    auto max      = float(k + 1) / points.size();
-    for (auto& s : segments) {
-      s.t_start = s.t_start * (max - min) + min;
-      s.t_end   = s.t_end * (max - min) + min;
-    }
-    result += segments;
-  }
-  return result;
-}
-
 void update_cache(
     App& app, int spline_id, scene_data& scene, hash_set<int>& updated_shapes) {
   auto& mesh   = app.mesh;
