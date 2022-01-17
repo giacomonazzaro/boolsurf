@@ -304,6 +304,8 @@ inline void update_cell_shapes(App& app, const bool_state& state,
   auto vertex_map = vector<int>(mesh.positions.size(), -1);
 
   auto num_cells    = (int)state.cells.size();
+  auto num_shapes   = (int)state.labels[0].size();
+  num_cells         = num_shapes + 1;
   auto shape_ids    = vector<int>(num_cells);
   auto material_ids = vector<int>(num_cells);
   for (int i = 0; i < num_cells; i++) {
@@ -321,9 +323,11 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     material.type      = material_type::glossy;
     material.roughness = 0.4;
     if (state.labels.size())
-      material.color = get_cell_color(state, i, false);
+      material.color = get_color(i);  // get_cell_color(state, i, false);
     else
       material.color = vec3f{0.8, 0.8, 0.8};
+    if (i == state.labels[0].size()) material.color = vec3f{0.8, 0.8, 0.8};
+
     material_ids[i] = material_id;
 
     if (bsh_output.size()) {
@@ -344,9 +348,8 @@ inline void update_cell_shapes(App& app, const bool_state& state,
 
   // TODO(giacomo): Parallelize.
   auto cell_shapes    = vector<shape_data>(num_cells);
-  auto cell_triangles = make_cell_triangles(
-      mesh.face_tags, mesh.triangles, num_cells);
-  auto f = [&](size_t i) {
+  auto cell_triangles = shapes_triangles(app.bool_state, app.mesh);
+  auto f              = [&](size_t i) {
     auto& shape = cell_shapes[i];
     // Raw copy if cell is too big. We waste some memory.
     if (cell_triangles[i].size() > mesh.triangles.size() / 2) {

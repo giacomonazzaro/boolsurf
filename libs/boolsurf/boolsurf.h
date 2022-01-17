@@ -142,15 +142,8 @@ inline vector<vector<vec3i>> make_cell_triangles(const vector<int>& face_tags,
   return cell_triangles;
 }
 
-inline bool_state*& global_state() {
-  static bool_state* state = nullptr;
-  return state;
-}
-
-inline bool_mesh*& global_mesh() {
-  static bool_mesh* mesh = nullptr;
-  return mesh;
-}
+vector<vector<vec3i>> shapes_triangles(
+    const bool_state& state, const bool_mesh& mesh);
 
 namespace yocto {  // TODO(giacomo): Fix this.
 struct bool_operation {
@@ -265,116 +258,12 @@ struct scope_timer {
 // #define _PROFILE_SCOPE(name) auto _profile = scope_timer(string(name));
 #define _PROFILE() _PROFILE_SCOPE(__FUNCTION__)
 
-/*
- *
- *
- *
- *
- *
- *
- *
- *
- *     DEBUGGING STUFF
- *
- */
-
-template <typename F>
-static vector<int> flood_fill(const bool_mesh& mesh, const vector<int>& start,
-    const int polygon, F&& check) {
-  auto visited = vector<bool>(mesh.adjacencies.size(), false);
-
-  auto result = vector<int>();
-  auto stack  = start;
-
-  while (!stack.empty()) {
-    auto face = stack.back();
-    stack.pop_back();
-
-    if (visited[face]) continue;
-    visited[face] = true;
-
-    result.push_back(face);
-
-    for (auto neighbor : mesh.adjacencies[face]) {
-      if (neighbor < 0 || visited[neighbor])
-        continue;
-      else if (check(face, -polygon) && check(neighbor, -polygon))
-        // Check if "face" is not inner and "neighbor" is outer
-        stack.push_back(neighbor);
-      else if (check(neighbor, polygon))
-        stack.push_back(neighbor);
-    }
-  }
-
-  return result;
+inline bool_state*& global_state() {
+  static bool_state* state = nullptr;
+  return state;
 }
 
-template <typename F>
-static vector<int> flood_fill(
-    const bool_mesh& mesh, const vector<int>& start, F&& check) {
-  auto visited = vector<bool>(mesh.adjacencies.size(), false);
-
-  auto result = vector<int>();
-  auto stack  = start;
-
-  while (!stack.empty()) {
-    auto face = stack.back();
-    stack.pop_back();
-
-    if (visited[face]) continue;
-    visited[face] = true;
-
-    result.push_back(face);
-
-    for (auto neighbor : mesh.adjacencies[face]) {
-      if (neighbor < 0 || visited[neighbor]) continue;
-      if (check(face, neighbor)) stack.push_back(neighbor);
-    }
-  }
-
-  return result;
-}
-
-template <typename F>
-static void flood_fill_debug(
-    const bool_mesh& mesh, const vector<int>& start, F&& check) {
-  int face = -1;
-  if (debug_stack().empty()) {
-    debug_restart() = true;
-    return;
-  }
-  while (!debug_stack().empty()) {
-    auto f = debug_stack().back();
-    debug_stack().pop_back();
-    if (debug_visited()[f]) continue;
-    face = f;
-    break;
-  }
-  if (face == -1) return;
-
-  debug_visited()[face] = true;
-
-  debug_result().push_back(face);
-
-  // auto tag = mesh.borders.tags[face];
-  // auto adj = mesh.adjacencies[face];
-  //  printf("\nfrom %d: tag(%d %d %d) adj(%d %d %d)\n", face, tag[0], tag[1],
-  //      tag[2], adj[0], adj[1], adj[2]);
-
-  // for (auto neighbor : mesh.adjacencies[face]) {
-  for (int k = 0; k < 3; k++) {
-    auto neighbor = mesh.adjacencies[face][k];
-    if (neighbor < 0 || debug_visited()[neighbor]) continue;
-    if (check(face, k)) {
-      debug_stack().push_back(neighbor);
-    }
-    // auto tag = mesh.borders.tags[neighbor];
-    // auto adj = mesh.adjacencies[neighbor];
-    //      printf("ok   %d: tag(%d %d %d) adj(%d %d %d)\n", neighbor, tag[0],
-    //      tag[1],
-    //          tag[2], adj[0], adj[1], adj[2]);
-    //    printf("no   %d: tag(%d %d %d) adj(%d %d %d)\n", neighbor, tag[0],
-    //    tag[1],
-    //        tag[2], adj[0], adj[1], adj[2]);
-  }
+inline bool_mesh*& global_mesh() {
+  static bool_mesh* mesh = nullptr;
+  return mesh;
 }

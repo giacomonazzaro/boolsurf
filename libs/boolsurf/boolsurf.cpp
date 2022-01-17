@@ -1447,6 +1447,7 @@ bool compute_cells(bool_mesh& mesh, bool_state& state,
   _PROFILE();
   global_state() = &state;
   global_mesh()  = &mesh;
+
   // Triangola mesh in modo da embeddare tutti i poligoni come mesh-edges.
   slice_mesh(mesh, state, shape_segments);
 
@@ -1455,46 +1456,75 @@ bool compute_cells(bool_mesh& mesh, bool_state& state,
   // Trova celle e loro adiacenza via flood-fill.
   state.cells = make_cell_graph(mesh);
 
-  //  auto patches = make_patches(mesh, state);
-
   // Calcola i label delle celle con una visita sulla loro adiacenza.
   compute_cell_labels(state);
 
   return true;
 }
 
-void compute_shapes(bool_state& state) {
-  // Calcoliamo le informazioni sulla shape, come le celle che ne fanno parte
-  auto& shapes  = state.shapes;
-  auto& sorting = state.shapes_sorting;
-  sorting.resize(state.shapes.size());
-
-  // Assign a polygon and a color to each shape.
-  for (auto s = 0; s < state.shapes.size(); s++) {
-    shapes[s].color = get_color(s);
-    sorting[s]      = s;
-  }
-
-  // Distribute cells to shapes.
-  // La prima shape è relativa alla cella ambiente, che è root per
-  // definizione
-  //  shapes[0].cells = hash_set<int>(
-  //      state.ambient_cells.begin(), state.ambient_cells.end());
-  //  shapes[0].is_root = false;
-
-  state.shape_from_cell.resize(state.labels[0].size());
+vector<int> make_shape_from_cell(const bool_state& state) {
+  auto num_shapes = (int)state.labels[0].size();
+  auto result     = vector<int>(state.cells.size());
   for (auto c = 0; c < state.cells.size(); c++) {
-    auto count = 0;
-    for (auto p = 1; p < state.labels[c].size(); p++) {
-      if (state.labels[c][p] > 0) {
-        shapes[p].cells.insert(c);
-        state.shape_from_cell[c] = p;
-        count += 1;
+    for (auto shape_id = num_shapes - 1; shape_id >= 0; shape_id--) {
+      if (state.labels[c][shape_id] > 0) {
+        result[c] = shape_id;
+        break;
       }
+      result[c] = num_shapes + 1;
     }
-
-    if (count == 0) shapes[0].cells.insert(c);
   }
+  return result;
+}
+
+vector<vector<vec3i>> shapes_triangles(
+    const bool_state& state, const bool_mesh& mesh) {
+  // Calcoliamo le informazioni sulla shape, come le celle che ne fanno parte
+  auto num_shapes = (int)state.labels[0].size();
+
+  auto shape_from_cell = make_shape_from_cell(state);
+
+  auto shape = vector<vector<vec3i>>(num_shapes + 1);
+  for (int i = 0; i < mesh.face_tags.size(); i++) {
+    if (mesh.face_tags[i] == -1) continue;
+    auto shape_id = shape_from_cell[mesh.face_tags[i]];
+    if (shape_id == num_shapes + 1) {
+      shape.back().push_back(mesh.triangles[i]);
+      continue;
+    }
+    shape[shape_id].push_back(mesh.triangles[i]);
+  }
+  return shape;
+
+  // auto& sorting = state.shapes_sorting;
+  // sorting.resize(state.shapes.size());
+
+  // // Assign a polygon and a color to each shape.
+  // for (auto s = 0; s < state.shapes.size(); s++) {
+  //   shapes[s].color = get_color(s);
+  //   sorting[s]      = s;
+  // }
+
+  // // Distribute cells to shapes.
+  // // La prima shape è relativa alla cella ambiente, che è root per
+  // // definizione
+  // //  shapes[0].cells = hash_set<int>(
+  // //      state.ambient_cells.begin(), state.ambient_cells.end());
+  // //  shapes[0].is_root = false;
+
+  // state.shape_from_cell.resize(state.labels[0].size());
+  // for (auto c = 0; c < state.cells.size(); c++) {
+  //   auto count = 0;
+  //   for (auto p = 1; p < state.labels[c].size(); p++) {
+  //     if (state.labels[c][p] > 0) {
+  //       shapes[p].cells.insert(c);
+  //       state.shape_from_cell[c] = p;
+  //       count += 1;
+  //     }
+  //   }
+
+  //   if (count == 0) shapes[0].cells.insert(c);
+  // }
 }
 
 void compute_generator_polygons(
