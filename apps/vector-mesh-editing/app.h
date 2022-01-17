@@ -316,14 +316,16 @@ inline void update_cell_shapes(App& app, const bool_state& state,
       material_id = it->second;
     }
     auto& material = app.scene.materials[material_id];
+    material.type  = material_type::glossy;
 
-    material.type      = material_type::glossy;
-    material.roughness = 0.4;
-    if (state.labels.size())
-      material.color = get_color(i);  // get_cell_color(state, i, false);
-    else
-      material.color = vec3f{0.8, 0.8, 0.8};
-    if (i == state.labels[0].size()) material.color = vec3f{0.8, 0.8, 0.8};
+    assert(state.labels.size());  // ??
+    if (i == state.labels[0].size()) {
+      material.color     = vec3f{0.8, 0.8, 0.8};
+      material.roughness = 0.5;
+    } else {
+      material.color     = get_color(i);  // get_cell_color(state, i, false);
+      material.roughness = 0.2;
+    }
 
     material_ids[i] = material_id;
 
