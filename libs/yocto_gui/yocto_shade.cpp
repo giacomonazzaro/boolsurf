@@ -254,10 +254,9 @@ void set_shape(shade_shape& glshape, const shape_data& shape) {
   if (shape.points.size() != 0) {
     set_points(glshape, shape.points);
   } else if (shape.lines.size() != 0) {
-    auto polyline_shape = polyline_to_cylinders(
-        shape.positions, 16, shape.radius[0]);
-    polyline_shape.normals = compute_normals(polyline_shape);
-    set_shape(glshape, polyline_shape);
+    auto pshape    = polyline_shape(shape.positions, 8, shape.radius[0]);
+    pshape.normals = compute_normals(pshape);
+    set_shape(glshape, pshape);
     return;
   } else if (shape.triangles.size() != 0) {
     set_triangles(glshape, shape.triangles);
@@ -292,7 +291,7 @@ void set_params_uniforms(ogl_program& program, const shade_params& params) {
 
 // Draw a shape
 static void set_instance_uniforms(const shade_scene& scene,
-    ogl_program& program, const frame3f& frame, const shape_data& shape,
+    ogl_program& program, const frame3f& frame, const shade_shape& glshape,
     const material_data& material, const shade_params& params) {
   auto shape_xform     = frame_to_mat(frame);
   auto shape_inv_xform = transpose(
@@ -300,7 +299,7 @@ static void set_instance_uniforms(const shade_scene& scene,
   set_uniform(program, "frame", shape_xform);
   set_uniform(program, "frameit", shape_inv_xform);
   set_uniform(program, "offset", 0.0f);
-  set_uniform(program, "faceted", params.faceted || shape.normals.empty());
+  set_uniform(program, "faceted", params.faceted || !has_normals(glshape));
   //  if (instance.highlighted) {
   //    set_uniform(program, "highlight", vec4f{1, 1, 0, 1});
   //  } else {
@@ -339,7 +338,7 @@ static void set_instance_uniforms(const shade_scene& scene,
 
   assert_ogl_error();
 
-  // switch (shape.elements) {
+  // switch (glshape.elements) {
   //   case ogl_element_type::points: set_uniform(program, "element", 1); break;
   //   case ogl_element_type::line_strip:
   //   case ogl_element_type::lines: set_uniform(program, "element", 2); break;
@@ -348,15 +347,21 @@ static void set_instance_uniforms(const shade_scene& scene,
   //   case ogl_element_type::triangles: set_uniform(program, "element", 3);
   //   break;
   // }
-  if (!shape.points.empty())
-    set_uniform(program, "element", 1);
-  else if (!shape.lines.empty())
-    set_uniform(program, "element", 3);  // Lines were converted to polylines
-  else if (!shape.triangles.empty())
-    set_uniform(program, "element", 3);
-  else if (!shape.quads.empty())
-    set_uniform(program, "element", 3);  // Quads were converted into triangles.
-
+  switch (glshape.elements) {
+    case ogl_element_type::points: {
+      set_uniform(program, "element", 1);
+      break;
+    }
+    case ogl_element_type::lines: {
+      set_uniform(program, "element", 2);
+      break;
+    }
+    case ogl_element_type::triangles: {
+      set_uniform(program, "element", 3);
+      break;
+    }
+    default: set_uniform(program, "element", 3);
+  }
   assert_ogl_error();
 }
 
@@ -466,7 +471,7 @@ static void draw_instances(shade_scene& glscene, const scene_data& scene,
   for (auto& instance : scene.instances) {
     if (!instance.visible) continue;
     set_instance_uniforms(glscene, program, instance.frame,
-        scene.shapes.at(instance.shape), scene.materials.at(instance.material),
+        glscene.shapes[instance.shape], scene.materials[instance.material],
         params);
     draw_shape(glscene.shapes.at(instance.shape));
   }

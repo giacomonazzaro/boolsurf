@@ -232,6 +232,7 @@ inline shape_data make_mesh_patch(
 }
 
 inline void toggle_handle_visibility(App& app, bool visible) {
+    return;
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   if (selection.control_point_id == -1) return;

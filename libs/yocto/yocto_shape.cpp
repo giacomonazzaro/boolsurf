@@ -1419,6 +1419,46 @@ shape_data polyline_to_cylinders(
   }
   return shape;
 }
+shape_data polyline_shape(
+    const vector<vec3f>& vertices, int steps, float scale) {
+  auto shape  = shape_data{};
+  auto circle = vector<vec3f>(steps);
+  for (int k = 0; k < steps; k++) {
+    auto a    = k * 2 * pif / steps;
+    circle[k] = {yocto::cos(a), yocto::sin(a)};
+    circle[k] *= scale;
+  }
+  for (auto i = 0; i < (int)vertices.size(); i++) {
+    auto  prev    = i == 0 ? 0 : i - 1;
+    auto  next    = i == (int)vertices.size() - 1 ? i : i + 1;
+    auto& p0      = vertices[prev];
+    auto& p1      = vertices[i];
+    auto& p2      = vertices[next];
+    auto  tangent = normalize(p2 - p0);
+    // auto  x       = triangle_normal(p0, p1, p2);
+    // auto  frame   = frame3f{};
+    // frame.x       = x;
+    // frame.z       = tangent;
+    // frame.y       = normalize(cross(frame.z, x));
+    // frame.o       = p1;
+    auto frame = frame_fromzx(p1, tangent, {0, 0, 1});
+    auto idx   = (int)shape.positions.size() - steps;
+    auto pos   = circle;
+    for (auto& p : pos) p = transform_point(frame, p);
+    shape.positions.insert(shape.positions.end(), pos.begin(), pos.end());
+    if (i == 0) continue;
+    for (int k = 0; k < steps; k++) {
+      auto tr0 = vec3i{k, (k + 1) % steps, steps + k};
+      auto tr1 = vec3i{(k + 1) % steps, steps + (k + 1) % steps, steps + k};
+      tr0 += vec3i{idx, idx, idx};
+      tr1 += vec3i{idx, idx, idx};
+      shape.triangles.push_back(tr0);
+      shape.triangles.push_back(tr1);
+    }
+  }
+  return shape;
+}
+
 shape_data lines_to_cylinders(
     const vector<vec3f>& vertices, int steps, float scale) {
   auto shape = shape_data{};
