@@ -232,7 +232,7 @@ inline shape_data make_mesh_patch(
 }
 
 inline void toggle_handle_visibility(App& app, bool visible) {
-    return;
+  // return;
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   if (selection.control_point_id == -1) return;
@@ -240,6 +240,7 @@ inline void toggle_handle_visibility(App& app, bool visible) {
     auto handle_id = app.selected_spline()
                          .cache.points[selection.control_point_id]
                          .handle_ids[k];
+    if(handle_id >= app.scene.instances.size()) continue;
     app.scene.instances[handle_id].visible = visible;
     auto tangent_id                        = app.selected_spline()
                           .cache.points[selection.control_point_id]

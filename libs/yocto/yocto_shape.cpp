@@ -1428,6 +1428,8 @@ shape_data polyline_shape(
     circle[k] = {yocto::cos(a), yocto::sin(a)};
     circle[k] *= scale;
   }
+  shape.positions.reserve(steps * vertices.size());
+  shape.triangles.reserve((steps + 1) * 2 * vertices.size());
   for (auto i = 0; i < (int)vertices.size(); i++) {
     auto  prev    = i == 0 ? 0 : i - 1;
     auto  next    = i == (int)vertices.size() - 1 ? i : i + 1;

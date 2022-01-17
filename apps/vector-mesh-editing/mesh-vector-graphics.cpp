@@ -141,7 +141,7 @@ void run_app(App& app) {
       }
     }
     if (draw_glbutton("Add Shape")) {
-      auto spline_id     = add_spline(app.splinesurf);
+      auto spline_id = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
 
@@ -166,6 +166,8 @@ void run_app(App& app) {
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
     auto timer = simple_timer();
     start_timer(timer);
+
+    if (app.envlight) params.exposure = -1;
 
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
