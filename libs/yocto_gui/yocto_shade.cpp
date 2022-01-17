@@ -207,8 +207,8 @@ void init_scene(shade_scene& glscene, const scene_data& scene,
 
   for (auto& texture : scene.textures) {
     auto texture_id = add_texture(glscene);
-    set_texture(glscene.textures[texture_id], texture.width,
-        texture.height, texture.pixelsf, true);
+    set_texture(glscene.textures[texture_id], texture.width, texture.height,
+        texture.pixelsf, true);
   }
 
   if (scene.environments.size() > 0) {
@@ -351,7 +351,7 @@ static void set_instance_uniforms(const shade_scene& scene,
   if (!shape.points.empty())
     set_uniform(program, "element", 1);
   else if (!shape.lines.empty())
-    set_uniform(program, "element", 2);
+    set_uniform(program, "element", 3);  // Lines were converted to polylines
   else if (!shape.triangles.empty())
     set_uniform(program, "element", 3);
   else if (!shape.quads.empty())
