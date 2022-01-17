@@ -141,7 +141,6 @@ void run_app(App& app) {
       }
     }
     if (draw_glbutton("Add Shape")) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
       auto spline_id     = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
@@ -180,7 +179,7 @@ void run_app(App& app) {
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
+      auto add_app_shape = [&]() -> int { return add_shape(app, {}, {}, 1); };
       insert_anchor_points(app.splinesurf, app.mesh,
           app.bool_state.intersections, add_app_shape);
       update_all_splines(app);

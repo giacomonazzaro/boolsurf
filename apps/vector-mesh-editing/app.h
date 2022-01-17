@@ -160,8 +160,7 @@ inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
 }
 
 inline void set_shape(App& app, int id, shape_data&& shape,
-    const frame3f& frame = identity3x4f, int material = 1,
-    bool visible = true) {
+    const frame3f& frame, int material, bool visible = true) {
   auto& item             = app.new_shapes.emplace_back();
   item.id                = id;
   item.instance.shape    = id;
@@ -173,9 +172,8 @@ inline void set_shape(App& app, int id, shape_data&& shape,
   // app.new_shapes.push_back({id, std::move(shape), frame, material});
 }
 
-inline int add_shape(App& app, shape_data&& shape,
-    const frame3f& frame = identity3x4f, int material = 1,
-    bool visible = true) {
+inline int add_shape(App& app, shape_data&& shape, const frame3f& frame,
+    int material, bool visible = true) {
   auto id = (int)app.scene.shapes.size() + app.num_new_shapes;
   set_shape(app, id, std::move(shape), frame, material, visible);
   app.num_new_shapes += 1;
@@ -234,7 +232,6 @@ inline shape_data make_mesh_patch(
 }
 
 inline void toggle_handle_visibility(App& app, bool visible) {
-  return;
   auto selection = app.editing.selection;
   if (selection.spline_id == -1) return;
   if (selection.control_point_id == -1) return;
@@ -496,8 +493,13 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
 }
 
 inline int add_anchor_point(
-    App& app, Spline_View& spline, const anchor_point& point) {
-  auto add_path_shape  = [&]() -> int { return add_shape(app, {}); };
+    App& app, int shape_id, Spline_View& spline, const anchor_point& point) {
+  auto add_path_shape = [&]() -> int {
+    auto  material_id = (int)app.scene.materials.size();
+    auto& material    = app.scene.materials.emplace_back();
+    material.color    = get_color(shape_id);
+    return add_shape(app, {}, {}, material_id);
+  };
   auto add_point_shape = [&]() -> int {
     auto radius   = app.line_thickness * 2;
     auto shape_id = add_shape(app, make_sphere(8, radius, 1), {}, 1);
@@ -540,8 +542,10 @@ inline void process_click(
 
   // Add new anchor point.
   auto spline    = app.selected_spline();
-  auto anchor_id = add_anchor_point(app, spline, {point, {point, point}});
-  set_selected_point(app, app.editing.selection.spline_id, anchor_id, 1);
+  auto spline_id = app.editing.selection.spline_id;
+  auto anchor_id = add_anchor_point(
+      app, spline_id, spline, {point, {point, point}});
+  set_selected_point(app, spline_id, anchor_id, 1);
   // app.editing.selection.control_point_id = anchor_id;
   // app.editing.selection.handle_id        = 1;
   app.editing.creating_new_point = true;
@@ -649,8 +653,6 @@ inline bool update_splines(
     app.shapes[spline_id].resize(1);
     auto& boundary = app.shapes[spline_id][0];
     for (auto curve_id : spline.cache.curves_to_update) {
-      // Add new 1-polygon shape to state
-      // if (test_polygon.empty()) continue;
       boundary.resize(spline.input.control_points.size());
       auto& curve = boundary[curve_id];
 
@@ -658,8 +660,6 @@ inline bool update_splines(
       auto  start   = polygon[curve_id];
       auto  end     = polygon[(curve_id + 1) % polygon.size()];
       curve         = make_curve_segments(app.mesh, start, end);
-      // boundary = recompute_polygon_segments(mesh,
-      // spline.input.control_points);
     }
   }
 
@@ -760,7 +760,7 @@ void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,
         else
           anchor.handles[0] = control_points.back();
         anchor.handles[1] = control_points[i + 1];
-        add_anchor_point(app, spline, anchor);
+        add_anchor_point(app, spline_id, spline, anchor);
       }
 
       // for (int i = 0; i < bezier.size() - 1; i++) {
@@ -791,9 +791,7 @@ inline void draw_widgets(App& app, const glinput_state& input) {
     // app.editing.selection           = {};
     // app.editing.selection.spline_id = spline_id;
   }
-  if (draw_glbutton("close spline")) {
-    auto add_app_shape = [&]() -> int { return add_shape(app, {}); };
-  }
+
   if (begin_glheader("render")) {
     auto edited  = 0;
     auto tparams = *render.params_ptr;
