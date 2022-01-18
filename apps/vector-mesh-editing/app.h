@@ -30,16 +30,18 @@ struct Shape_Entry {
 };
 
 struct App {
-  Render      render;
-  scene_data  scene         = {};
-  shade_scene glscene       = {};
-  bool_mesh   mesh          = {};
-  bool_state  bool_state    = {};
-  bool_test   bool_test     = {};
-  string      svg_filename  = {};
-  shape_bvh   bvh           = {};
-  float       time          = 0;
-  float       frame_time_ms = 0;
+  Render         render;
+  scene_data     scene          = {};
+  shade_scene    glscene        = {};
+  bool_mesh      mesh           = {};
+  bool_state     bool_state     = {};
+  bool_test      bool_test      = {};
+  bool_operation bool_operation = {};
+
+  string    svg_filename  = {};
+  shape_bvh bvh           = {};
+  float     time          = 0;
+  float     frame_time_ms = 0;
 
   BSH_graph bsh_input = {};
   int       patch_id  = 0;
@@ -214,10 +216,13 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
         auto id       = (int)shape.positions.size();
         vertex_map[v] = id;
         shape.positions.push_back(positions[v]);
-        if (v >= colors.size())
-          shape.colors.push_back({0.5, 0.5, 0.5, 1});
-        else
-          shape.colors.push_back(colors[v]);
+        if (colors.size()) {
+          if (v >= colors.size()) {
+            shape.colors.push_back({0.5, 0.5, 0.5, 1});
+          } else {
+            shape.colors.push_back(colors[v]);
+          }
+        }
         v = id;
       } else {
         v = vertex_map[v];
@@ -352,6 +357,9 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     } else {
       shape_id                              = it->second;
       app.scene.instances[shape_id].visible = true;
+      if (i < app.bool_state.labels[0].size() &&
+          !app.bool_state.shapes[i].is_root)
+        app.scene.instances[shape_id].visible = false;
     }
     updated_shapes += shape_id;
     shape_ids[i] = shape_id;
@@ -390,6 +398,13 @@ inline void update_boolsurf(App& app, const glinput_state& input) {
   {
     PROFILE_SCOPE("compute_cells");
     compute_cells(app.mesh, app.bool_state, app.shapes);
+    if (app.bool_state.labels.size() && app.bool_state.labels[0].size() == 2) {
+      auto op    = bool_operation{};
+      op.shape_a = 0;
+      op.shape_b = 1;
+      op.type    = app.bool_operation.type;
+      compute_bool_operation(app.bool_state, op);
+    }
     // compute_shapes(app.bool_state);
   }
 

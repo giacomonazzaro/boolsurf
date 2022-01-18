@@ -489,42 +489,42 @@ vector<bool_cell> make_cell_graph(bool_mesh& mesh) {
   return cells;
 }
 
-inline vector<vector<int>> compute_components(
-    const bool_state& state, const bool_shape& bool_shape) {
-  // Calcoliamo le componenti tra le celle presenti in una bool_shape
-  // (per calcolarne i bordi in maniera più semplice)
-  auto cells   = vector<int>(bool_shape.cells.begin(), bool_shape.cells.end());
-  auto visited = hash_map<int, bool>();
-  for (auto cell : cells) visited[cell] = false;
-
-  auto components = vector<vector<int>>();
-
-  for (auto cell : cells) {
-    if (visited[cell]) continue;
-
-    auto& component = components.emplace_back();
-
-    auto stack = vector<int>();
-    stack.push_back(cell);
-
-    while (!stack.empty()) {
-      auto cell_idx = stack.back();
-      stack.pop_back();
-
-      if (visited[cell_idx]) continue;
-      visited[cell_idx] = true;
-      component.push_back(cell_idx);
-
-      auto& cell = state.cells[cell_idx];
-      for (auto& [neighbor, shape_id, entering] : cell.adjacency) {
-        if (find_idx(cells, neighbor) == -1) continue;
-        if (visited[neighbor]) continue;
-        stack.push_back(neighbor);
-      }
-    }
-  }
-  return components;
-}
+// inline vector<vector<int>> compute_components(
+//    const bool_state& state, const bool_shape& bool_shape) {
+//  // Calcoliamo le componenti tra le celle presenti in una bool_shape
+//  // (per calcolarne i bordi in maniera più semplice)
+//  auto cells   = vector<int>(bool_shape.cells.begin(),
+//  bool_shape.cells.end()); auto visited = hash_map<int, bool>(); for (auto
+//  cell : cells) visited[cell] = false;
+//
+//  auto components = vector<vector<int>>();
+//
+//  for (auto cell : cells) {
+//    if (visited[cell]) continue;
+//
+//    auto& component = components.emplace_back();
+//
+//    auto stack = vector<int>();
+//    stack.push_back(cell);
+//
+//    while (!stack.empty()) {
+//      auto cell_idx = stack.back();
+//      stack.pop_back();
+//
+//      if (visited[cell_idx]) continue;
+//      visited[cell_idx] = true;
+//      component.push_back(cell_idx);
+//
+//      auto& cell = state.cells[cell_idx];
+//      for (auto& [neighbor, shape_id, entering] : cell.adjacency) {
+//        if (find_idx(cells, neighbor) == -1) continue;
+//        if (visited[neighbor]) continue;
+//        stack.push_back(neighbor);
+//      }
+//    }
+//  }
+//  return components;
+//}
 
 static vector<vector<int>> propagate_cell_labels(bool_state& state) {
   _PROFILE();
@@ -1467,7 +1467,7 @@ vector<int> make_shape_from_cell(const bool_state& state) {
   auto result     = vector<int>(state.cells.size());
   for (auto c = 0; c < state.cells.size(); c++) {
     for (auto shape_id = num_shapes - 1; shape_id >= 0; shape_id--) {
-      if (state.labels[c][shape_id] > 0) {
+      if (state.labels[c][shape_id] > 0 && state.shapes[shape_id].is_root) {
         result[c] = shape_id;
         break;
       }
@@ -1680,26 +1680,17 @@ void compute_bool_operation(bool_state& state, const bool_operation& op) {
   auto& a = state.shapes[op.shape_a];
   auto& b = state.shapes[op.shape_b];
 
-  // Convertiamo il vettore di interi in bool per semplificare le operazioni
-  auto aa = vector<bool>(state.cells.size(), false);
-  for (auto& c : a.cells) aa[c] = true;
-
-  auto bb = vector<bool>(state.cells.size(), false);
-  for (auto& c : b.cells) bb[c] = true;
-
-  for (auto i = 0; i < aa.size(); i++) {
-    if (op.type == bool_operation::Type::op_union) {
-      aa[i] = (aa[i] || bb[i]);
+  for (auto i = 0; i < state.cells.size(); i++) {
+    auto in_a = state.labels[i][op.shape_a];
+    auto in_b = state.labels[i][op.shape_b];
+    auto in   = false;
+    switch (op.type) {
+      case bool_operation::Type::op_union: in = (in_a || in_b); break;
+      case bool_operation::Type::op_intersection: in = (in_a && in_b); break;
+      case bool_operation::Type::op_difference: in = (in_a && !in_b); break;
+      case bool_operation::Type::op_xor: in = (in_a != in_b); break;
     }
-    if (op.type == bool_operation::Type::op_intersection) {
-      aa[i] = (aa[i] && bb[i]);
-    }
-    if (op.type == bool_operation::Type::op_difference) {
-      aa[i] = (aa[i] && !bb[i]);
-    }
-    if (op.type == bool_operation::Type::op_symmetrical_difference) {
-      aa[i] = (aa[i] != bb[i]);
-    }
+    state.labels[i].push_back((int)in);
   }
 
   // Le shape 'a' e 'b' sono state usate nell'operazione,
@@ -1709,17 +1700,14 @@ void compute_bool_operation(bool_state& state, const bool_operation& op) {
 
   // Creiamo una nuova shape risultato, settando come generatori le shape 'a'
   // e 'b' e riconvertendo il vettore di bool a interi
-  auto  shape_id = state.shapes.size();
-  auto& c        = state.shapes.emplace_back();
-  c.generators   = {op.shape_a, op.shape_b};
-  c.color        = state.shapes[op.shape_a].color;
-  c.is_root      = true;
-  auto sorting   = find_idx(state.shapes_sorting, op.shape_a);
+  //  auto  shape_id       = state.shapes.size();
+  auto& new_shape      = state.shapes.emplace_back();
+  new_shape.generators = {op.shape_a, op.shape_b};
+  new_shape.color      = state.shapes[op.shape_a].color;
+  new_shape.is_root    = true;
 
-  insert(state.shapes_sorting, sorting, (int)shape_id);
-
-  for (auto i = 0; i < aa.size(); i++)
-    if (aa[i]) c.cells.insert(i);
+  // auto sorting   = find_idx(state.shapes_sorting, op.shape_a);
+  // insert(state.shapes_sorting, sorting, (int)shape_id);
 }
 
 void compute_bool_operations(
@@ -1733,12 +1721,12 @@ void compute_bool_operations(
 vec3f get_cell_color(const bool_state& state, int cell_id, bool color_shapes) {
   if (state.shapes.empty() && state.labels.empty()) return {1, 1, 1};
   if (color_shapes) {
-    for (int s = (int)state.shapes_sorting.size() - 1; s >= 0; s--) {
-      auto& bool_shape = state.shapes[state.shapes_sorting[s]];
-      if (bool_shape.cells.count(cell_id) && bool_shape.is_root) {
-        return bool_shape.color;
-      }
-    }
+    //    for (int s = (int)state.shapes_sorting.size() - 1; s >= 0; s--) {
+    //      auto& bool_shape = state.shapes[state.shapes_sorting[s]];
+    //      if (bool_shape.cells.count(cell_id) && bool_shape.is_root) {
+    //        return bool_shape.color;
+    //      }
+    //    }
     return {1, 1, 1};
   } else {
     auto color = vec3f{0, 0, 0};

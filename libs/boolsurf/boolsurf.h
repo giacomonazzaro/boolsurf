@@ -58,10 +58,10 @@ vector<mesh_segment> make_curve_segments(
     const bool_mesh& mesh, const anchor_point& start, const anchor_point& end);
 
 struct bool_shape {
-  vector<int>   generators = {};
-  bool          is_root    = true;
-  vec3f         color      = {0, 0, 0};
-  hash_set<int> cells      = {};
+  vector<int> generators = {};
+  bool        is_root    = true;
+  vec3f       color      = {0, 0, 0};
+  // hash_set<int> cells      = {};
 };
 
 struct bool_cell {
@@ -147,18 +147,13 @@ vector<vector<vec3i>> shapes_triangles(
 
 namespace yocto {  // TODO(giacomo): Fix this.
 struct bool_operation {
-  enum struct Type {
-    op_union,
-    op_difference,
-    op_intersection,
-    op_symmetrical_difference
-  };
+  enum struct Type { op_union, op_difference, op_intersection, op_xor };
   int  shape_a = -1;
   int  shape_b = -1;
   Type type    = Type::op_union;
 
-  inline static const auto type_names = vector<string>{"op_union",
-      "op_difference", "op_intersection", "op_symmetrical_difference"};
+  inline static const auto type_names = vector<string>{
+      "op_union", "op_difference", "op_intersection", "op_xor"};
 };
 }  // namespace yocto
 
@@ -179,12 +174,12 @@ BSH_graph    make_bsh_input(bool_state& state, bool_mesh& mesh,
        const vector<vector<vector<vector<mesh_segment>>>>& shape_segments);
 vector<bool> run_bsh(const BSH_graph& bsh);
 
-void       compute_shapes(bool_state& state);
-void       compute_shape_borders(const bool_mesh& mesh, bool_state& state);
-bool_state compute_border_polygons(const bool_state& state);
-void       compute_bool_operation(bool_state& state, const bool_operation& op);
-void       compute_bool_operations(
-          bool_state& state, const vector<bool_operation>& ops);
+// void compute_shapes(const bool_state& state);
+// void       compute_shape_borders(const bool_mesh& mesh, bool_state& state);
+// bool_state compute_border_polygons(const bool_state& state);
+void compute_bool_operation(bool_state& state, const bool_operation& op);
+void compute_bool_operations(
+    bool_state& state, const vector<bool_operation>& ops);
 
 template <typename Add_Shape>
 void insert_anchor_points(Splinesurf& splinesurf, const spline_mesh& mesh,

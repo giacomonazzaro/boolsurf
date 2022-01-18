@@ -104,6 +104,10 @@ void run_app(App& app) {
       }
     }
 
+    auto op = (int)app.bool_operation.type;
+    draw_glcombobox("boolean", op, bool_operation::type_names);
+    app.bool_operation.type = (bool_operation::Type)op;
+
     if (draw_glslider(
             "patch-id", app.patch_id, 0, (int)app.bsh_input.patches.size())) {
       update_boolsurf(app, input);
