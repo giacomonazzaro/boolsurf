@@ -120,11 +120,17 @@ void init_app(App& app, const Params& params) {
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
   init_mesh(app.mesh);
 
-  app.mesh.normals.clear();
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
 
   // make scene
   app.scene = make_shape_scene(app.mesh, false);
+
+  if (params.ao_output.size()) {
+    app.mesh.colors = bake_ambient_occlusion(app, params.ao_num_samples);
+    auto io         = save_shape(params.ao_output, app.mesh);
+  }
+
+  app.mesh.normals.clear();
 
   // Add line material.
   auto spline_material  = app.scene.materials[0];
@@ -193,8 +199,8 @@ inline void add_new_shapes(App& app) {
   app.num_new_shapes = 0;
 }
 
-inline shape_data make_mesh_patch(
-    const vector<vec3f>& positions, vector<vec3i>&& triangles) {
+inline shape_data make_mesh_patch(const vector<vec3f>& positions,
+    const vector<vec4f>& colors, vector<vec3i>&& triangles) {
   // PROFILE();
   auto shape = shape_data{};
 
@@ -208,6 +214,10 @@ inline shape_data make_mesh_patch(
         auto id       = (int)shape.positions.size();
         vertex_map[v] = id;
         shape.positions.push_back(positions[v]);
+        if (v >= colors.size())
+          shape.colors.push_back({0.5, 0.5, 0.5, 1});
+        else
+          shape.colors.push_back(colors[v]);
         v = id;
       } else {
         v = vertex_map[v];
@@ -240,7 +250,7 @@ inline void toggle_handle_visibility(App& app, bool visible) {
     auto handle_id = app.selected_spline()
                          .cache.points[selection.control_point_id]
                          .handle_ids[k];
-    if(handle_id >= app.scene.instances.size()) continue;
+    if (handle_id >= app.scene.instances.size()) continue;
     app.scene.instances[handle_id].visible = visible;
     auto tangent_id                        = app.selected_spline()
                           .cache.points[selection.control_point_id]
@@ -355,10 +365,12 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     // Raw copy if cell is too big. We waste some memory.
     if (cell_triangles[i].size() > mesh.triangles.size() / 2) {
       shape.positions = mesh.positions;
+      shape.colors    = mesh.colors;
       shape.triangles = std::move(cell_triangles[i]);
       return;
     }
-    shape = make_mesh_patch(mesh.positions, std::move(cell_triangles[i]));
+    shape = make_mesh_patch(
+        mesh.positions, mesh.colors, std::move(cell_triangles[i]));
   };
   // parallel_for(num_cells, f);
   serial_for(num_cells, f);
@@ -578,7 +590,7 @@ void update_cache(
       // TODO(giacomo): Cleanup.
       shape.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
       shape.lines.resize(app.shapes[spline_id][0][curve_id].size());
-      shape.radius.assign(shape.positions.size(), app.line_thickness);
+      shape._radius = app.line_thickness;
       for (int i = 0; i < app.shapes[spline_id][0][curve_id].size(); i++) {
         auto& segment      = app.shapes[spline_id][0][curve_id][i];
         shape.positions[i] = eval_position(mesh, {segment.face, segment.start});
@@ -597,6 +609,11 @@ void update_cache(
     // }
   }
 
+  auto make_lines = [](int num_positions) {
+    auto result = vector<vec2i>(num_positions - 1);
+    for (int i = 0; i < num_positions - 1; i++) result[i] = {i, i + 1};
+    return result;
+  };
   for (auto point_id : cache.points_to_update) {
     auto& anchor = cache.points[point_id];
     for (int k = 0; k < 2; k++) {
@@ -606,20 +623,20 @@ void update_cache(
             input.control_points[point_id].point,
             input.control_points[point_id].handles[k]);
       }
-      auto shape_id  = tangent.shape_id;
-      auto positions = path_positions(
-          tangent.path, app.mesh.triangles, app.mesh.positions);
+      auto shape_id = tangent.shape_id;
 
       auto& instance    = scene.instances[shape_id];
       auto& shape       = scene.shapes[shape_id];
       instance.material = 2;
-      shape = polyline_to_cylinders(positions, 16, app.line_thickness * 0.6);
-      shape.normals = compute_normals(shape);
+      shape.positions   = path_positions(
+          tangent.path, app.mesh.triangles, app.mesh.positions);
+      shape.lines   = make_lines(shape.positions.size());
+      shape._radius = app.line_thickness * 0.6;
       updated_shapes += shape_id;
 
       auto& handle_instance    = scene.instances[anchor.handle_ids[k]];
       handle_instance.material = 2;
-      handle_instance.frame.o  = positions.back();
+      handle_instance.frame.o  = shape.positions.back();
       auto& handle_shape       = scene.shapes[handle_instance.shape];
       if (handle_shape.triangles.empty()) {
         auto radius  = app.line_thickness * 2;
@@ -943,4 +960,35 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
 
   // done
   render.stop_render();
+}
+
+#include <yocto/yocto_sampling.h>
+vector<vec4f> bake_ambient_occlusion(App& app, int num_samples) {
+  auto result  = vector<vec4f>(app.mesh.positions.size(), zero4f);
+  auto rng     = rng_state{};
+  auto normals = app.mesh.normals;
+  if (normals.empty()) normals = compute_normals(app.mesh);
+  auto f = [&](int i) {
+    auto frame = basis_fromz(app.mesh.normals[i]);
+    for (int sample = 0; sample < num_samples; sample++) {
+      auto dir = sample_hemisphere_cos(rand2f(rng));
+      dir      = transform_direction(frame, dir);
+      if (dir.y <= 0) {
+        result[i] += vec4f{0, 0, 0, 1};
+        continue;
+      }
+      auto ray  = ray3f{app.mesh.positions[i], dir};
+      auto isec = intersect_triangles_bvh(
+          app.bvh, app.mesh.triangles, app.mesh.positions, ray);
+      if (!isec.hit) {
+        result[i] += vec4f{1, 1, 1, 1};
+      } else {
+        result[i] += vec4f{0, 0, 0, 1};
+      }
+    }
+  };
+  parallel_for((int)app.mesh.positions.size(), f);
+
+  for (auto& r : result) r /= r.w;
+  return result;
 }

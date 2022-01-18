@@ -18,14 +18,10 @@ struct glview_params {
   string envlight_texture = "boolsurf/scenes/uffizi.hdr";
   float  line_thickness   = 0.001;
   bool   envlight         = false;
-};
 
-// view shapes
-void run_view(const glview_params& params) {
-  auto app = App{};
-  init_app(app, params);
-  view_raytraced_scene(app, "yshape", params.shape, app.scene);
-}
+  string ao_output      = "";
+  int    ao_num_samples = 1;
+};
 
 // Cli
 void add_options(const cli_command& cli, glview_params& params) {
@@ -35,13 +31,24 @@ void add_options(const cli_command& cli, glview_params& params) {
   add_option(cli, "envlight", params.envlight, "Environment lighting.");
   add_option(cli, "envlight-texture", params.envlight_texture,
       "Environment lighting texture.");
+  add_option(cli, "ao-output", params.ao_output,
+      "Filename of output shape with baked ambient occlusion.");
+  add_option(cli, "ao-samples", params.ao_num_samples,
+      "Number of samples for baked ao.");
+}
+
+// view shapes
+void run_view(const glview_params& params) {
+  auto app = App{};
+  init_app(app, params);
+  view_raytraced_scene(app, "yshape", params.shape, app.scene);
 }
 
 void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
   PROFILE();
   for (auto shape_id : updated_shapes) {
-    set_shape(glscene.shapes[shape_id], scene.shapes[shape_id]);
+    set_shape(glscene.shapes.at(shape_id), scene.shapes[shape_id]);
   }
   // TODO(giacomo): Update textures.
 }

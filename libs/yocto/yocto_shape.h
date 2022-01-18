@@ -85,6 +85,7 @@ struct shape_data {
   vector<vec4f> colors    = {};
   vector<float> radius    = {};
   vector<vec4f> tangents  = {};
+  float         _radius   = 0.0f;
 };
 
 // Interpolate vertex data

@@ -254,7 +254,7 @@ void set_shape(shade_shape& glshape, const shape_data& shape) {
   if (shape.points.size() != 0) {
     set_points(glshape, shape.points);
   } else if (shape.lines.size() != 0) {
-    auto pshape    = polyline_shape(shape.positions, 8, shape.radius[0]);
+    auto pshape    = polyline_shape(shape.positions, 8, shape._radius);
     pshape.normals = compute_normals(pshape);
     set_shape(glshape, pshape);
     return;
@@ -962,6 +962,7 @@ void main() {
         eval_light(lid, position, cl, incoming);
         radiance += cl * eval_brdfcos(brdf, n, incoming, outgoing);
       }
+      radiance *= color.xyz;
     }
     if (lighting == lighting_envlight) {
       // diffuse
@@ -971,6 +972,7 @@ void main() {
       vec3 reflection = envlight_scale * sample_prefiltered_refleciton(incoming, brdf.roughness);
       vec2 env_brdf   = texture(envlight_brdflut, vec2(max(dot(n, outgoing), 0.0), roughness)).rg;
       radiance += reflection * (brdf.specular * env_brdf.x + env_brdf.y);
+      radiance *= color.xyz;
     }
   }
 
