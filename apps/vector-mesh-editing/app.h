@@ -351,15 +351,13 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     }
 
     auto shape_id = -1;
+    auto visible = true;
     if (auto it = cell_to_shape_id.find(i); it == cell_to_shape_id.end()) {
-      shape_id            = add_shape(app, {}, {}, material_id);
+      shape_id            = add_shape(app, {}, {}, material_id, visible);
       cell_to_shape_id[i] = shape_id;
     } else {
       shape_id                              = it->second;
-      app.scene.instances[shape_id].visible = true;
-      if (i < app.bool_state.labels[0].size() &&
-          !app.bool_state.shapes[i].is_root)
-        app.scene.instances[shape_id].visible = false;
+      app.scene.instances[shape_id].visible = visible;
     }
     updated_shapes += shape_id;
     shape_ids[i] = shape_id;
@@ -384,8 +382,9 @@ inline void update_cell_shapes(App& app, const bool_state& state,
   serial_for(num_cells, f);
 
   for (int i = 0; i < num_cells; i++) {
-    set_shape(
-        app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i]);
+    auto visible = i == num_cells - 1 ? true : app.bool_state.shapes[i].is_root;
+    set_shape(app, shape_ids[i], std::move(cell_shapes[i]), {}, material_ids[i],
+        visible);
   }
 
   app.scene.instances[0].visible = false;
