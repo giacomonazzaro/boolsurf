@@ -455,7 +455,7 @@ inline void update_boolsurf(App& app) {
 
 inline void process_mouse(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
-  if (input.modifier_alt) return;
+  if (input.modifier_alt || input.modifier_ctrl || input.modifier_shift) return;
   if (!input.mouse_left) {
     app.editing.holding_control_point = false;
     app.editing.creating_new_point    = false;

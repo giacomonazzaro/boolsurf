@@ -219,6 +219,11 @@ void run_app(App& app) {
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
+      auto spline_id = add_spline(app.splinesurf);
+      set_selected_spline(app, spline_id);
+    }
+
+    if (input.key_pressed[(int)'I']) {
       auto add_app_shape = [&]() -> int { return add_shape(app, {}, {}, 1); };
       insert_anchor_points(app.splinesurf, app.mesh,
           app.bool_state.intersections, add_app_shape);
@@ -250,10 +255,19 @@ void run_app(App& app) {
       app.updated_shapes.clear();
     }
 
-    app.frame_time_ms = elapsed_seconds(timer) * 1000;
+    printf("mouse %f %f \n", input.mouse_pos.x, input.mouse_pos.y);
+    printf("window %d %d \n", input.window_size.x, input.window_size.y);
+    printf("fb %d %d %d %d\n", input.framebuffer_viewport.x,
+        input.framebuffer_viewport.y, input.framebuffer_viewport.z,
+        input.framebuffer_viewport.w);
+    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+        input.mouse_pos.y / float(input.window_size.y)};
+    printf("mouse_uv %f %f \n\n", mouse_uv.x, mouse_uv.y);
+    app.scene.cameras[0].aspect = input.window_size.x / input.window_size.y;
+    app.frame_time_ms           = elapsed_seconds(timer) * 1000;
   };
   // run ui
-  run_ui({1280 + 320, 720}, "yshade", callbacks, 320, app.show_gui);
+  run_ui({1280 + 320, 720}, "Boolsurf", callbacks, 320, true);
 }
 
 // Main
