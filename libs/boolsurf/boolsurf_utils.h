@@ -177,6 +177,25 @@ inline pair<int, float> get_edge_lerp_from_uv(const vec2f& uv) {
   return {-1, -1};
 }
 
+template <typename T>
+void smooth_out_signal(vector<T>& values, const shape_data& shape) {
+  auto result  = vector<T>(values.size(), T{0});
+  auto weights = vector<float>(values.size(), 0.0f);
+  for (int i = 0; i < shape.triangles.size(); i++) {
+    auto [x, y, z] = shape.triangles[i];
+    auto area      = triangle_area(
+        1e6*shape.positions[x], 1e6*shape.positions[y], 1e6*shape.positions[z]);
+    result[x] += area * values[x];
+    result[y] += area * values[y];
+    result[z] += area * values[z];
+    weights[x] += area;
+    weights[y] += area;
+    weights[z] += area;
+  }
+  for (int i = 0; i < result.size(); i++) result[i] /= weights[i];
+  swap(values, result);
+}
+
 // template <int N>
 // struct hash<std::array<int, N>> {
 //  size_t operator()(const std::array<int, N>& v) const {

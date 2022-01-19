@@ -1190,6 +1190,21 @@ void slice_mesh(bool_mesh& mesh, bool_state& state,
   triangulate(mesh, hashgrid);
   update_face_adjacencies(mesh);
 
+  mesh.colors.resize(mesh.positions.size());
+  for (auto& [face, polylines] : hashgrid) {
+    auto& [x, y, z] = mesh.triangles[face];
+    auto& cx        = mesh.colors[x];
+    auto& cy        = mesh.colors[y];
+    auto& cz        = mesh.colors[z];
+
+    for (auto& polyline : polylines) {
+      for (int i = 0; i < polyline.points.size(); i++) {
+        auto vertex         = polyline.vertices[i];
+        mesh.colors[vertex] = interpolate_triangle(cx, cy, cz, polyline.points[i]);
+      }
+    }
+  }
+
   // Tagga tutti i mesh edges che si trovano su un boundary.
   mesh.is_edge_on_boundary = make_edges_boundary_tags(mesh);
 }

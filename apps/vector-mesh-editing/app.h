@@ -31,12 +31,14 @@ struct Shape_Entry {
 
 struct App {
   Render         render;
-  scene_data     scene          = {};
-  shade_scene    glscene        = {};
-  bool_mesh      mesh           = {};
-  bool_state     bool_state     = {};
-  bool_test      bool_test      = {};
-  bool_operation bool_operation = {};
+  scene_data     scene            = {};
+  shade_scene    glscene          = {};
+  bool_mesh      mesh             = {};
+  bool_state     bool_state       = {};
+  bool_test      bool_test        = {};
+  bool_operation bool_operation   = {};
+  bool           preview_booleans = false;
+  shade_params   shade_params     = {};
 
   string    svg_filename  = {};
   shape_bvh bvh           = {};
@@ -59,12 +61,14 @@ struct App {
   std::vector<std::function<void()>> jobs       = {};
   bool                               update_bvh = false;
 
-  bool   flag                = true;
-  float  line_thickness      = 0.001;
-  bool   are_splines_visible = true;
-  bool   envlight            = false;
-  string envlight_texture    = "";
-  int    num_subdivisions    = 4;
+  bool   flag                    = true;
+  float  line_thickness          = 0.001;
+  bool   are_splines_visible     = true;
+  bool   envlight                = false;
+  string envlight_texture        = "";
+  int    num_subdivisions        = 4;
+  float  ambient_shape_roughness = 0.5;
+  float  shapes_roughness        = 0.5;
 
   inline Spline_View get_spline_view(int id) {
     return splinesurf.get_spline_view(id);
@@ -115,11 +119,14 @@ void init_app(App& app, const Params& params) {
   app.line_thickness   = params.line_thickness;
   app.envlight         = params.envlight;
   app.envlight_texture = params.envlight_texture;
+  if (app.envlight) app.shade_params.exposure = +1;
+  app.shade_params.background = {1, 1, 1, 1};
 
   auto test = bool_test{};
 
   // if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
   if (!load_shape(params.shape, app.mesh, error)) print_fatal(error);
+  app.mesh.normals.clear();
   init_mesh(app.mesh);
 
   app.bvh = make_triangles_bvh(app.mesh.triangles, app.mesh.positions, {});
@@ -129,10 +136,12 @@ void init_app(App& app, const Params& params) {
 
   if (params.ao_output.size()) {
     app.mesh.colors = bake_ambient_occlusion(app, params.ao_num_samples);
-    auto io         = save_shape(params.ao_output, app.mesh);
+    // for (int i = 0; i < 1000; i++) {
+    //   smooth_out_signal(app.mesh.colors, app.mesh);
+    // }
+    auto io = save_shape(params.ao_output, app.mesh);
+    exit(0);
   }
-
-  app.mesh.normals.clear();
 
   // Add line material.
   auto spline_material  = app.scene.materials[0];
@@ -217,11 +226,11 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
         vertex_map[v] = id;
         shape.positions.push_back(positions[v]);
         if (colors.size()) {
-          if (v >= colors.size()) {
-            shape.colors.push_back({0.5, 0.5, 0.5, 1});
-          } else {
-            shape.colors.push_back(colors[v]);
-          }
+          // if (v >= colors.size()) {
+          //   shape.colors.push_back({0.5, 0.5, 0.5, 1});
+          // } else {
+          shape.colors.push_back(colors[v]);
+          // }
         }
         v = id;
       } else {
@@ -338,10 +347,10 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     assert(state.labels.size());  // ??
     if (i == state.labels[0].size()) {
       material.color     = vec3f{0.8, 0.8, 0.8};
-      material.roughness = 0.5;
+      material.roughness = app.ambient_shape_roughness;
     } else {
       material.color     = get_color(i);  // get_cell_color(state, i, false);
-      material.roughness = 0.2;
+      material.roughness = app.shapes_roughness;
     }
 
     material_ids[i] = material_id;
@@ -351,7 +360,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     }
 
     auto shape_id = -1;
-    auto visible = true;
+    auto visible  = true;
     if (auto it = cell_to_shape_id.find(i); it == cell_to_shape_id.end()) {
       shape_id            = add_shape(app, {}, {}, material_id, visible);
       cell_to_shape_id[i] = shape_id;
@@ -390,14 +399,14 @@ inline void update_cell_shapes(App& app, const bool_state& state,
   app.scene.instances[0].visible = false;
 }
 
-inline void update_boolsurf(App& app, const glinput_state& input) {
+inline void update_boolsurf(App& app) {
   PROFILE_SCOPE("boolsurf");
   app.bool_state = {};
   // update_boolsurf_input(app.bool_state, app);
   {
     PROFILE_SCOPE("compute_cells");
     compute_cells(app.mesh, app.bool_state, app.shapes);
-    if (app.bool_state.labels.size() && app.bool_state.labels[0].size() == 2) {
+    if (app.preview_booleans) {
       auto op    = bool_operation{};
       op.shape_a = 0;
       op.shape_b = 1;
@@ -977,20 +986,21 @@ void view_raytraced_scene(App& app, const string& title, const string& name,
 }
 
 #include <yocto/yocto_sampling.h>
+
 vector<vec4f> bake_ambient_occlusion(App& app, int num_samples) {
   auto result  = vector<vec4f>(app.mesh.positions.size(), zero4f);
   auto rng     = rng_state{};
   auto normals = app.mesh.normals;
   if (normals.empty()) normals = compute_normals(app.mesh);
   auto f = [&](int i) {
-    auto frame = basis_fromz(app.mesh.normals[i]);
+    auto frame = basis_fromz(normals[i]);
     for (int sample = 0; sample < num_samples; sample++) {
       auto dir = sample_hemisphere_cos(rand2f(rng));
       dir      = transform_direction(frame, dir);
-      if (dir.y <= 0) {
-        result[i] += vec4f{0, 0, 0, 1};
-        continue;
-      }
+      // if (dir.y <= 0) {
+      //   result[i] += vec4f{0, 0, 0, 1};
+      //   continue;
+      // }
       auto ray  = ray3f{app.mesh.positions[i], dir};
       auto isec = intersect_triangles_bvh(
           app.bvh, app.mesh.triangles, app.mesh.positions, ray);

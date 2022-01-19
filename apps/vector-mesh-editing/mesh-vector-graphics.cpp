@@ -15,7 +15,7 @@ using namespace yocto;
 struct glview_params {
   string shape            = "shape.ply";
   string svg              = "";
-  string envlight_texture = "boolsurf/scenes/uffizi.hdr";
+  string envlight_texture = "boolsurf/scenes/doge2.hdr";
   float  line_thickness   = 0.001;
   bool   envlight         = false;
 
@@ -60,7 +60,7 @@ void run_app(App& app) {
   auto& scene   = app.scene;
 
   // draw params
-  auto params = shade_params{};
+  auto& params = app.shade_params;
   if (scene.environments.size()) {
     params.lighting         = shade_lighting_type::envlight;
     params.hide_environment = true;
@@ -104,13 +104,18 @@ void run_app(App& app) {
       }
     }
 
+    auto edited = 0;
+    edited += draw_glcheckbox("preview", app.preview_booleans);
+
     auto op = (int)app.bool_operation.type;
-    draw_glcombobox("boolean", op, bool_operation::type_names);
+    edited += draw_glcombobox("boolean", op, bool_operation::type_names);
     app.bool_operation.type = (bool_operation::Type)op;
+
+    if (edited) update_boolsurf(app);
 
     if (draw_glslider(
             "patch-id", app.patch_id, 0, (int)app.bsh_input.patches.size())) {
-      update_boolsurf(app, input);
+      update_boolsurf(app);
     }
 
     static auto svg_size = 0.1f;
@@ -169,6 +174,9 @@ void run_app(App& app) {
       draw_glslider("gamma", params.gamma, 0.1f, 4);
       draw_glslider("near", params.near, 0.01f, 1.0f);
       draw_glslider("far", params.far, 1000.0f, 10000.0f);
+      draw_glslider(
+          "ambient roughness", app.ambient_shape_roughness, 0.0f, 1.0f);
+      draw_glslider("shapes roughness", app.shapes_roughness, 0.0f, 1.0f);
       draw_glcoloredit("background", params.background);
       end_glheader();
     }
@@ -177,8 +185,6 @@ void run_app(App& app) {
   callbacks.uiupdate_cb = [&](const glinput_state& input) {
     auto timer = simple_timer();
     start_timer(timer);
-
-    if (app.envlight) params.exposure = -1;
 
     auto camera = scene.cameras.at(params.camera);
     if (uiupdate_camera_params(input, camera)) {
@@ -209,7 +215,7 @@ void run_app(App& app) {
 
     auto edited = update_splines(app, scene, app.updated_shapes);
     if (edited) {
-      update_boolsurf(app, input);
+      update_boolsurf(app);
     }
 
     for (auto& entry : app.new_shapes) {
