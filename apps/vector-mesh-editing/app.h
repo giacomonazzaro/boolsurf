@@ -259,7 +259,8 @@ inline shape_data make_mesh_patch(const vector<vec3f>& positions,
 inline void toggle_handle_visibility(App& app, bool visible) {
   // return;
   auto selection = app.editing.selection;
-  if (selection.spline_id == -1) return;
+  if (selection.spline_id < 0) return;
+  if (selection.spline_id >= app.splinesurf.spline_input.size()) return;
   if (selection.control_point_id == -1) return;
   for (int k = 0; k < 2; k++) {
     auto handle_id = app.selected_spline()
@@ -717,6 +718,7 @@ inline bool update_splines(
 }
 
 inline void update_all_splines(App& app) {
+  app.shapes.resize(app.splinesurf.num_splines());
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
     for (int k = 0; k < spline.cache.points.size(); k++) {

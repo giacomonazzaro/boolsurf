@@ -108,11 +108,6 @@ inline int add_spline(Splinesurf& splinesurf) {
   splinesurf.spline_cache.push_back({});
   return id;
 }
-inline void delete_spline(Splinesurf& splinesurf, int spline_id) {
-  auto id = (int)splinesurf.spline_input.size();
-  splinesurf.spline_input.erase(splinesurf.spline_input.begin() + spline_id);
-  splinesurf.spline_cache.erase(splinesurf.spline_cache.begin() + spline_id);
-}
 
 inline vec2f tangent_path_direction(
     const spline_mesh& mesh, const geodesic_path& path) {
@@ -219,23 +214,32 @@ inline int add_anchor_point(Spline_View& spline, const mesh_point& point,
   return add_anchor_point(spline, anchor, add_point_shape, add_path_shape);
 }
 
-template <typename Delete_Point_Shape, typename Delete_Path_Shape>
-inline void delete_anchor_point(Spline_View& spline, int point_id,
-    Delete_Point_Shape& delete_point_shape,
-    Delete_Path_Shape&  delete_path_shape) {
-
+template <typename Delete_Shape>
+inline void delete_anchor_point(
+    Spline_View& spline, int point_id, Delete_Shape& delete_shape) {
   // Add shapes for point, handles and tangents to cache.
   auto& cache = spline.cache.points[point_id];
-  delete_point_shape(cache.anchor_id);
-  delete_point_shape(cache.tangents[0].shape_id);
-  delete_point_shape(cache.tangents[1].shape_id);
-  for (int k = 0; k < 2; k++) delete_point_shape(cache.handle_ids[k]);
+  delete_shape(cache.anchor_id);
+  delete_shape(cache.tangents[0].shape_id);
+  delete_shape(cache.tangents[1].shape_id);
+  for (int k = 0; k < 2; k++) delete_shape(cache.handle_ids[k]);
 
-  delete_curve(spline.cache, delete_path_shape);
-    
-    spline.input.control_points.erase(
-        spline.input.control_points.begin() + point_id);
-    spline.input.is_smooth.erase(spline.input.is_smooth.begin() + point_id);
+  delete_curve(spline.cache, point_id, delete_shape);
+
+  spline.input.control_points.erase(
+      spline.input.control_points.begin() + point_id);
+  spline.input.is_smooth.erase(spline.input.is_smooth.begin() + point_id);
+}
+
+template <typename Delete_Shape>
+inline void delete_spline(
+    Splinesurf& splinesurf, int spline_id, Delete_Shape& delete_shape) {
+  auto spline = splinesurf.get_spline_view(spline_id);
+  for (int i = (int)spline.input.control_points.size() - 1; i >= 0; i--) {
+    delete_anchor_point(spline, i, delete_shape);
+  }
+  splinesurf.spline_input.erase(splinesurf.spline_input.begin() + spline_id);
+  splinesurf.spline_cache.erase(splinesurf.spline_cache.begin() + spline_id);
 }
 
 inline void move_selected_point(Splinesurf& splinesurf,

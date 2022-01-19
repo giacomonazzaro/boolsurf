@@ -222,6 +222,16 @@ void run_app(App& app) {
       auto spline_id = add_spline(app.splinesurf);
       set_selected_spline(app, spline_id);
     }
+    if (input.key_pressed[(int)'A']) {
+        auto a            = 0;//app.bool_operation.shape_a;
+        auto b            = 1;//app.bool_operation.shape_b;
+      auto delete_shape = [&](int shape_id) {
+        clear_shape(app.glscene.shapes[shape_id]);
+      };
+      delete_spline(app.splinesurf, b, delete_shape);
+      delete_spline(app.splinesurf, a, delete_shape);
+      update_all_splines(app);
+    }
 
     if (input.key_pressed[(int)'I']) {
       auto add_app_shape = [&]() -> int { return add_shape(app, {}, {}, 1); };
