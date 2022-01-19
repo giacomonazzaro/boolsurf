@@ -39,6 +39,7 @@ struct App {
   bool_operation bool_operation   = {};
   bool           preview_booleans = false;
   shade_params   shade_params     = {};
+  bool           show_gui         = false;
 
   string    svg_filename  = {};
   shape_bvh bvh           = {};
@@ -550,7 +551,7 @@ inline int add_anchor_point(
 
 inline void process_click(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
-  if (input.modifier_alt) return;
+  if (input.modifier_alt || input.modifier_ctrl || input.modifier_shift) return;
   if (input.mouse_right_click) {
     return;
   }

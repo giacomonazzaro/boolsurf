@@ -89,7 +89,7 @@ bool uiupdate_camera_params(const glinput_state& input, camera_data& camera) {
     auto pan    = zero2f;
     auto rotate = zero2f;
     if (input.modifier_shift) {
-      pan   = (input.mouse_pos - input.mouse_last) * camera.focus / 200.0f;
+      pan   = (input.mouse_pos - input.mouse_last) * camera.focus / 500.0f;
       pan.x = -pan.x;
     } else if (input.modifier_ctrl) {
       dolly = (input.mouse_pos.y - input.mouse_last.y) / 100.0f;

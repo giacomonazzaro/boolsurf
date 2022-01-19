@@ -191,10 +191,31 @@ void run_app(App& app) {
       scene.cameras.at(params.camera) = camera;
     }
 
-    if (input.modifier_ctrl && input.modifier_shift &&
-        app.selected_spline().input.control_points.size() > 1) {
-      auto spline_id = add_spline(app.splinesurf);
-      set_selected_spline(app, spline_id);
+    if (input.key_pressed[(int)'S']) {
+      auto sel = app.editing.selection;
+      if (sel.spline_id != -1 && sel.control_point_id != -1) {
+        auto spline = app.selected_spline();
+        spline.input.is_smooth[sel.control_point_id] =
+            !spline.input.is_smooth[sel.control_point_id];
+      }
+    }
+
+    int edited = 0;
+    if (input.key_pressed[(int)'1']) {
+      app.bool_operation.type = bool_operation::Type::op_union;
+      edited += 1;
+    }
+    if (input.key_pressed[(int)'2']) {
+      app.bool_operation.type = bool_operation::Type::op_difference;
+      edited += 1;
+    }
+    if (input.key_pressed[(int)'3']) {
+      app.bool_operation.type = bool_operation::Type::op_intersection;
+      edited += 1;
+    }
+    if (input.key_pressed[(int)'4']) {
+      app.bool_operation.type = bool_operation::Type::op_xor;
+      edited += 1;
     }
 
     if (input.key_pressed[(int)gui_key::enter]) {
@@ -213,7 +234,7 @@ void run_app(App& app) {
     add_new_shapes(app);
     new_shapes.clear();
 
-    auto edited = update_splines(app, scene, app.updated_shapes);
+    edited += update_splines(app, scene, app.updated_shapes);
     if (edited) {
       update_boolsurf(app);
     }
@@ -232,7 +253,7 @@ void run_app(App& app) {
     app.frame_time_ms = elapsed_seconds(timer) * 1000;
   };
   // run ui
-  run_ui({1280 + 320, 720}, "yshade", callbacks);
+  run_ui({1280 + 320, 720}, "yshade", callbacks, 320, app.show_gui);
 }
 
 // Main
