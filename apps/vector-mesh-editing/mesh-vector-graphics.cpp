@@ -255,16 +255,16 @@ void run_app(App& app) {
       app.updated_shapes.clear();
     }
 
-    printf("mouse %f %f \n", input.mouse_pos.x, input.mouse_pos.y);
-    printf("window %d %d \n", input.window_size.x, input.window_size.y);
-    printf("fb %d %d %d %d\n", input.framebuffer_viewport.x,
-        input.framebuffer_viewport.y, input.framebuffer_viewport.z,
-        input.framebuffer_viewport.w);
-    auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
-        input.mouse_pos.y / float(input.window_size.y)};
-    printf("mouse_uv %f %f \n\n", mouse_uv.x, mouse_uv.y);
-    app.scene.cameras[0].aspect = input.window_size.x / input.window_size.y;
-    app.frame_time_ms           = elapsed_seconds(timer) * 1000;
+    // printf("mouse %f %f \n", input.mouse_pos.x, input.mouse_pos.y);
+    // printf("window %d %d \n", input.window_size.x, input.window_size.y);
+    // printf("fb %d %d %d %d\n", input.framebuffer_viewport.x,
+    //     input.framebuffer_viewport.y, input.framebuffer_viewport.z,
+    //     input.framebuffer_viewport.w);
+    // auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
+    //     input.mouse_pos.y / float(input.window_size.y)};
+    // printf("mouse_uv %f %f \n\n", mouse_uv.x, mouse_uv.y);
+    // app.scene.cameras[0].aspect = input.window_size.x / input.window_size.y;
+    app.frame_time_ms = elapsed_seconds(timer) * 1000;
   };
   // run ui
   run_ui({1280 + 320, 720}, "Boolsurf", callbacks, 320, true);
