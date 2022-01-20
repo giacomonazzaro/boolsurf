@@ -1721,6 +1721,8 @@ void run_ui(const vec2i& size, const string& title,
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
+  { glfwWindowHint(GLFW_SAMPLES, 4); }
+
   // create state
   auto state     = glwindow_state{};
   state.title    = title;
