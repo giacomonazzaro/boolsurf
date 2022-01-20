@@ -348,8 +348,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
 
     assert(state.labels.size());  // ??
     if (i == state.labels[0].size()) {
-      material.color     = vec3f{0.8, 0.8, 0.8};
-      material.roughness = app.ambient_shape_roughness;
+      material = app.scene.materials[0];
     } else {
       material.color     = get_color(i);  // get_cell_color(state, i, false);
       material.roughness = app.shapes_roughness;
