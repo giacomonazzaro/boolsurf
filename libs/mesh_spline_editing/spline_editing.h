@@ -229,6 +229,11 @@ inline void delete_anchor_point(
   spline.input.control_points.erase(
       spline.input.control_points.begin() + point_id);
   spline.input.is_smooth.erase(spline.input.is_smooth.begin() + point_id);
+
+  if (point_id == 0)
+    spline.cache.curves_to_update.insert(spline.input.control_points.size() - 1);
+  else
+    spline.cache.curves_to_update.insert(point_id - 1);
 }
 
 template <typename Delete_Shape>

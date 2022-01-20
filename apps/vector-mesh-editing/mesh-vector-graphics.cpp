@@ -111,6 +111,17 @@ void run_app(App& app) {
     edited += draw_glcombobox("boolean", op, bool_operation::type_names);
     app.bool_operation.type = (bool_operation::Type)op;
 
+    {
+      auto names = vector<string>{};
+      for (int i = 0; i < app.shapes.size(); i++) {
+        names.push_back(std::to_string(i));
+      }
+      if (names.size() >= 2) {
+        edited += draw_glcombobox("a", app.bool_operation.shape_a, names);
+        edited += draw_glcombobox("b", app.bool_operation.shape_b, names);
+      }
+    }
+
     if (edited) update_boolsurf(app);
 
     if (draw_glslider(
@@ -191,54 +202,8 @@ void run_app(App& app) {
       scene.cameras.at(params.camera) = camera;
     }
 
-    if (input.key_pressed[(int)'S']) {
-      auto sel = app.editing.selection;
-      if (sel.spline_id != -1 && sel.control_point_id != -1) {
-        auto spline = app.selected_spline();
-        spline.input.is_smooth[sel.control_point_id] =
-            !spline.input.is_smooth[sel.control_point_id];
-      }
-    }
-
     int edited = 0;
-    if (input.key_pressed[(int)'1']) {
-      app.bool_operation.type = bool_operation::Type::op_union;
-      edited += 1;
-    }
-    if (input.key_pressed[(int)'2']) {
-      app.bool_operation.type = bool_operation::Type::op_difference;
-      edited += 1;
-    }
-    if (input.key_pressed[(int)'3']) {
-      app.bool_operation.type = bool_operation::Type::op_intersection;
-      edited += 1;
-    }
-    if (input.key_pressed[(int)'4']) {
-      app.bool_operation.type = bool_operation::Type::op_xor;
-      edited += 1;
-    }
-
-    if (input.key_pressed[(int)gui_key::enter]) {
-      auto spline_id = add_spline(app.splinesurf);
-      set_selected_spline(app, spline_id);
-    }
-    if (input.key_pressed[(int)'A']) {
-        auto a            = 0;//app.bool_operation.shape_a;
-        auto b            = 1;//app.bool_operation.shape_b;
-      auto delete_shape = [&](int shape_id) {
-        clear_shape(app.glscene.shapes[shape_id]);
-      };
-      delete_spline(app.splinesurf, b, delete_shape);
-      delete_spline(app.splinesurf, a, delete_shape);
-      update_all_splines(app);
-    }
-
-    if (input.key_pressed[(int)'I']) {
-      auto add_app_shape = [&]() -> int { return add_shape(app, {}, {}, 1); };
-      insert_anchor_points(app.splinesurf, app.mesh,
-          app.bool_state.intersections, add_app_shape);
-      update_all_splines(app);
-    }
+    edited += process_key(app, input);
 
     process_click(app, app.updated_shapes, input);
     process_mouse(app, app.updated_shapes, input);

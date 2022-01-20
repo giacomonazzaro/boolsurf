@@ -409,11 +409,11 @@ inline void update_boolsurf(App& app) {
     PROFILE_SCOPE("compute_cells");
     compute_cells(app.mesh, app.bool_state, app.shapes);
     if (app.preview_booleans) {
-      auto op    = bool_operation{};
-      op.shape_a = 0;
-      op.shape_b = 1;
-      op.type    = app.bool_operation.type;
-      compute_bool_operation(app.bool_state, op);
+      auto& op = app.bool_operation;
+      if (op.shape_a >= 0 && op.shape_a < app.bool_state.shapes.size() &&
+          op.shape_b >= 0 && op.shape_b < app.bool_state.shapes.size()) {
+        compute_bool_operation(app.bool_state, op);
+      }
     }
     // compute_shapes(app.bool_state);
   }
@@ -448,10 +448,103 @@ inline void update_boolsurf(App& app) {
       app, patch_sample_id, make_sphere(8, app.line_thickness * 15, 1), frame);
   app.updated_shapes += patch_sample_id;
 #endif
-
+  app.bool_state.shape_from_cell = make_shape_from_cell(app.bool_state);
   update_cell_shapes(
       app, app.bool_state, {} /*bsh_output*/, app.updated_shapes);
   reset_mesh(app.mesh);
+}
+
+inline void update_all_splines(App& app) {
+  app.shapes.resize(app.splinesurf.num_splines());
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    auto spline = app.get_spline_view(i);
+    for (int k = 0; k < spline.cache.points.size(); k++) {
+      spline.cache.points_to_update.insert(k);
+      app.updated_shapes += spline.cache.points[k].anchor_id;
+      app.updated_shapes += spline.cache.points[k].handle_ids[0];
+      app.updated_shapes += spline.cache.points[k].handle_ids[1];
+      app.updated_shapes += spline.cache.points[k].tangents[0].shape_id;
+      app.updated_shapes += spline.cache.points[k].tangents[1].shape_id;
+    }
+    for (int k = 0; k < spline.cache.curves.size(); k++) {
+      spline.cache.curves_to_update.insert(k);
+    }
+  }
+}
+
+inline int process_key(App& app, const glinput_state& input) {
+  int edited = 0;
+  if (input.key_pressed[(int)'S']) {
+    auto sel = app.editing.selection;
+    if (sel.spline_id != -1 && sel.control_point_id != -1) {
+      auto spline = app.selected_spline();
+      spline.input.is_smooth[sel.control_point_id] =
+          !spline.input.is_smooth[sel.control_point_id];
+    }
+  }
+
+  if (input.key_pressed[(int)'1']) {
+    app.bool_operation.type = bool_operation::Type::op_union;
+    edited += 1;
+  }
+  if (input.key_pressed[(int)'2']) {
+    app.bool_operation.type = bool_operation::Type::op_difference;
+    edited += 1;
+  }
+  if (input.key_pressed[(int)'3']) {
+    app.bool_operation.type = bool_operation::Type::op_intersection;
+    edited += 1;
+  }
+  if (input.key_pressed[(int)'4']) {
+    app.bool_operation.type = bool_operation::Type::op_xor;
+    edited += 1;
+  }
+
+  auto delete_shape = [&](int shape_id) {
+    clear_shape(app.glscene.shapes[shape_id]);
+  };
+  if (input.key_pressed[(int)'D']) {
+    while (1) {
+      auto selection = app.editing.selection;
+      if (selection.spline_id == -1) break;
+      if (selection.control_point_id == -1) break;
+      auto spline = app.selected_spline();
+      if (input.modifier_shift) {
+        delete_spline(app.splinesurf, selection.spline_id, delete_shape);
+        set_selected_spline(app, -1);
+      } else {
+        delete_anchor_point(spline, selection.control_point_id, delete_shape);
+      }
+      // update_all_splines(app);
+      edited += 1;
+      break;
+    }
+  }
+  if (input.key_pressed[(int)gui_key::enter]) {
+    auto spline_id = add_spline(app.splinesurf);
+    set_selected_spline(app, spline_id);
+  }
+  if (input.key_pressed[(int)'A']) {
+    auto a = app.bool_operation.shape_a;
+    auto b = app.bool_operation.shape_b;
+    if (a < b) {
+      delete_spline(app.splinesurf, b, delete_shape);
+      delete_spline(app.splinesurf, a, delete_shape);
+    } else {
+      delete_spline(app.splinesurf, a, delete_shape);
+      delete_spline(app.splinesurf, b, delete_shape);
+    }
+    update_all_splines(app);
+    edited += 1;
+  }
+
+  if (input.key_pressed[(int)'I']) {
+    auto add_app_shape = [&]() -> int { return add_shape(app, {}, {}, 1); };
+    insert_anchor_points(
+        app.splinesurf, app.mesh, app.bool_state.intersections, add_app_shape);
+    update_all_splines(app);
+  }
+  return edited;
 }
 
 inline void process_mouse(
@@ -552,16 +645,26 @@ inline int add_anchor_point(
 
 inline void process_click(
     App& app, hash_set<int>& updated_shapes, const glinput_state& input) {
-  if (input.modifier_alt || input.modifier_ctrl || input.modifier_shift) return;
+  if (input.modifier_alt || input.modifier_shift) return;
   if (input.mouse_right_click) {
     return;
   }
 
   if (!input.mouse_left_click) return;
-
   // Compute clicked point and exit if it mesh was not clicked.
   auto point = intersect_mesh(app, input);
   if (point.face == -1) return;
+
+  if (input.modifier_ctrl) {
+    auto cell_id         = app.mesh.face_tags[point.face];
+    auto shape_from_cell = make_shape_from_cell(app.bool_state);
+    auto shape_id        = shape_from_cell[cell_id];
+    if (app.bool_operation.shape_a == -1)
+      app.bool_operation.shape_a = shape_id;
+    else
+      app.bool_operation.shape_b = shape_id;
+    return;
+  }
 
   // Update selection. If it was changed, don't add new points.
   auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
@@ -715,24 +818,6 @@ inline bool update_splines(
     update_cache(app, i, scene, updated_shapes);
   }
   return updated;
-}
-
-inline void update_all_splines(App& app) {
-  app.shapes.resize(app.splinesurf.num_splines());
-  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-    auto spline = app.get_spline_view(i);
-    for (int k = 0; k < spline.cache.points.size(); k++) {
-      spline.cache.points_to_update.insert(k);
-      app.updated_shapes += spline.cache.points[k].anchor_id;
-      app.updated_shapes += spline.cache.points[k].handle_ids[0];
-      app.updated_shapes += spline.cache.points[k].handle_ids[1];
-      app.updated_shapes += spline.cache.points[k].tangents[0].shape_id;
-      app.updated_shapes += spline.cache.points[k].tangents[1].shape_id;
-    }
-    for (int k = 0; k < spline.cache.curves.size(); k++) {
-      spline.cache.curves_to_update.insert(k);
-    }
-  }
 }
 
 void init_from_svg(App& app, Splinesurf& splinesurf, const bool_mesh& mesh,

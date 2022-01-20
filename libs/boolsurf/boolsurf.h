@@ -174,6 +174,7 @@ BSH_graph    make_bsh_input(bool_state& state, bool_mesh& mesh,
        const vector<vector<vector<vector<mesh_segment>>>>& shape_segments);
 vector<bool> run_bsh(const BSH_graph& bsh);
 
+vector<int> make_shape_from_cell(const bool_state& state);
 // void compute_shapes(const bool_state& state);
 // void       compute_shape_borders(const bool_mesh& mesh, bool_state& state);
 // bool_state compute_border_polygons(const bool_state& state);

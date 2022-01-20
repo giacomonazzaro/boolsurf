@@ -1200,7 +1200,8 @@ void slice_mesh(bool_mesh& mesh, bool_state& state,
     for (auto& polyline : polylines) {
       for (int i = 0; i < polyline.points.size(); i++) {
         auto vertex         = polyline.vertices[i];
-        mesh.colors[vertex] = interpolate_triangle(cx, cy, cz, polyline.points[i]);
+        mesh.colors[vertex] = interpolate_triangle(
+            cx, cy, cz, polyline.points[i]);
       }
     }
   }
@@ -1497,12 +1498,10 @@ vector<vector<vec3i>> shapes_triangles(
   // Calcoliamo le informazioni sulla shape, come le celle che ne fanno parte
   auto num_shapes = (int)state.labels[0].size();
 
-  auto shape_from_cell = make_shape_from_cell(state);
-
   auto shape = vector<vector<vec3i>>(num_shapes + 1);
   for (int i = 0; i < mesh.face_tags.size(); i++) {
     if (mesh.face_tags[i] == -1) continue;
-    auto shape_id = shape_from_cell[mesh.face_tags[i]];
+    auto shape_id = state.shape_from_cell[mesh.face_tags[i]];
     if (shape_id == num_shapes + 1) {
       shape.back().push_back(mesh.triangles[i]);
       continue;

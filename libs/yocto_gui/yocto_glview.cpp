@@ -84,14 +84,15 @@ static bool uiupdate_image_params(
 }
 
 bool uiupdate_camera_params(const glinput_state& input, camera_data& camera) {
-  if (input.mouse_left && !input.widgets_active) {
+    if(input.widgets_active) return false;
+    if (!input.mouse_left && !input.mouse_right) return false;
     auto dolly  = 0.0f;
     auto pan    = zero2f;
     auto rotate = zero2f;
     if (input.modifier_shift) {
       pan   = (input.mouse_pos - input.mouse_last) * camera.focus / 500.0f;
       pan.x = -pan.x;
-    } else if (input.modifier_ctrl) {
+    } else if (input.mouse_right) {
       dolly = (input.mouse_pos.y - input.mouse_last.y) / 100.0f;
     } else if (input.modifier_alt) {
       rotate   = (input.mouse_pos - input.mouse_last) / 100.0f;
@@ -104,8 +105,7 @@ bool uiupdate_camera_params(const glinput_state& input, camera_data& camera) {
       camera.focus = focus;
       return true;
     }
-  }
-  return false;
+    return false;
 }
 
 static bool draw_tonemap_params(
