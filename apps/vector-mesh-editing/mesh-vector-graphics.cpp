@@ -233,10 +233,18 @@ void run_app(App& app) {
     //     input.mouse_pos.y / float(input.window_size.y)};
     // printf("mouse_uv %f %f \n\n", mouse_uv.x, mouse_uv.y);
     // app.scene.cameras[0].aspect = input.window_size.x / input.window_size.y;
+    {
+      auto& camera  = app.scene.cameras[0];
+      auto  w       = float(input.window_size.x);
+      auto  h       = float(input.window_size.y);
+      camera.film   = (0.036f * w) / 1280;
+      camera.aspect = w / h;
+    }
     app.frame_time_ms = elapsed_seconds(timer) * 1000;
   };
   // run ui
-  run_ui({1280 + 320, 720}, "Boolsurf", callbacks, 320, true);
+  run_ui({1280 + app.widgets_width, 720}, "Boolsurf", callbacks,
+      app.widgets_width, true);
 }
 
 // Main

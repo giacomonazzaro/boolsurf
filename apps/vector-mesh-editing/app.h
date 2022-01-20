@@ -39,7 +39,7 @@ struct App {
   bool_operation bool_operation   = {};
   bool           preview_booleans = false;
   shade_params   shade_params     = {};
-  bool           show_gui         = false;
+  int            widgets_width    = 0;
 
   string    svg_filename  = {};
   shape_bvh bvh           = {};
