@@ -1,6 +1,7 @@
 #pragma once
 #include "spline_mesh.h"
 
+namespace yocto {
 struct anchor_point {
   mesh_point point      = {};
   mesh_point handles[2] = {{}, {}};
@@ -231,7 +232,8 @@ inline void delete_anchor_point(
   spline.input.is_smooth.erase(spline.input.is_smooth.begin() + point_id);
 
   if (point_id == 0)
-    spline.cache.curves_to_update.insert(spline.input.control_points.size() - 1);
+    spline.cache.curves_to_update.insert(
+        spline.input.control_points.size() - 1);
   else
     spline.cache.curves_to_update.insert(point_id - 1);
 }
@@ -313,3 +315,5 @@ inline void move_selected_point(Splinesurf& splinesurf,
 
   spline.cache.points_to_update.insert(selection.control_point_id);
 }
+
+}  // namespace yocto

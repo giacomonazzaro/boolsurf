@@ -461,15 +461,18 @@ inline void update_boolsurf(App& app) {
 inline void update_all_splines(App& app) {
   app.shapes.resize(app.splinesurf.num_splines());
   for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    app.shapes[i].emplace_back();  // TODO(giacomo): @Boundary.
+    app.shapes[i][0].resize(
+        app.splinesurf.spline_input[i].control_points.size());
+  }
+  app.splinesurf.spline_cache.resize(app.splinesurf.spline_input.size());
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
     auto spline = app.get_spline_view(i);
+    spline.cache.points.resize(spline.input.control_points.size());
     for (int k = 0; k < spline.cache.points.size(); k++) {
       spline.cache.points_to_update.insert(k);
-      app.updated_shapes += spline.cache.points[k].anchor_id;
-      app.updated_shapes += spline.cache.points[k].handle_ids[0];
-      app.updated_shapes += spline.cache.points[k].handle_ids[1];
-      app.updated_shapes += spline.cache.points[k].tangents[0].shape_id;
-      app.updated_shapes += spline.cache.points[k].tangents[1].shape_id;
     }
+    spline.cache.curves.resize(spline.input.control_points.size());
     for (int k = 0; k < spline.cache.curves.size(); k++) {
       spline.cache.curves_to_update.insert(k);
     }
@@ -491,6 +494,23 @@ inline void toggle_splines_visibility(App& app) {
 
 inline int process_key(App& app, const glinput_state& input) {
   int edited = 0;
+  if (input.key_pressed[(int)'U']) {
+    update_all_splines(app);
+    return 1;
+  }
+  if (input.key_pressed[(int)'S']) {
+    if (input.modifier_shift) {
+      save_splines(app.splinesurf.spline_input, "boolsurf/splines.json");
+      return 0;
+    }
+  }
+  if (input.key_pressed[(int)'L']) {
+    if (input.modifier_shift) {
+      load_splines(app.splinesurf.spline_input, "boolsurf/splines.json");
+      update_all_splines(app);
+      return 1;
+    }
+  }
   if (input.key_pressed[(int)'S']) {
     auto sel = app.editing.selection;
     if (sel.spline_id != -1 && sel.control_point_id != -1) {
@@ -745,8 +765,15 @@ void update_cache(
       auto& curve = cache.curves[curve_id];
       if (app.shapes[spline_id][0][curve_id].empty()) continue;
 
-      auto  shape_id = cache.curves[curve_id].shape_id;
-      auto& shape    = scene.shapes[shape_id];
+      auto shape_id = cache.curves[curve_id].shape_id;
+      if (shape_id == -1) {
+        auto  material_id = (int)app.scene.materials.size();
+        auto& material    = app.scene.materials.emplace_back();
+        material.color    = get_color(shape_id);
+        shape_id          = add_shape(app, {}, {}, material_id);
+        continue;
+      }
+      auto& shape = scene.shapes[shape_id];
       // TODO(giacomo): Cleanup.
       shape.positions.resize(app.shapes[spline_id][0][curve_id].size() + 1);
       shape.lines.resize(app.shapes[spline_id][0][curve_id].size());
@@ -783,8 +810,12 @@ void update_cache(
             input.control_points[point_id].point,
             input.control_points[point_id].handles[k]);
       }
-      auto shape_id = tangent.shape_id;
 
+      if (tangent.shape_id == -1) {
+        tangent.shape_id = add_shape(app, {}, {}, {}, false);
+        continue;
+      };
+      auto shape_id = tangent.shape_id;
       auto& instance    = scene.instances[shape_id];
       auto& shape       = scene.shapes[shape_id];
       instance.material = 2;
@@ -793,6 +824,12 @@ void update_cache(
       shape.lines   = make_lines(shape.positions.size());
       shape._radius = app.line_thickness * 0.6;
       updated_shapes += shape_id;
+
+      if (anchor.handle_ids[k] == -1) {
+        auto radius          = app.line_thickness * 2;
+        anchor.handle_ids[k] = add_shape(app, make_sphere(8, radius, 1), {}, 1, false);
+        continue;
+      }
 
       auto& handle_instance    = scene.instances[anchor.handle_ids[k]];
       handle_instance.material = 2;
@@ -803,6 +840,12 @@ void update_cache(
         handle_shape = make_sphere(8, radius, 1);
         updated_shapes += anchor.handle_ids[k];
       }
+    }
+
+    if (anchor.anchor_id == -1) {
+      auto radius      = app.line_thickness * 2;
+      anchor.anchor_id = add_shape(app, make_sphere(8, radius, 1), {}, 1);
+      continue;
     }
     auto& anchor_instance    = scene.instances[anchor.anchor_id];
     anchor_instance.material = 1;

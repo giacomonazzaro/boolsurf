@@ -25,21 +25,49 @@ bool load_json(const string& filename, json& js) {
   }
 }
 
-bool save_test(const bool_test& test, const string& filename) {
-  auto js           = json{};
-  js["points"]      = test.points;
-  js["shapes"]      = test.shapes;
-  js["polygons"]    = test.polygons;
-  js["model"]       = test.model;
-  js["operations"]  = test.operations;
-  js["camera"]      = test.camera;
-  js["cell_colors"] = test.cell_colors;
+namespace yocto {
+
+inline void to_json(json& js, const anchor_point& value) {
+  js["point"]   = value.point;
+  js["handle0"] = value.handles[0];
+  js["handle1"] = value.handles[1];
+}
+
+inline void from_json(const json& js, anchor_point& value) {
+  js.at("point").get_to(value.point);
+  js.at("handle0").get_to(value.handles[0]);
+  js.at("handle1").get_to(value.handles[1]);
+}
+
+inline void to_json(json& js, const Spline_Input& value) {
+  js["anchor_point"] = value.control_points;
+  js["is_smooth"]    = value.is_smooth;
+}
+
+inline void from_json(const json& js, Spline_Input& value) {
+  js.at("anchor_point").get_to(value.control_points);
+  js.at("is_smooth").get_to(value.is_smooth);
+}
+
+}  // namespace yocto
+
+bool save_splines(
+    const vector<Spline_Input>& spline_input, const string& filename) {
+  auto js       = json{};
+  js["splines"] = spline_input;
 
   auto error = ""s;
   if (!save_text(filename, js.dump(2), error)) {
     printf("[%s]: %s\n", __FUNCTION__, error.c_str());
     return false;
   }
+  return true;
+}
+
+bool load_splines(vector<Spline_Input>& spline_input, const string& filename) {
+  auto js = json{};
+  if (!load_json(filename, js)) return false;
+  spline_input = js["splines"].get<vector<Spline_Input>>();
   return true;
 }
 

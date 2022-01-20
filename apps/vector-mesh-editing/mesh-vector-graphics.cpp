@@ -50,6 +50,7 @@ void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
   PROFILE();
   for (auto shape_id : updated_shapes) {
+    if(shape_id == -1) continue;
     set_shape(glscene.shapes.at(shape_id), scene.shapes[shape_id]);
   }
   // TODO(giacomo): Update textures.
