@@ -183,8 +183,8 @@ void smooth_out_signal(vector<T>& values, const shape_data& shape) {
   auto weights = vector<float>(values.size(), 0.0f);
   for (int i = 0; i < shape.triangles.size(); i++) {
     auto [x, y, z] = shape.triangles[i];
-    auto area      = triangle_area(
-        1e6*shape.positions[x], 1e6*shape.positions[y], 1e6*shape.positions[z]);
+    auto area      = triangle_area(1e6 * shape.positions[x],
+        1e6 * shape.positions[y], 1e6 * shape.positions[z]);
     result[x] += area * values[x];
     result[y] += area * values[y];
     result[z] += area * values[z];
@@ -230,9 +230,10 @@ void smooth_out_signal(vector<T>& values, const shape_data& shape) {
 
 inline vec3f get_color(int i) {
   auto colors = vector<vec3f>{
-      {0.8, 0, 0},    // red
-      {0, 0.5, 0},    // green
       {0, 0, 0.8},    // blue
+      {0.8, 0, 0},    // red
+      {0, 0, 0.8},    // blue
+      {0, 0.5, 0},    // green
       {0.5, 0.5, 0},  // yellow
       {1, 0, 1},      // purple
       {0, 1, 1},      // cyan

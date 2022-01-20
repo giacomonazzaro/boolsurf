@@ -95,13 +95,7 @@ void run_app(App& app) {
     draw_gllabel("frame time (ms)", app.frame_time_ms);
     draw_glcheckbox("flag", app.flag);
     if (draw_glcheckbox("splines visibility", app.are_splines_visible)) {
-      update_all_splines(app);
-      for (int i = 0; i < app.splinesurf.num_splines(); i++) {
-        auto spline = app.get_spline_view(i);
-        for (auto& curve : spline.cache.curves) {
-          app.scene.instances[curve.shape_id].visible = app.are_splines_visible;
-        }
-      }
+      toggle_splines_visibility(app);
     }
 
     auto edited = 0;

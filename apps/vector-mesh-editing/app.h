@@ -472,6 +472,19 @@ inline void update_all_splines(App& app) {
   }
 }
 
+inline void toggle_splines_visibility(App& app) {
+  update_all_splines(app);
+  for (int i = 0; i < app.splinesurf.num_splines(); i++) {
+    auto spline = app.get_spline_view(i);
+    for (auto& curve : spline.cache.curves) {
+      app.scene.instances[curve.shape_id].visible = app.are_splines_visible;
+    }
+    for (auto& point : spline.cache.points) {
+      app.scene.instances[point.anchor_id].visible = app.are_splines_visible;
+    }
+  }
+}
+
 inline int process_key(App& app, const glinput_state& input) {
   int edited = 0;
   if (input.key_pressed[(int)'S']) {
@@ -543,6 +556,15 @@ inline int process_key(App& app, const glinput_state& input) {
     insert_anchor_points(
         app.splinesurf, app.mesh, app.bool_state.intersections, add_app_shape);
     update_all_splines(app);
+  }
+  if (input.key_pressed[(int)'B']) {
+    app.preview_booleans = !app.preview_booleans;
+    edited += 1;
+  }
+  if (input.key_pressed[(int)'H']) {
+    app.are_splines_visible = !app.are_splines_visible;
+    toggle_splines_visibility(app);
+    edited += 1;
   }
   return edited;
 }
