@@ -39,7 +39,8 @@ struct App {
   bool_operation bool_operation   = {};
   bool           preview_booleans = false;
   shade_params   shade_params     = {};
-  int            widgets_width    = 0;
+  int            widgets_width    = 320;
+  vec2f          mouse_offset     = {};
 
   string    svg_filename  = {};
   shape_bvh bvh           = {};
@@ -123,6 +124,8 @@ void init_app(App& app, const Params& params) {
   if (app.envlight) app.shade_params.exposure = +1;
   app.shade_params.background = {1, 1, 1, 1};
 
+  app.widgets_width = params.gui_width;
+
   auto test = bool_test{};
 
   // if (!load_shape(test.model, app.mesh, error)) print_fatal(error);
@@ -171,10 +174,11 @@ inline mesh_point intersect_mesh(App& app, const vec2f& screen_uv) {
     return {};
 }
 
-inline mesh_point intersect_mesh(App& app, const glinput_state& input) {
+inline mesh_point intersect_mesh(
+    App& app, const glinput_state& input, vec2f mouse_offset = {0, 0}) {
   auto mouse_uv = vec2f{input.mouse_pos.x / float(input.window_size.x),
       input.mouse_pos.y / float(input.window_size.y)};
-  return intersect_mesh(app, mouse_uv);
+  return intersect_mesh(app, mouse_uv + mouse_offset);
 }
 
 inline void set_shape(App& app, int id, shape_data&& shape,
@@ -283,13 +287,14 @@ inline void set_selected_spline(App& app, int spline_id) {
 }
 
 inline void set_selected_point(
-    App& app, int spline_id, int anchor_id, int handle_id) {
+    App& app, int spline_id, int anchor_id, int handle_id, vec2f offset) {
   toggle_handle_visibility(app, false);
   app.editing.selection                  = {};
   app.editing.selection.spline_id        = spline_id;
   app.editing.selection.control_point_id = anchor_id;
   app.editing.selection.handle_id        = handle_id;
   toggle_handle_visibility(app, true);
+  app.mouse_offset = offset;
 }
 
 inline int intersect_segments(const App& app, const vec2f& mouse_uv,
@@ -590,7 +595,8 @@ inline void process_mouse(
   app.editing.holding_control_point = true;
 
   auto spline = app.selected_spline();
-  move_selected_point(app.splinesurf, app.editing.selection, app.mesh, point,
+  auto ppoint = intersect_mesh(app, input, app.mouse_offset);
+  move_selected_point(app.splinesurf, app.editing.selection, app.mesh, ppoint,
       app.editing.creating_new_point);
 
   updated_shapes +=
@@ -617,6 +623,9 @@ inline bool intersect_mesh_point(const bool_mesh& mesh, const ray3f& ray,
   return hit;
 }
 
+inline vec2f mouse_offset(
+    const App& app, const mesh_point& point, const vec2f& mouse);
+
 inline bool update_selection(App& app, const vec2f& mouse_uv) {
   auto& camera = app.scene.cameras[0];
   auto  radius = 5 * app.line_thickness;
@@ -632,14 +641,16 @@ inline bool update_selection(App& app, const vec2f& mouse_uv) {
         auto hit = intersect_mesh_point(
             app.mesh, ray, anchor.handles[k], radius);
         if (hit) {
-          set_selected_point(app, spline_id, i, k);
+          auto offset = mouse_offset(app, anchor.handles[k], mouse_uv);
+          set_selected_point(app, spline_id, i, k, offset);
           return true;
         }
       }
 
       auto hit = intersect_mesh_point(app.mesh, ray, anchor.point, radius);
       if (hit) {
-        set_selected_point(app, spline_id, i, -1);
+        auto offset = mouse_offset(app, anchor.point, mouse_uv);
+        set_selected_point(app, spline_id, i, -1, offset);
         return true;
       }
     }
@@ -710,7 +721,7 @@ inline void process_click(
   auto spline_id = app.editing.selection.spline_id;
   auto anchor_id = add_anchor_point(
       app, spline_id, spline, {point, {point, point}});
-  set_selected_point(app, spline_id, anchor_id, 1);
+  set_selected_point(app, spline_id, anchor_id, 1, {0, 0});
   // app.editing.selection.control_point_id = anchor_id;
   // app.editing.selection.handle_id        = 1;
   app.editing.creating_new_point = true;
@@ -1124,4 +1135,30 @@ vector<vec4f> bake_ambient_occlusion(App& app, int num_samples) {
 
   for (auto& r : result) r /= r.w;
   return result;
+}
+
+inline vec2f screenspace_from_worldspace(
+    const camera_data& camera, const vec3f& position) {
+  auto camera_yfov =
+      (camera.aspect >= 0)
+          ? (2 * yocto::atan(camera.film / (camera.aspect * 2 * camera.lens)))
+          : (2 * yocto::atan(camera.film / (2 * camera.lens)));
+
+  auto view       = frame_to_mat(inverse(camera.frame));
+  auto projection = perspective_mat(
+      camera_yfov, camera.aspect, 0.01f, 10000.0f);
+
+  auto projection_view = projection * view;
+  auto [x, y, z]       = position;
+  auto uv4f            = projection_view * vec4f{x, y, z, 1};
+  return vec2f{uv4f.x / uv4f.w, uv4f.y / uv4f.w};
+}
+
+inline vec2f mouse_offset(
+    const App& app, const mesh_point& point, const vec2f& mouse) {
+  auto& camera = app.scene.cameras[0];
+  auto uv = screenspace_from_worldspace(camera, eval_position(app.mesh, point));
+  uv      = uv / 2 + vec2f{0.5, 0.5};
+  uv.y    = 1 - uv.y;
+  return uv - mouse;
 }

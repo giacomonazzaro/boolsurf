@@ -230,13 +230,13 @@ void smooth_out_signal(vector<T>& values, const shape_data& shape) {
 
 inline vec3f get_color(int i) {
   auto colors = vector<vec3f>{
-      {0, 0, 0.8},    // blue
-      {0.8, 0, 0},    // red
-      {0, 0, 0.8},    // blue
-      {0, 0.5, 0},    // green
-      {0.5, 0.5, 0},  // yellow
-      {1, 0, 1},      // purple
-      {0, 1, 1},      // cyan
+      {0.05, 0.05, 0.7},  // blue
+      {0.7, 0.05, 0.05},  // red
+      {0.1, 0.1, 0.7},    // blue
+      {0, 0.5, 0},        // green
+      {0.5, 0.5, 0},      // yellow
+      {1, 0, 1},          // purple
+      {0, 1, 1},          // cyan
       //      {0.5, 0.5, 0.5},
       {190 / 255.0, 45 / 255.0, 52 / 255.0},
       {0.063, 0.426, 0.127},

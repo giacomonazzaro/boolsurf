@@ -21,6 +21,7 @@ struct glview_params {
 
   string ao_output      = "";
   int    ao_num_samples = 1;
+  int    gui_width      = 320;
 };
 
 // Cli
@@ -35,6 +36,7 @@ void add_options(const cli_command& cli, glview_params& params) {
       "Filename of output shape with baked ambient occlusion.");
   add_option(cli, "ao-samples", params.ao_num_samples,
       "Number of samples for baked ao.");
+  add_option(cli, "gui-width", params.gui_width, "Gui width.");
 }
 
 // view shapes
