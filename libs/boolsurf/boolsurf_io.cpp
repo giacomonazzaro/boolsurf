@@ -51,10 +51,11 @@ inline void from_json(const json& js, Spline_Input& value) {
 
 }  // namespace yocto
 
-bool save_splines(
-    const vector<Spline_Input>& spline_input, const string& filename) {
+bool save_splines(const vector<Spline_Input>& spline_input,
+    const camera_data& camera, const string& filename) {
   auto js       = json{};
   js["splines"] = spline_input;
+  js["camera"]  = camera;
 
   auto error = ""s;
   if (!save_text(filename, js.dump(2), error)) {
@@ -64,10 +65,12 @@ bool save_splines(
   return true;
 }
 
-bool load_splines(vector<Spline_Input>& spline_input, const string& filename) {
+bool load_splines(vector<Spline_Input>& spline_input, camera_data& camera,
+    const string& filename) {
   auto js = json{};
   if (!load_json(filename, js)) return false;
   spline_input = js["splines"].get<vector<Spline_Input>>();
+  camera       = js["camera"].get<camera_data>();
   return true;
 }
 

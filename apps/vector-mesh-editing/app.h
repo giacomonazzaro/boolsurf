@@ -500,13 +500,15 @@ inline int process_key(App& app, const glinput_state& input) {
   }
   if (input.key_pressed[(int)'S']) {
     if (input.modifier_shift) {
-      save_splines(app.splinesurf.spline_input, "boolsurf/splines.json");
+      save_splines(app.splinesurf.spline_input, app.scene.cameras[0],
+          "boolsurf/splines.json");
       return 0;
     }
   }
   if (input.key_pressed[(int)'L']) {
     if (input.modifier_shift) {
-      load_splines(app.splinesurf.spline_input, "boolsurf/splines.json");
+      load_splines(app.splinesurf.spline_input, app.scene.cameras[0],
+          "boolsurf/splines.json");
       update_all_splines(app);
       return 1;
     }
@@ -815,7 +817,7 @@ void update_cache(
         tangent.shape_id = add_shape(app, {}, {}, {}, false);
         continue;
       };
-      auto shape_id = tangent.shape_id;
+      auto  shape_id    = tangent.shape_id;
       auto& instance    = scene.instances[shape_id];
       auto& shape       = scene.shapes[shape_id];
       instance.material = 2;
@@ -827,7 +829,8 @@ void update_cache(
 
       if (anchor.handle_ids[k] == -1) {
         auto radius          = app.line_thickness * 2;
-        anchor.handle_ids[k] = add_shape(app, make_sphere(8, radius, 1), {}, 1, false);
+        anchor.handle_ids[k] = add_shape(
+            app, make_sphere(8, radius, 1), {}, 1, false);
         continue;
       }
 

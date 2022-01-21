@@ -81,9 +81,10 @@ inline void from_json(const json& js, camera_data& camera) {
 
 }  // namespace yocto
 
-bool save_splines(
-    const vector<Spline_Input>& spline_input, const string& filename);
-bool load_splines(vector<Spline_Input>& spline_input, const string& filename);
+bool save_splines(const vector<Spline_Input>& spline_input,
+    const camera_data& camera, const string& filename);
+bool load_splines(vector<Spline_Input>& spline_input, camera_data& camera,
+    const string& filename);
 
 struct bool_test {
   string                model;
