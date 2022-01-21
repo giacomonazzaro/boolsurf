@@ -43,6 +43,7 @@ struct App {
   vec2f          mouse_offset     = {};
 
   string    svg_filename  = {};
+  string    test_filename = {};
   shape_bvh bvh           = {};
   float     time          = 0;
   float     frame_time_ms = 0;
@@ -123,8 +124,8 @@ void init_app(App& app, const Params& params) {
   app.envlight_texture = params.envlight_texture;
   if (app.envlight) app.shade_params.exposure = +1;
   app.shade_params.background = {1, 1, 1, 1};
-
-  app.widgets_width = params.gui_width;
+  app.test_filename           = params.test_filename;
+  app.widgets_width           = params.gui_width;
 
   auto test = bool_test{};
 
@@ -500,15 +501,17 @@ inline int process_key(App& app, const glinput_state& input) {
   }
   if (input.key_pressed[(int)'S']) {
     if (input.modifier_shift) {
+      auto hash =
+          std::chrono::high_resolution_clock::now().time_since_epoch().count();
       save_splines(app.splinesurf.spline_input, app.scene.cameras[0],
-          "boolsurf/splines.json");
+          "boolsurf/maglietta/" + std::to_string(hash) + ".json");
       return 0;
     }
   }
   if (input.key_pressed[(int)'L']) {
     if (input.modifier_shift) {
-      load_splines(app.splinesurf.spline_input, app.scene.cameras[0],
-          "boolsurf/splines.json");
+      load_splines(
+          app.splinesurf.spline_input, app.scene.cameras[0], app.test_filename);
       update_all_splines(app);
       return 1;
     }

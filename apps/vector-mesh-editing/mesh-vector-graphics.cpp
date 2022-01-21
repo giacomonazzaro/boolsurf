@@ -15,6 +15,7 @@ using namespace yocto;
 struct glview_params {
   string shape            = "shape.ply";
   string svg              = "";
+  string test_filename    = "";
   string envlight_texture = "boolsurf/scenes/doge2.hdr";
   float  line_thickness   = 0.001;
   bool   envlight         = false;
@@ -28,6 +29,7 @@ struct glview_params {
 void add_options(const cli_command& cli, glview_params& params) {
   add_argument(cli, "shape", params.shape, "Input shape.");
   add_option(cli, "svg", params.svg, "Load svg.");
+  add_option(cli, "test", params.test_filename, "json filename.");
   add_option(cli, "line-thickness", params.line_thickness, "Line thickness.");
   add_option(cli, "envlight", params.envlight, "Environment lighting.");
   add_option(cli, "envlight-texture", params.envlight_texture,
@@ -50,7 +52,7 @@ void update_glscene(shade_scene& glscene, const scene_data& scene,
     const hash_set<int>& updated_shapes) {
   PROFILE();
   for (auto shape_id : updated_shapes) {
-    if(shape_id == -1) continue;
+    if (shape_id == -1) continue;
     set_shape(glscene.shapes.at(shape_id), scene.shapes[shape_id]);
   }
   // TODO(giacomo): Update textures.
