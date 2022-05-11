@@ -1,6 +1,7 @@
 #include "boolsurf.h"
 
 #include <cassert>
+#include <chrono>
 #include <deque>
 
 #include "ext/CDT/CDT/include/CDT.h"

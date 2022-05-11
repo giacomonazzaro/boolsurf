@@ -15,7 +15,7 @@ def cli():
 def release(clear=False):
     os.makedirs('build/terminal/Release', exist_ok=True)
     os.chdir('build/terminal/Release')
-    os.system('cmake ../../.. -GNinja -DCMAKE_BUILD_TYPE=Release -DYOCTO_EMBREE=ON -DYOCTO_DENOISE=ON')
+    os.system('cmake ../../.. -GNinja -DCMAKE_BUILD_TYPE=Release -DYOCTO_EMBREE=ON -DYOCTO_DENOISE=OFF')
     os.system('cmake --build . --parallel 8' +
               (' --clean-first' if clear else ''))
 

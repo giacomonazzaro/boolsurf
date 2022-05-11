@@ -30,9 +30,9 @@
 #include "yocto_shade.h"
 
 #include <array>
+#include <cassert>
 #include <memory>
 #include <stdexcept>
-
 // -----------------------------------------------------------------------------
 // USING DIRECTIVES
 // -----------------------------------------------------------------------------

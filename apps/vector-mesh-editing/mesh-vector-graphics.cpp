@@ -142,7 +142,7 @@ void run_app(App& app) {
       update_all_splines(app);
     }
     if (draw_glbutton("Save Scene")) {
-      auto scene_dir = "boolsurf/scenes";
+      auto scene_dir = "scenes/";
 
       auto error = string{};
       if (!make_directory(scene_dir, error)) {
