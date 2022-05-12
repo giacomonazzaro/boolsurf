@@ -387,7 +387,7 @@ inline void update_cell_shapes(App& app, const bool_state& state,
     // Raw copy if cell is too big. We waste some memory.
     if (cell_triangles[i].size() > mesh.triangles.size() / 2) {
       shape.positions = mesh.positions;
-      shape.colors    = mesh.colors;
+      //shape.colors    = mesh.colors;
       shape.triangles = std::move(cell_triangles[i]);
       return;
     }
